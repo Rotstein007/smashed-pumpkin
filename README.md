@@ -23,6 +23,11 @@ flatpak-builder --disable-rofiles-fuse --user --install --force-clean buildDir/f
 flatpak run dev.rotstein.SmashedPumpkin
 ```
 
+### Shareable bundle
+```bash
+flatpak build-bundle ~/.local/share/flatpak/repo buildDir/SmashedPumpkin.flatpak dev.rotstein.SmashedPumpkin
+```
+
 ## Data layout
 Server instances are stored in:
 ```
