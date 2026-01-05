@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop">
+  <id>@APP_ID@</id>
+  <name>@APP_NAME@</name>
+  <summary>Manage PumpkinMC servers with GNOME‑style workflows</summary>
+  <description>
+    <p>Smashed Pumpkin helps you install, update, start, and maintain PumpkinMC servers without losing worlds or plugins. It keeps server binaries isolated from persistent data, provides clear status and logs, and organizes your instances in a modern GNOME interface.</p>
+    <p>Planned management areas include plugin folders, player lists, permissions, and world data, with safe defaults and quick access to config files.</p>
+  </description>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+  <developer_name>Rotstein</developer_name>
+  <url type="homepage">https://github.com/Pumpkin-MC/Pumpkin</url>
+  <launchable type="desktop-id">@APP_ID@.desktop</launchable>
+  <requires>
+    <display_length compare="ge">small</display_length>
+  </requires>
+  <releases>
+    <release version="0.1.0" date="2026-01-05"/>
+  </releases>
+</component>

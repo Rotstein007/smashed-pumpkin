@@ -1,0 +1,788 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<interface>
+  <requires lib="gtk" version="4.0"/>
+  <requires lib="adwaita" version="1.0"/>
+
+  <menu id="app-menu">
+    <section>
+      <item>
+        <attribute name="label" translatable="yes">_About</attribute>
+        <attribute name="action">app.about</attribute>
+      </item>
+    </section>
+    <section>
+      <item>
+        <attribute name="label" translatable="yes">_Quit</attribute>
+        <attribute name="action">app.quit</attribute>
+      </item>
+    </section>
+  </menu>
+
+  <template class="PumpkinWindow" parent="AdwApplicationWindow">
+    <property name="default-width">960</property>
+    <property name="default-height">620</property>
+    <property name="title" translatable="yes">Smashed Pumpkin</property>
+
+    <child>
+      <object class="AdwToolbarView">
+        <child type="top">
+          <object class="AdwHeaderBar">
+            <property name="show-start-title-buttons">true</property>
+            <property name="show-end-title-buttons">true</property>
+            <property name="title-widget">
+              <object class="AdwWindowTitle">
+                <property name="title" translatable="yes">Smashed Pumpkin</property>
+                <property name="subtitle" translatable="yes">PumpkinMC Server Manager</property>
+              </object>
+            </property>
+            <child type="end">
+              <object class="GtkMenuButton">
+                <property name="icon-name">open-menu-symbolic</property>
+                <property name="menu-model">app-menu</property>
+              </object>
+            </child>
+          </object>
+        </child>
+
+        <child>
+          <object class="AdwViewStack" id="view_stack">
+            <child>
+              <object class="AdwViewStackPage">
+                <property name="name">overview</property>
+                <property name="title" translatable="yes">Overview</property>
+                <property name="icon-name">view-grid-symbolic</property>
+                <property name="child">
+                  <object class="GtkBox">
+                    <property name="orientation">vertical</property>
+                    <property name="spacing">12</property>
+                    <property name="margin-top">18</property>
+                    <property name="margin-bottom">18</property>
+                    <property name="margin-start">18</property>
+                    <property name="margin-end">18</property>
+                    <child>
+                      <object class="GtkBox">
+                        <property name="spacing">8</property>
+                        <child>
+                          <object class="GtkLabel">
+                            <property name="label" translatable="yes">Servers</property>
+                            <property name="xalign">0</property>
+                            <property name="hexpand">true</property>
+                            <style>
+                              <class name="title-2"/>
+                            </style>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkButton" id="btn_add_server_overview">
+                            <property name="label" translatable="yes">Add Server</property>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkButton" id="btn_import_server_overview">
+                            <property name="label" translatable="yes">Import Server</property>
+                          </object>
+                        </child>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkScrolledWindow">
+                        <property name="vexpand">true</property>
+                        <child>
+                          <object class="GtkListBox" id="overview_list">
+                            <property name="selection-mode">none</property>
+                            <property name="show-separators">false</property>
+                            <property name="css-classes">overview-list</property>
+                          </object>
+                        </child>
+                      </object>
+                    </child>
+                  </object>
+                </property>
+              </object>
+            </child>
+
+            <child>
+              <object class="AdwViewStackPage">
+                <property name="name">details</property>
+                <property name="title" translatable="yes">Details</property>
+                <property name="icon-name">network-server-symbolic</property>
+                <property name="child">
+                  <object class="GtkBox">
+                    <property name="orientation">vertical</property>
+                    <property name="spacing">12</property>
+                    <property name="margin-top">18</property>
+                    <property name="margin-bottom">18</property>
+                    <property name="margin-start">18</property>
+                    <property name="margin-end">18</property>
+                    <child>
+                      <object class="GtkBox">
+                        <property name="spacing">12</property>
+                        <child>
+                          <object class="GtkButton" id="btn_details_back">
+                            <property name="icon-name">go-previous-symbolic</property>
+                            <property name="tooltip-text" translatable="yes">Back to Overview</property>
+                            <property name="valign">center</property>
+                            <property name="css-classes">small flat</property>
+                            <style><class name="compact-button"/></style>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkBox">
+                            <property name="spacing">10</property>
+                            <property name="hexpand">true</property>
+                            <property name="valign">center</property>
+                            <child>
+                              <object class="GtkImage" id="details_server_icon">
+                                <property name="icon-name">network-server-symbolic</property>
+                                <property name="pixel-size">32</property>
+                              </object>
+                            </child>
+                            <child>
+                              <object class="GtkLabel" id="details_title">
+                                <property name="label" translatable="yes">No server selected</property>
+                                <property name="xalign">0</property>
+                                <property name="valign">center</property>
+                                <style>
+                                  <class name="title-3"/>
+                                </style>
+                              </object>
+                            </child>
+                            <child>
+                              <object class="GtkRevealer" id="details_error_revealer">
+                                <property name="transition-type">slide-right</property>
+                                <property name="reveal-child">false</property>
+                                <child>
+                                  <object class="GtkLabel" id="details_error">
+                                    <property name="label"></property>
+                                    <property name="xalign">0</property>
+                                    <property name="valign">center</property>
+                                    <style>
+                                      <class name="error"/>
+                                    </style>
+                                  </object>
+                                </child>
+                              </object>
+                            </child>
+                            <child>
+                              <object class="GtkRevealer" id="details_status_revealer">
+                                <property name="transition-type">slide-right</property>
+                                <property name="reveal-child">false</property>
+                                <child>
+                                  <object class="GtkLabel" id="details_status">
+                                    <property name="label"></property>
+                                    <property name="xalign">0</property>
+                                    <property name="valign">center</property>
+                                    <style>
+                                      <class name="dim-label"/>
+                                    </style>
+                                  </object>
+                                </child>
+                              </object>
+                            </child>
+                            <child>
+                              <object class="GtkRevealer" id="download_progress_revealer">
+                                <property name="transition-type">slide-right</property>
+                                <property name="reveal-child">false</property>
+                                <child>
+                                  <object class="GtkProgressBar" id="download_progress">
+                                    <property name="show-text">true</property>
+                                    <property name="valign">center</property>
+                                    <property name="hexpand">true</property>
+                                  </object>
+                                </child>
+                              </object>
+                            </child>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkBox">
+                            <property name="spacing">6</property>
+                            <property name="halign">end</property>
+                            <style>
+                              <class name="details-action-row"/>
+                            </style>
+                            <child>
+                              <object class="GtkButton" id="btn_details_check_updates">
+                                <property name="label" translatable="yes">Check Updates</property>
+                                <property name="valign">center</property>
+                                <property name="can-shrink">true</property>
+                                <property name="css-classes">small flat</property>
+                                <style><class name="compact-button"/></style>
+                              </object>
+                            </child>
+                            <child>
+                              <object class="GtkButton" id="btn_details_install">
+                                <property name="label" translatable="yes">Install</property>
+                                <property name="valign">center</property>
+                                <property name="can-shrink">true</property>
+                                <property name="css-classes">small flat</property>
+                                <style><class name="compact-button"/></style>
+                              </object>
+                            </child>
+                            <child>
+                              <object class="GtkButton" id="btn_details_update">
+                                <property name="label" translatable="yes">Update</property>
+                                <property name="valign">center</property>
+                                <property name="can-shrink">true</property>
+                                <property name="css-classes">small flat</property>
+                                <style><class name="compact-button"/></style>
+                              </object>
+                            </child>
+                            <child>
+                              <object class="GtkButton" id="btn_details_start">
+                                <property name="label" translatable="yes">Start</property>
+                                <property name="valign">center</property>
+                                <property name="css-classes">suggested-action small flat</property>
+                                <property name="can-shrink">true</property>
+                                <style><class name="compact-button"/></style>
+                              </object>
+                            </child>
+                            <child>
+                              <object class="GtkButton" id="btn_details_stop">
+                                <property name="label" translatable="yes">Stop</property>
+                                <property name="valign">center</property>
+                                <property name="css-classes">destructive-action small flat</property>
+                                <property name="can-shrink">true</property>
+                                <style><class name="compact-button"/></style>
+                              </object>
+                            </child>
+                            <child>
+                              <object class="GtkButton" id="btn_details_restart">
+                                <property name="label" translatable="yes">Restart</property>
+                                <property name="valign">center</property>
+                                <property name="can-shrink">true</property>
+                                <property name="css-classes">small flat</property>
+                                <style><class name="compact-button"/></style>
+                              </object>
+                            </child>
+                            <child>
+                              <object class="GtkSpinner" id="download_spinner">
+                                <property name="visible">false</property>
+                                <property name="valign">center</property>
+                              </object>
+                            </child>
+                          </object>
+                        </child>
+                      </object>
+                    </child>
+
+                    <child>
+                      <object class="AdwViewSwitcher">
+                        <property name="stack">details_stack</property>
+                        <property name="policy">wide</property>
+                      </object>
+                    </child>
+
+                    <child>
+                      <object class="AdwViewStack" id="details_stack">
+                        <child>
+                          <object class="AdwViewStackPage">
+                            <property name="name">console</property>
+                            <property name="title" translatable="yes">Console</property>
+                            <property name="icon-name">utilities-terminal-symbolic</property>
+                            <property name="child">
+                              <object class="GtkBox">
+                                <property name="orientation">vertical</property>
+                                <property name="spacing">8</property>
+                                <child>
+                                  <object class="GtkBox" id="stats_row">
+                                    <property name="spacing">12</property>
+                                    <property name="halign">start</property>
+                                    <child>
+                                      <object class="GtkLabel" id="label_sys_cpu">
+                                        <property name="label" translatable="yes">System CPU: --</property>
+                                        <style><class name="dim-label"/></style>
+                                      </object>
+                                    </child>
+                                    <child>
+                                      <object class="GtkLabel" id="label_sys_ram">
+                                        <property name="label" translatable="yes">System RAM: --</property>
+                                        <style><class name="dim-label"/></style>
+                                      </object>
+                                    </child>
+                                    <child>
+                                      <object class="GtkLabel" id="label_srv_cpu">
+                                        <property name="label" translatable="yes">Pumpkin CPU: --</property>
+                                        <style><class name="dim-label"/></style>
+                                      </object>
+                                    </child>
+                                    <child>
+                                      <object class="GtkLabel" id="label_srv_ram">
+                                        <property name="label" translatable="yes">Pumpkin RAM: --</property>
+                                        <style><class name="dim-label"/></style>
+                                      </object>
+                                    </child>
+                                  </object>
+                                </child>
+                                <child>
+                                  <object class="GtkScrolledWindow">
+                                    <property name="vexpand">true</property>
+                                    <child>
+                                      <object class="GtkTextView" id="log_view">
+                                        <property name="editable">false</property>
+                                        <property name="monospace">true</property>
+                                        <property name="wrap-mode">word-char</property>
+                                        <property name="css-classes">log-view</property>
+                                      </object>
+                                    </child>
+                                  </object>
+                                </child>
+                                <child>
+                                  <object class="GtkBox">
+                                    <property name="spacing">8</property>
+                                    <child>
+                                      <object class="GtkEntry" id="entry_command">
+                                        <property name="hexpand">true</property>
+                                        <property name="placeholder-text" translatable="yes">Enter command…</property>
+                                      </object>
+                                    </child>
+                                    <child>
+                                      <object class="GtkButton" id="btn_send_command">
+                                        <property name="label" translatable="yes">Send</property>
+                                      </object>
+                                    </child>
+                                    <child>
+                                      <object class="GtkButton" id="btn_console_copy">
+                                        <property name="label" translatable="yes">Copy</property>
+                                      </object>
+                                    </child>
+                                    <child>
+                                      <object class="GtkButton" id="btn_console_clear">
+                                        <property name="label" translatable="yes">Clear</property>
+                                      </object>
+                                    </child>
+                                    <child>
+                                      <object class="GtkButton" id="btn_open_server_root">
+                                        <property name="label" translatable="yes">Open Server Folder</property>
+                                      </object>
+                                    </child>
+                                  </object>
+                                </child>
+                              </object>
+                            </property>
+                          </object>
+                        </child>
+
+                        <child>
+                          <object class="AdwViewStackPage">
+                            <property name="name">logs</property>
+                            <property name="title" translatable="yes">Logs</property>
+                            <property name="icon-name">text-x-generic-symbolic</property>
+                            <property name="child">
+                              <object class="GtkBox">
+                                <property name="orientation">vertical</property>
+                                <property name="spacing">12</property>
+                                <child>
+                                  <object class="GtkBox">
+                                    <property name="spacing">8</property>
+                                    <child>
+                                      <object class="GtkDropDown" id="log_filter">
+                                        <property name="selected">0</property>
+                                        <property name="model">
+                                          <object class="GtkStringList">
+                                            <items>
+                                              <item translatable="yes">All</item>
+                                              <item translatable="yes">Today</item>
+                                              <item translatable="yes">This week</item>
+                                            </items>
+                                          </object>
+                                        </property>
+                                      </object>
+                                    </child>
+                                    <child>
+                                      <object class="GtkDropDown" id="log_level_filter">
+                                        <property name="selected">0</property>
+                                        <property name="model">
+                                          <object class="GtkStringList">
+                                            <items>
+                                              <item translatable="yes">All levels</item>
+                                              <item translatable="yes">Info</item>
+                                              <item translatable="yes">Warn</item>
+                                              <item translatable="yes">Error</item>
+                                            </items>
+                                          </object>
+                                        </property>
+                                      </object>
+                                    </child>
+                                    <child>
+                                      <object class="GtkEntry" id="log_search">
+                                        <property name="placeholder-text" translatable="yes">Filter logs…</property>
+                                        <property name="hexpand">true</property>
+                                      </object>
+                                    </child>
+                                  </object>
+                                </child>
+                                <child>
+                                  <object class="GtkPaned">
+                                    <property name="orientation">horizontal</property>
+                                    <child>
+                                      <object class="GtkScrolledWindow">
+                                        <property name="min-content-width">220</property>
+                                        <child>
+                                          <object class="GtkListBox" id="log_files_list">
+                                            <property name="selection-mode">single</property>
+                                          </object>
+                                        </child>
+                                      </object>
+                                    </child>
+                                    <child>
+                                      <object class="GtkScrolledWindow">
+                                        <property name="hexpand">true</property>
+                                        <property name="vexpand">true</property>
+                                        <child>
+                                          <object class="GtkTextView" id="log_file_view">
+                                            <property name="editable">false</property>
+                                            <property name="monospace">true</property>
+                                          </object>
+                                        </child>
+                                      </object>
+                                    </child>
+                                  </object>
+                                </child>
+                                <child>
+                                  <object class="GtkButton" id="btn_open_logs">
+                                    <property name="label" translatable="yes">Open Logs Folder</property>
+                                  </object>
+                                </child>
+                              </object>
+                            </property>
+                          </object>
+                        </child>
+
+                        <child>
+                          <object class="AdwViewStackPage">
+                            <property name="name">plugins</property>
+                            <property name="title" translatable="yes">Plugins</property>
+                            <property name="icon-name">folder-symbolic</property>
+                            <property name="child">
+                              <object class="GtkBox">
+                                <property name="orientation">vertical</property>
+                                <property name="spacing">12</property>
+                                <child>
+                                  <object class="GtkBox">
+                                    <property name="spacing">8</property>
+                                    <child>
+                                      <object class="GtkEntry" id="entry_plugin_url">
+                                        <property name="placeholder-text" translatable="yes">Plugin URL</property>
+                                        <property name="hexpand">true</property>
+                                      </object>
+                                    </child>
+                                    <child>
+                                      <object class="GtkButton" id="btn_install_plugin">
+                                        <property name="label" translatable="yes">Download</property>
+                                      </object>
+                                    </child>
+                                  </object>
+                                </child>
+                                <child>
+                                  <object class="GtkScrolledWindow">
+                                    <property name="vexpand">true</property>
+                                    <child>
+                                      <object class="GtkListBox" id="plugin_list"/>
+                                    </child>
+                                  </object>
+                                </child>
+                                <child>
+                                  <object class="GtkButton" id="btn_open_plugins">
+                                    <property name="label" translatable="yes">Open Plugins Folder</property>
+                                  </object>
+                                </child>
+                              </object>
+                            </property>
+                          </object>
+                        </child>
+
+                        <child>
+                          <object class="AdwViewStackPage">
+                            <property name="name">players</property>
+                            <property name="title" translatable="yes">Players</property>
+                            <property name="icon-name">system-users-symbolic</property>
+                            <property name="child">
+                              <object class="GtkBox">
+                                <property name="orientation">vertical</property>
+                                <property name="spacing">12</property>
+                                <child>
+                                  <object class="GtkScrolledWindow">
+                                    <property name="vexpand">true</property>
+                                    <child>
+                                      <object class="GtkListBox" id="player_list">
+                                        <property name="selection-mode">single</property>
+                                      </object>
+                                    </child>
+                                  </object>
+                                </child>
+                                <child>
+                                  <object class="GtkButton" id="btn_open_players">
+                                    <property name="label" translatable="yes">Open Player Data Folder</property>
+                                  </object>
+                                </child>
+                              </object>
+                            </property>
+                          </object>
+                        </child>
+
+                        <child>
+                          <object class="AdwViewStackPage">
+                            <property name="name">worlds</property>
+                            <property name="title" translatable="yes">Worlds</property>
+                            <property name="icon-name">folder-symbolic</property>
+                            <property name="child">
+                              <object class="GtkBox">
+                                <property name="orientation">vertical</property>
+                                <property name="spacing">12</property>
+                                <child>
+                                  <object class="GtkScrolledWindow">
+                                    <property name="vexpand">true</property>
+                                    <child>
+                                      <object class="GtkListBox" id="world_list"/>
+                                    </child>
+                                  </object>
+                                </child>
+                                <child>
+                                  <object class="GtkButton" id="btn_open_worlds">
+                                    <property name="label" translatable="yes">Open Worlds Folder</property>
+                                  </object>
+                                </child>
+                              </object>
+                            </property>
+                          </object>
+                        </child>
+
+                        <child>
+                          <object class="AdwViewStackPage">
+                            <property name="name">settings</property>
+                            <property name="title" translatable="yes">Settings</property>
+                            <property name="icon-name">emblem-system-symbolic</property>
+                            <property name="child">
+                              <object class="GtkBox">
+                                <property name="orientation">vertical</property>
+                                <property name="spacing">12</property>
+                                <child>
+                                  <object class="GtkLabel">
+                                    <property name="label" translatable="yes">Server Settings</property>
+                                    <property name="xalign">0</property>
+                                    <style><class name="title-4"/></style>
+                                  </object>
+                                </child>
+                                <child>
+                                  <object class="GtkLabel">
+                                    <property name="label" translatable="yes">Edit core server settings. These values are saved per server.</property>
+                                    <property name="wrap">true</property>
+                                    <property name="xalign">0</property>
+                                    <style><class name="dim-label"/></style>
+                                  </object>
+                                </child>
+                                <child>
+                                  <object class="GtkEntry" id="entry_server_name">
+                                    <property name="placeholder-text" translatable="yes">Server name (shown in the app)</property>
+                                  </object>
+                                </child>
+                                <child>
+                                  <object class="GtkEntry" id="entry_download_url">
+                                    <property name="placeholder-text" translatable="yes">Pumpkin download URL (binary)</property>
+                                  </object>
+                                </child>
+                                <child>
+                                  <object class="GtkBox">
+                                    <property name="spacing">8</property>
+                                    <child>
+                                      <object class="GtkLabel">
+                                        <property name="label" translatable="yes">Use local download cache</property>
+                                        <property name="xalign">0</property>
+                                        <property name="hexpand">true</property>
+                                      </object>
+                                    </child>
+                                    <child>
+                                      <object class="GtkSwitch" id="switch_use_cache">
+                                        <property name="halign">end</property>
+                                      </object>
+                                    </child>
+                                  </object>
+                                </child>
+                                <child>
+                                  <object class="GtkLabel">
+                                    <property name="label" translatable="yes">Stores downloaded Pumpkin binaries in a shared cache and copies them into new servers.</property>
+                                    <property name="wrap">true</property>
+                                    <property name="xalign">0</property>
+                                    <style><class name="dim-label"/></style>
+                                  </object>
+                                </child>
+                                <child>
+                                  <object class="GtkBox">
+                                    <property name="spacing">8</property>
+                                    <child>
+                                      <object class="GtkButton" id="btn_choose_icon">
+                                        <property name="label" translatable="yes">Choose Server Icon</property>
+                                      </object>
+                                    </child>
+                                    <child>
+                                      <object class="GtkButton" id="btn_reset_icon">
+                                        <property name="label" translatable="yes">Reset Icon</property>
+                                      </object>
+                                    </child>
+                                  </object>
+                                </child>
+                                <child>
+                                  <object class="GtkLabel">
+                                    <property name="label" translatable="yes">Minecraft uses a 64×64 PNG named server-icon.png in the server root. The app will resize your image and save it there.</property>
+                                    <property name="wrap">true</property>
+                                    <property name="xalign">0</property>
+                                    <style><class name="dim-label"/></style>
+                                  </object>
+                                </child>
+                                <child>
+                                  <object class="GtkBox">
+                                    <property name="spacing">8</property>
+                                    <child>
+                                      <object class="GtkEntry" id="entry_server_port">
+                                        <property name="placeholder-text" translatable="yes">Server port (Java)</property>
+                                      </object>
+                                    </child>
+                                    <child>
+                                      <object class="GtkEntry" id="entry_max_players">
+                                        <property name="placeholder-text" translatable="yes">Max players (limit)</property>
+                                      </object>
+                                    </child>
+                                  </object>
+                                </child>
+                                <child>
+                                  <object class="GtkBox">
+                                    <property name="spacing">8</property>
+                                    <child>
+                                      <object class="GtkLabel">
+                                        <property name="label" translatable="yes">Auto restart</property>
+                                        <property name="xalign">0</property>
+                                        <property name="hexpand">true</property>
+                                      </object>
+                                    </child>
+                                    <child>
+                                      <object class="GtkSwitch" id="switch_auto_restart">
+                                        <property name="halign">end</property>
+                                      </object>
+                                    </child>
+                                  </object>
+                                </child>
+                                <child>
+                                  <object class="GtkBox">
+                                    <property name="spacing">8</property>
+                                    <child>
+                                      <object class="GtkEntry" id="entry_auto_restart_delay">
+                                        <property name="placeholder-text" translatable="yes">Delay</property>
+                                        <property name="hexpand">true</property>
+                                      </object>
+                                    </child>
+                                    <child>
+                                      <object class="GtkLabel">
+                                        <property name="label" translatable="yes">seconds</property>
+                                        <style><class name="dim-label"/></style>
+                                      </object>
+                                    </child>
+                                  </object>
+                                </child>
+                                <child>
+                                  <object class="GtkLabel">
+                                    <property name="label" translatable="yes">The server will restart automatically after this delay if it crashes.</property>
+                                    <property name="wrap">true</property>
+                                    <property name="xalign">0</property>
+                                    <style><class name="dim-label"/></style>
+                                  </object>
+                                </child>
+                                <child>
+                                  <object class="GtkLabel">
+                                    <property name="label" translatable="yes">RCON (Remote Console) is optional. Use it if you want to control the server from admin tools or scripts.</property>
+                                    <property name="wrap">true</property>
+                                    <property name="xalign">0</property>
+                                    <style><class name="dim-label"/></style>
+                                  </object>
+                                </child>
+                                <child>
+                                  <object class="GtkBox">
+                                    <property name="spacing">8</property>
+                                    <child>
+                                      <object class="GtkEntry" id="entry_rcon_host">
+                                        <property name="placeholder-text" translatable="yes">RCON host (usually 127.0.0.1)</property>
+                                      </object>
+                                    </child>
+                                    <child>
+                                      <object class="GtkEntry" id="entry_rcon_port">
+                                        <property name="placeholder-text" translatable="yes">RCON port</property>
+                                      </object>
+                                    </child>
+                                  </object>
+                                </child>
+                                <child>
+                                  <object class="GtkPasswordEntry" id="entry_rcon_password">
+                                    <property name="placeholder-text" translatable="yes">RCON password (keep secret)</property>
+                                  </object>
+                                </child>
+                                <child>
+                                  <object class="GtkButton" id="btn_save_settings">
+                                    <property name="label" translatable="yes">Save Settings</property>
+                                    <property name="css-classes">suggested-action</property>
+                                  </object>
+                                </child>
+                              </object>
+                            </property>
+                          </object>
+                        </child>
+                      </object>
+                    </child>
+                  </object>
+                </property>
+              </object>
+            </child>
+
+            <child>
+              <object class="AdwViewStackPage">
+                <property name="name">servers</property>
+                <property name="title" translatable="yes">Servers</property>
+                <property name="icon-name">network-server-symbolic</property>
+                <property name="child">
+                  <object class="GtkBox">
+                    <property name="orientation">vertical</property>
+                    <property name="spacing">12</property>
+                    <property name="margin-top">18</property>
+                    <property name="margin-bottom">18</property>
+                    <property name="margin-start">18</property>
+                    <property name="margin-end">18</property>
+                    <child>
+                      <object class="GtkBox">
+                        <property name="spacing">8</property>
+                        <child>
+                          <object class="GtkButton" id="btn_add_server">
+                            <property name="label" translatable="yes">Add Server</property>
+                            <property name="css-classes">suggested-action</property>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkButton" id="btn_import_server">
+                            <property name="label" translatable="yes">Import Server</property>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkButton" id="btn_remove_server">
+                            <property name="label" translatable="yes">Remove</property>
+                          </object>
+                        </child>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkScrolledWindow">
+                        <property name="vexpand">true</property>
+                        <child>
+                          <object class="GtkListBox" id="server_list">
+                            <property name="selection-mode">single</property>
+                          </object>
+                        </child>
+                      </object>
+                    </child>
+                  </object>
+                </property>
+              </object>
+            </child>
+          </object>
+        </child>
+      </object>
+    </child>
+  </template>
+</interface>

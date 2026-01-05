@@ -1,0 +1,32 @@
+# Build outputs
+buildDir/
+build-*/
+_build/
+.flatpak-builder/
+
+# IDEs/editors
+.idea/
+.vscode/
+*.swp
+*~
+
+# Compiled objects
+*.o
+*.obj
+*.a
+*.so
+*.dll
+*.dylib
+
+# Meson/Ninja
+meson-logs/
+meson-private/
+compile_commands.json
+
+# App/runtime data
+logs/
+*.log
+cache/
+
+# OS files
+.DS_Store

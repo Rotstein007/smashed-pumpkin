@@ -1,0 +1,90 @@
+/* Subtle GNOME Circle-like polish */
+.card {
+  border-radius: 10px;
+  padding: 8px;
+}
+
+.overview-list row {
+  border-radius: 10px;
+  background-color: transparent;
+  box-shadow: none;
+}
+
+.overview-list row:selected {
+  border-radius: 10px;
+  background-color: transparent;
+}
+
+.overview-list row:selected > .card {
+  border-radius: 10px;
+}
+
+.overview-list {
+  background-color: transparent;
+}
+
+.overview-card {
+  min-width: 220px;
+}
+
+.card-button {
+  min-height: 28px;
+  padding: 2px 10px;
+}
+
+.details-action-row button,
+button.compact-button,
+button.small {
+  min-height: 30px;
+  padding: 2px 10px;
+}
+
+button.compact-button > box,
+button.small > box {
+  min-height: 30px;
+  padding: 2px 10px;
+}
+
+button.compact-button > box > label,
+button.small > box > label {
+  padding: 0;
+}
+
+.update-button {
+  background: alpha(currentColor, 0.08);
+}
+
+.status-badge {
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-weight: 600;
+}
+
+.status-running {
+  background: #dff3e4;
+  color: #1b5e20;
+}
+
+.status-stopped {
+  background: #fbe9e7;
+  color: #bf360c;
+}
+
+.log-view {
+  font-family: monospace;
+  font-size: 12px;
+}
+
+#log_file_view {
+  font-family: monospace;
+  font-size: 12px;
+}
+
+.update-status-row {
+  padding: 4px 6px;
+}
+
+.update-status {
+  font-weight: 600;
+  font-size: 14px;
+}

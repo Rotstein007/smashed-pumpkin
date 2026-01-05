@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gresources>
+  <gresource prefix="/dev/rotstein/SmashedPumpkin">
+    <file preprocess="xml-stripblanks">ui/window.ui</file>
+    <file>style.css</file>
+    <file>icons/hicolor/scalable/apps/dev.rotstein.SmashedPumpkin.svg</file>
+    <file>icons/hicolor/512x512/apps/dev.rotstein.SmashedPumpkin.png</file>
+  </gresource>
+</gresources>
