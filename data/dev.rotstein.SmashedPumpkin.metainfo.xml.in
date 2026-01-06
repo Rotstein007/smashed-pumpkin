@@ -10,8 +10,16 @@
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>GPL-3.0-or-later</project_license>
   <developer_name>Rotstein</developer_name>
-  <url type="homepage">https://github.com/Pumpkin-MC/Pumpkin</url>
+  <url type="homepage">https://github.com/rotstein/smashed-pumpkin</url>
+  <url type="bugtracker">https://github.com/rotstein/smashed-pumpkin/issues</url>
+  <url type="vcs-browser">https://github.com/rotstein/smashed-pumpkin</url>
   <launchable type="desktop-id">@APP_ID@.desktop</launchable>
+  <content_rating type="oars-1.1"/>
+  <screenshots>
+    <screenshot type="default">
+      <image type="source">https://raw.githubusercontent.com/rotstein/smashed-pumpkin/main/data/screenshots/smashed-pumpkin-1.png</image>
+    </screenshot>
+  </screenshots>
   <requires>
     <display_length compare="ge">small</display_length>
   </requires>

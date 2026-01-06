@@ -26,6 +26,11 @@ install_data(
 )
 
 install_data(
+  join_paths('icons', 'hicolor', 'symbolic', 'apps', app_id + '-stats-symbolic.svg'),
+  install_dir: join_paths(get_option('datadir'), 'icons', 'hicolor', 'symbolic', 'apps')
+)
+
+install_data(
   join_paths('icons', 'hicolor', '512x512', 'apps', app_id + '.png'),
   install_dir: join_paths(get_option('datadir'), 'icons', 'hicolor', '512x512', 'apps')
 )

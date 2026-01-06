@@ -185,11 +185,42 @@ pumpkin_download_file_finish(GAsyncResult *result, GError **error)
   return g_task_propagate_boolean(G_TASK(result), error);
 }
 
-static char *
-extract_linux_x64_url(const char *html)
+static const char *
+expected_asset_name(void)
 {
-  g_autoptr(GRegex) regex = g_regex_new("https://github\\.com/Pumpkin-MC/Pumpkin/releases/download/[^\"]*?/pumpkin-?X64-?Linux",
-                                      G_REGEX_CASELESS, 0, NULL);
+#if defined(G_OS_WIN32)
+#if defined(_M_ARM64) || defined(__aarch64__) || defined(__arm64__)
+  return "pumpkin-ARM64-Windows.exe";
+#else
+  return "pumpkin-X64-Windows.exe";
+#endif
+#elif defined(__APPLE__)
+#if defined(__aarch64__) || defined(__arm64__)
+  return "pumpkin-ARM64-macOS";
+#else
+  return "pumpkin-X64-macOS";
+#endif
+#else
+#if defined(__aarch64__) || defined(__arm64__)
+  return "pumpkin-ARM64-Linux";
+#else
+  return "pumpkin-X64-Linux";
+#endif
+#endif
+}
+
+static char *
+extract_asset_url(const char *html, const char *asset_name)
+{
+  if (html == NULL || asset_name == NULL) {
+    return NULL;
+  }
+
+  g_autofree char *escaped = g_regex_escape_string(asset_name, -1);
+  g_autofree char *pattern = g_strdup_printf(
+    "https://github\\.com/Pumpkin-MC/Pumpkin/releases/download/[^\"\\s]*?/%s",
+    escaped);
+  g_autoptr(GRegex) regex = g_regex_new(pattern, G_REGEX_CASELESS, 0, NULL);
   g_autoptr(GMatchInfo) match = NULL;
 
   if (!g_regex_match(regex, html, 0, &match)) {
@@ -197,6 +228,101 @@ extract_linux_x64_url(const char *html)
   }
 
   return g_match_info_fetch(match, 0);
+}
+
+static gboolean
+url_matches_keywords(const char *url, const char *const *os_keywords, const char *const *arch_keywords)
+{
+  if (url == NULL || os_keywords == NULL || arch_keywords == NULL) {
+    return FALSE;
+  }
+  g_autofree char *lower = g_ascii_strdown(url, -1);
+
+  gboolean os_match = FALSE;
+  for (int i = 0; os_keywords[i] != NULL; i++) {
+    if (strstr(lower, os_keywords[i]) != NULL) {
+      os_match = TRUE;
+      break;
+    }
+  }
+  if (!os_match) {
+    return FALSE;
+  }
+
+  for (int i = 0; arch_keywords[i] != NULL; i++) {
+    if (strstr(lower, arch_keywords[i]) != NULL) {
+      return TRUE;
+    }
+  }
+
+  return FALSE;
+}
+
+static const char *const *
+expected_os_keywords(void)
+{
+#if defined(G_OS_WIN32)
+  static const char *const keywords[] = { "windows", "win", NULL };
+  return keywords;
+#elif defined(__APPLE__)
+  static const char *const keywords[] = { "macos", "mac", "osx", "darwin", NULL };
+  return keywords;
+#else
+  static const char *const keywords[] = { "linux", NULL };
+  return keywords;
+#endif
+}
+
+static const char *const *
+expected_arch_keywords(void)
+{
+#if defined(_M_ARM64) || defined(__aarch64__) || defined(__arm64__)
+  static const char *const keywords[] = { "arm64", "aarch64", NULL };
+  return keywords;
+#else
+  static const char *const keywords[] = { "x64", "x86_64", "amd64", NULL };
+  return keywords;
+#endif
+}
+
+static char *
+extract_best_platform_url(const char *html)
+{
+  if (html == NULL) {
+    return NULL;
+  }
+
+  const char *const *os_kw = expected_os_keywords();
+  const char *const *arch_kw = expected_arch_keywords();
+
+  g_autoptr(GRegex) regex = g_regex_new(
+    "https://github\\.com/Pumpkin-MC/Pumpkin/releases/download/[^\"\\s]*?/[^\"\\s]+",
+    G_REGEX_CASELESS, 0, NULL);
+  g_autoptr(GMatchInfo) match = NULL;
+
+  if (!g_regex_match(regex, html, 0, &match)) {
+    return NULL;
+  }
+
+  while (g_match_info_matches(match)) {
+    g_autofree char *url = g_match_info_fetch(match, 0);
+    if (url != NULL && url_matches_keywords(url, os_kw, arch_kw)) {
+      return g_strdup(url);
+    }
+    g_match_info_next(match, NULL);
+  }
+
+  return NULL;
+}
+
+static char *
+fallback_nightly_url(void)
+{
+  const char *asset = expected_asset_name();
+  if (asset == NULL) {
+    return NULL;
+  }
+  return g_strdup_printf("https://github.com/Pumpkin-MC/Pumpkin/releases/download/nightly/%s", asset);
 }
 
 static void
@@ -218,10 +344,20 @@ on_resolve_ready(GObject *source, GAsyncResult *res, gpointer user_data)
   const char *data = g_bytes_get_data(bytes, &size);
   g_autofree char *html = g_strndup(data, size);
 
-  g_autofree char *url = extract_linux_x64_url(html);
+  const char *asset = expected_asset_name();
+  g_autofree char *url = extract_asset_url(html, asset);
   if (url == NULL) {
-    g_task_return_new_error(task, G_IO_ERROR, G_IO_ERROR_FAILED,
-                            "Failed to find Linux x64 download URL");
+    url = extract_best_platform_url(html);
+  }
+  if (url == NULL) {
+    g_autofree char *fallback = fallback_nightly_url();
+    if (fallback == NULL) {
+      g_task_return_new_error(task, G_IO_ERROR, G_IO_ERROR_FAILED,
+                              "Failed to find download URL for %s", asset);
+    } else {
+      g_task_set_task_data(task, GUINT_TO_POINTER(PUMPKIN_DOWNLOAD_FALLBACK_USED), NULL);
+      g_task_return_pointer(task, g_strdup(fallback), g_free);
+    }
   } else {
     g_task_set_task_data(task, GUINT_TO_POINTER(PUMPKIN_DOWNLOAD_OK), NULL);
     g_task_return_pointer(task, g_strdup(url), g_free);
@@ -231,9 +367,9 @@ on_resolve_ready(GObject *source, GAsyncResult *res, gpointer user_data)
 }
 
 void
-pumpkin_resolve_latest_linux_x64_async(GCancellable *cancellable,
-                                       GAsyncReadyCallback callback,
-                                       gpointer user_data)
+pumpkin_resolve_latest_async(GCancellable *cancellable,
+                             GAsyncReadyCallback callback,
+                             gpointer user_data)
 {
   GTask *task = g_task_new(NULL, cancellable, callback, user_data);
   ResolveState *state = g_new0(ResolveState, 1);
@@ -247,9 +383,9 @@ pumpkin_resolve_latest_linux_x64_async(GCancellable *cancellable,
 }
 
 char *
-pumpkin_resolve_latest_linux_x64_finish(GAsyncResult *result,
-                                         PumpkinDownloadResult *result_code,
-                                         GError **error)
+pumpkin_resolve_latest_finish(GAsyncResult *result,
+                              PumpkinDownloadResult *result_code,
+                              GError **error)
 {
   if (result_code != NULL) {
     gpointer code = g_task_get_task_data(G_TASK(result));

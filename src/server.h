@@ -27,7 +27,10 @@ const char *pumpkin_server_get_rcon_host(PumpkinServer *self);
 const char *pumpkin_server_get_rcon_password(PumpkinServer *self);
 int pumpkin_server_get_rcon_port(PumpkinServer *self);
 int pumpkin_server_get_port(PumpkinServer *self);
+int pumpkin_server_get_bedrock_port(PumpkinServer *self);
 int pumpkin_server_get_max_players(PumpkinServer *self);
+int pumpkin_server_get_max_cpu_cores(PumpkinServer *self);
+int pumpkin_server_get_max_ram_mb(PumpkinServer *self);
 
 gboolean pumpkin_server_get_running(PumpkinServer *self);
 
@@ -40,7 +43,10 @@ void pumpkin_server_set_rcon_host(PumpkinServer *self, const char *host);
 void pumpkin_server_set_rcon_port(PumpkinServer *self, int port);
 void pumpkin_server_set_rcon_password(PumpkinServer *self, const char *password);
 void pumpkin_server_set_port(PumpkinServer *self, int port);
+void pumpkin_server_set_bedrock_port(PumpkinServer *self, int port);
 void pumpkin_server_set_max_players(PumpkinServer *self, int max_players);
+void pumpkin_server_set_max_cpu_cores(PumpkinServer *self, int max_cpu_cores);
+void pumpkin_server_set_max_ram_mb(PumpkinServer *self, int max_ram_mb);
 void pumpkin_server_set_root_dir(PumpkinServer *self, const char *dir);
 
 char *pumpkin_server_get_bin_path(PumpkinServer *self);

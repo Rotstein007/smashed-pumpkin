@@ -3,6 +3,7 @@ buildDir/
 build-*/
 _build/
 .flatpak-builder/
+buildDir/flatpak/
 
 # IDEs/editors
 .idea/
@@ -27,6 +28,7 @@ compile_commands.json
 logs/
 *.log
 cache/
+*.deactivated
 
 # OS files
 .DS_Store

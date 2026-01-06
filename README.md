@@ -44,3 +44,6 @@ Server instances are stored in:
 - Updates are resolved from Pumpkin’s download page (no GitHub release fallback).
 - Worlds/plugins are kept in `data/` so updates only replace `bin/pumpkin`.
 - Global config is stored at `~/.config/smashed-pumpkin/config.ini`.
+
+## License
+GPL-3.0-or-later. See `LICENSE`.

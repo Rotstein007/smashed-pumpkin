@@ -70,6 +70,70 @@ button.small > box > label {
   color: #bf360c;
 }
 
+.warning-badge {
+  background: #fff3cd;
+  color: #8a6d3b;
+}
+
+.stats-legend-cpu {
+  color: #ed5555;
+  font-weight: 600;
+}
+
+.stats-legend-ram {
+  color: #548ce1;
+  font-weight: 600;
+}
+
+.stats-legend-disk {
+  color: #59c675;
+  font-weight: 600;
+}
+
+.stats-legend-tps {
+  color: #59c675;
+  font-weight: 600;
+}
+
+.stats-legend-players {
+  color: #f2a83f;
+  font-weight: 600;
+}
+
+.legend-dot {
+  min-width: 6px;
+  min-height: 6px;
+  border-radius: 999px;
+  background-color: #999;
+}
+
+.legend-cpu {
+  background-color: #ed5555;
+}
+
+.legend-ram {
+  background-color: #548ce1;
+}
+
+.legend-disk {
+  background-color: #59c675;
+}
+
+.legend-tps {
+  background-color: #59c675;
+}
+
+.stats-disabled {
+  opacity: 0.45;
+}
+.legend-players {
+  background-color: #f2a83f;
+}
+
+.validation-error {
+  color: #c01c28;
+}
+
 .log-view {
   font-family: monospace;
   font-size: 12px;
@@ -87,4 +151,46 @@ button.small > box > label {
 .update-status {
   font-weight: 600;
   font-size: 14px;
+}
+
+.drop-placeholder {
+  padding: 24px;
+  border-radius: 12px;
+  border: 1px dashed alpha(currentColor, 0.2);
+  color: alpha(currentColor, 0.85);
+  background: alpha(currentColor, 0.03);
+}
+
+.drop-active {
+  border-radius: 12px;
+  background: alpha(currentColor, 0.08);
+  outline: 2px solid alpha(currentColor, 0.2);
+  outline-offset: -2px;
+}
+
+.compact-switch {
+  min-width: 40px;
+  min-height: 16px;
+  padding: 0;
+}
+
+switch.compact-switch {
+  min-width: 40px;
+  min-height: 16px;
+  padding: 0;
+  border-radius: 999px;
+}
+
+switch.compact-switch slider {
+  min-width: 18px;
+  min-height: 12px;
+  margin: 2px;
+  border-radius: 999px;
+}
+
+.plugin-delete-button {
+  min-height: 20px;
+  padding-top: 0;
+  padding-bottom: 0;
+  line-height: 1;
 }

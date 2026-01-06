@@ -42,7 +42,7 @@ pumpkin_server_store_init(PumpkinServerStore *self)
     self->base_dir = g_strdup(pumpkin_config_get_base_dir(config));
     pumpkin_config_free(config);
   } else {
-    self->base_dir = g_build_filename(g_get_home_dir(), "PumpkinServer", NULL);
+    self->base_dir = g_build_filename(g_get_user_data_dir(), "smashed-pumpkin", "servers", NULL);
   }
   g_mkdir_with_parents(self->base_dir, 0755);
 

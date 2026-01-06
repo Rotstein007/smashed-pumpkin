@@ -1,6 +1,9 @@
 adw_dep = dependency('libadwaita-1', version: '>= 1.5')
 Gtk_dep = dependency('gtk4', version: '>= 4.12')
 soup_dep = dependency('libsoup-3.0', version: '>= 3.4')
+psapi_dep = dependency('psapi', required: false)
+cc = meson.get_compiler('c')
+math_dep = cc.find_library('m', required: false)
 
 app_id = 'dev.rotstein.SmashedPumpkin'
 
@@ -52,6 +55,6 @@ executable(
   'smashed-pumpkin',
   sources,
   include_directories: inc,
-  dependencies: [adw_dep, Gtk_dep, soup_dep],
+  dependencies: [adw_dep, Gtk_dep, soup_dep, psapi_dep, math_dep],
   install: true
 )
