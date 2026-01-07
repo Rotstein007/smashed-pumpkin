@@ -17,12 +17,12 @@
   <content_rating type="oars-1.1"/>
   <screenshots>
     <screenshot type="default">
-      <image type="source">https://raw.githubusercontent.com/Rotstein007/smashed-pumpkin/main/data/screenshots/smashed-pumpkin-1.png</image>
+      <image type="source">https://raw.githubusercontent.com/Rotstein007/smashed-pumpkin/master/data/screenshots/smashed-pumpkin-1.png</image>
       <caption>Server overview and controls</caption>
     </screenshot>
   </screenshots>
   <requires>
-    <display_length compare="ge">small</display_length>
+    <display_length compare="ge">360</display_length>
   </requires>
   <releases>
     <release version="0.1.0" date="2026-01-05"/>
