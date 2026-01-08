@@ -18,12 +18,18 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y flatpak flatpak-builder
-          flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
-          flatpak remote-add --user --if-not-exists flathub-beta https://dl.flathub.org/beta-repo/flathub-beta.flatpakrepo
+          export XDG_RUNTIME_DIR=/tmp/xdg-runtime-$UID
+          mkdir -p "$XDG_RUNTIME_DIR"
+          chmod 700 "$XDG_RUNTIME_DIR"
+          flatpak --user remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+          flatpak --user remote-add --if-not-exists flathub-beta https://dl.flathub.org/beta-repo/flathub-beta.flatpakrepo
 
       - name: Build Flatpak
         run: |
-          flatpak-builder --user --repo=flatpak-repo --force-clean --disable-rofiles-fuse build-dir .flathub/dev.rotstein.SmashedPumpkin.json
+          export XDG_RUNTIME_DIR=/tmp/xdg-runtime-$UID
+          mkdir -p "$XDG_RUNTIME_DIR"
+          chmod 700 "$XDG_RUNTIME_DIR"
+          flatpak-builder --user --repo=flatpak-repo --install-deps-from=flathub --install-deps-from=flathub-beta --force-clean --disable-rofiles-fuse build-dir .flathub/dev.rotstein.SmashedPumpkin.json
 
       - name: Bundle Flatpak
         run: |
