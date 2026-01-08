@@ -160,6 +160,7 @@ struct _PumpkinWindow {
   gboolean settings_loading;
   gboolean settings_guard;
   gboolean settings_invalid;
+  gboolean background_hold;
   char *last_details_page;
   char *pending_details_page;
   char *pending_view_page;
@@ -252,13 +253,17 @@ static void on_console_clear(GtkButton *button, PumpkinWindow *self);
 static void on_settings_changed(GtkEditable *editable, PumpkinWindow *self);
 static void on_settings_switch_changed(GObject *object, GParamSpec *pspec, PumpkinWindow *self);
 static void on_details_stack_changed(GObject *object, GParamSpec *pspec, PumpkinWindow *self);
+static void update_save_button(PumpkinWindow *self);
+static void update_save_button(PumpkinWindow *self);
 static gboolean widget_has_label(GtkWidget *widget, const char *label);
 static void disable_players_tab(PumpkinWindow *self);
 static void get_system_limits(int *max_cores, int *max_ram_mb);
 static void validate_settings_limits(PumpkinWindow *self);
+static int parse_limit_entry(GtkEntry *entry, int max_value);
 static gboolean parse_tps_from_line(const char *line, double *out);
 static void on_settings_leave_confirmed(GObject *dialog, GAsyncResult *res, gpointer user_data);
 static gboolean on_window_close_request(GtkWindow *window, gpointer user_data);
+static void on_window_visible_changed(GObject *object, GParamSpec *pspec, gpointer user_data);
 static gboolean query_minecraft_players(const char *host, int port, int *out_players, int *out_max_players);
 static void on_send_command(GtkButton *button, PumpkinWindow *self);
 static void on_choose_icon(GtkButton *button, PumpkinWindow *self);
@@ -395,16 +400,162 @@ log_line_matches_level(const char *line, int level_index)
   return TRUE;
 }
 
+static const char *
+get_entry_text(GtkEntry *entry)
+{
+  if (entry == NULL) {
+    return NULL;
+  }
+  return gtk_editable_get_text(GTK_EDITABLE(entry));
+}
+
+static int
+get_entry_int_value(GtkEntry *entry)
+{
+  if (entry == NULL) {
+    return 0;
+  }
+  const char *text = gtk_editable_get_text(GTK_EDITABLE(entry));
+  if (text == NULL || *text == '\0') {
+    return 0;
+  }
+  return atoi(text);
+}
+
+static gboolean
+strings_equal(const char *a, const char *b)
+{
+  const char *left = a != NULL ? a : "";
+  const char *right = b != NULL ? b : "";
+  return g_strcmp0(left, right) == 0;
+}
+
+static gboolean
+entry_matches_string(GtkEntry *entry, const char *value)
+{
+  if (entry == NULL) {
+    return TRUE;
+  }
+  return strings_equal(get_entry_text(entry), value);
+}
+
+static gboolean
+entry_matches_int(GtkEntry *entry, int value)
+{
+  if (entry == NULL) {
+    return TRUE;
+  }
+  return get_entry_int_value(entry) == value;
+}
+
+static gboolean
+global_switches_match(PumpkinWindow *self)
+{
+  if (self->config == NULL) {
+    return TRUE;
+  }
+  if (self->switch_use_cache != NULL &&
+      pumpkin_config_get_use_cache(self->config) != gtk_switch_get_active(self->switch_use_cache)) {
+    return FALSE;
+  }
+  if (self->switch_run_in_background != NULL &&
+      pumpkin_config_get_run_in_background(self->config) != gtk_switch_get_active(self->switch_run_in_background)) {
+    return FALSE;
+  }
+  return TRUE;
+}
+
+static gboolean
+settings_match_server(PumpkinWindow *self)
+{
+  if (self->current == NULL) {
+    return TRUE;
+  }
+  PumpkinServer *server = self->current;
+  if (!entry_matches_string(self->entry_server_name, pumpkin_server_get_name(server))) {
+    return FALSE;
+  }
+  if (!entry_matches_string(self->entry_download_url, pumpkin_server_get_download_url(server))) {
+    return FALSE;
+  }
+  if (!entry_matches_int(self->entry_server_port, pumpkin_server_get_port(server))) {
+    return FALSE;
+  }
+  if (!entry_matches_int(self->entry_bedrock_port, pumpkin_server_get_bedrock_port(server))) {
+    return FALSE;
+  }
+  if (!entry_matches_int(self->entry_max_players, pumpkin_server_get_max_players(server))) {
+    return FALSE;
+  }
+  int sys_cores = 0;
+  int sys_ram_mb = 0;
+  get_system_limits(&sys_cores, &sys_ram_mb);
+  if (parse_limit_entry(self->entry_max_cpu_cores, sys_cores) != pumpkin_server_get_max_cpu_cores(server)) {
+    return FALSE;
+  }
+  if (parse_limit_entry(self->entry_max_ram_mb, sys_ram_mb) != pumpkin_server_get_max_ram_mb(server)) {
+    return FALSE;
+  }
+  if (self->switch_auto_restart != NULL &&
+      pumpkin_server_get_auto_restart(server) != gtk_switch_get_active(self->switch_auto_restart)) {
+    return FALSE;
+  }
+  if (!entry_matches_int(self->entry_auto_restart_delay, pumpkin_server_get_auto_restart_delay(server))) {
+    return FALSE;
+  }
+  if (!entry_matches_string(self->entry_rcon_host, pumpkin_server_get_rcon_host(server))) {
+    return FALSE;
+  }
+  if (!entry_matches_int(self->entry_rcon_port, pumpkin_server_get_rcon_port(server))) {
+    return FALSE;
+  }
+  GtkEntry *rcon_password_entry = self->entry_rcon_password != NULL ? GTK_ENTRY(self->entry_rcon_password) : NULL;
+  if (!entry_matches_string(rcon_password_entry, pumpkin_server_get_rcon_password(server))) {
+    return FALSE;
+  }
+  return global_switches_match(self);
+}
+
+static gboolean
+settings_match_config(PumpkinWindow *self)
+{
+  if (self->config == NULL) {
+    return TRUE;
+  }
+  if (self->entry_download_url != NULL &&
+      !entry_matches_string(self->entry_download_url, pumpkin_config_get_default_download_url(self->config))) {
+    return FALSE;
+  }
+  return global_switches_match(self);
+}
+
+static gboolean
+settings_still_match_saved(PumpkinWindow *self)
+{
+  if (self->current != NULL) {
+    return settings_match_server(self);
+  }
+  return settings_match_config(self);
+}
+
 static void
 mark_settings_dirty(PumpkinWindow *self)
 {
   if (self->settings_loading) {
     return;
   }
-  self->settings_dirty = TRUE;
-  if (self->btn_save_settings != NULL) {
-    gtk_widget_set_sensitive(GTK_WIDGET(self->btn_save_settings), !self->settings_invalid);
+  self->settings_dirty = !settings_still_match_saved(self);
+  update_save_button(self);
+}
+
+static void
+update_save_button(PumpkinWindow *self)
+{
+  if (self->btn_save_settings == NULL) {
+    return;
   }
+  gtk_widget_set_sensitive(GTK_WIDGET(self->btn_save_settings),
+                           self->settings_dirty && !self->settings_invalid);
 }
 
 static void
@@ -442,11 +593,8 @@ on_settings_switch_changed(GObject *object, GParamSpec *pspec, PumpkinWindow *se
   (void)pspec;
   if (self->switch_run_in_background != NULL &&
       GTK_WIDGET(object) == GTK_WIDGET(self->switch_run_in_background)) {
-    if (self->config != NULL) {
-      pumpkin_config_set_run_in_background(self->config,
-                                           gtk_switch_get_active(self->switch_run_in_background));
-      pumpkin_config_save(self->config, NULL);
-    }
+    mark_settings_dirty(self);
+    validate_settings_limits(self);
     return;
   }
   mark_settings_dirty(self);
@@ -836,10 +984,7 @@ validate_settings_limits(PumpkinWindow *self)
 
   self->settings_invalid = cpu_invalid || ram_invalid || port_invalid || bedrock_port_invalid ||
                            players_invalid || rcon_port_invalid || rcon_host_invalid;
-  if (self->btn_save_settings != NULL) {
-    gtk_widget_set_sensitive(GTK_WIDGET(self->btn_save_settings),
-                             self->settings_dirty && !self->settings_invalid);
-  }
+  update_save_button(self);
 }
 
 static void
@@ -935,9 +1080,30 @@ on_window_close_request(GtkWindow *window, gpointer user_data)
   }
   if (run_in_background) {
     gtk_widget_set_visible(GTK_WIDGET(window), FALSE);
+    if (!self->background_hold) {
+      GApplication *app = G_APPLICATION(gtk_window_get_application(GTK_WINDOW(self)));
+      if (app != NULL) {
+        g_application_hold(app);
+        self->background_hold = TRUE;
+      }
+    }
     return TRUE;
   }
   return FALSE;
+}
+
+static void
+on_window_visible_changed(GObject *object, GParamSpec *pspec, gpointer user_data)
+{
+  (void)pspec;
+  PumpkinWindow *self = PUMPKIN_WINDOW(user_data);
+  if (gtk_widget_get_visible(GTK_WIDGET(object)) && self->background_hold) {
+    GApplication *app = G_APPLICATION(gtk_window_get_application(GTK_WINDOW(self)));
+    if (app != NULL) {
+      g_application_release(app);
+    }
+    self->background_hold = FALSE;
+  }
 }
 
 static void
@@ -5472,6 +5638,7 @@ pumpkin_window_init(PumpkinWindow *self)
 {
   gtk_widget_init_template(GTK_WIDGET(self));
   g_signal_connect(self, "close-request", G_CALLBACK(on_window_close_request), self);
+  g_signal_connect(self, "notify::visible", G_CALLBACK(on_window_visible_changed), self);
 
   adw_view_stack_set_visible_child_name(self->view_stack, "overview");
   if (self->details_stack != NULL) {

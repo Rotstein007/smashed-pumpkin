@@ -51,6 +51,16 @@ sources = [
   resources,
 ]
 
+install_data(join_paths('..', 'resources', 'icons', 'hicolor', 'scalable', 'apps',
+                        'dev.rotstein.SmashedPumpkin.svg'),
+             install_dir: join_paths(get_option('datadir'), 'icons', 'hicolor', 'scalable', 'apps'))
+install_data(join_paths('..', 'resources', 'icons', 'hicolor', 'symbolic', 'apps',
+                        'dev.rotstein.SmashedPumpkin-stats-symbolic.svg'),
+             install_dir: join_paths(get_option('datadir'), 'icons', 'hicolor', 'symbolic', 'apps'))
+install_data(join_paths('..', 'resources', 'icons', 'hicolor', '512x512', 'apps',
+                        'dev.rotstein.SmashedPumpkin.png'),
+             install_dir: join_paths(get_option('datadir'), 'icons', 'hicolor', '512x512', 'apps'))
+
 executable(
   'smashed-pumpkin',
   sources,
@@ -58,3 +68,16 @@ executable(
   dependencies: [adw_dep, Gtk_dep, soup_dep, psapi_dep, math_dep],
   install: true
 )
+
+gtk3_dep = dependency('gtk+-3.0', required: false)
+appindicator_dep = dependency('ayatana-appindicator3-0.1', required: false)
+
+if host_machine.system() == 'linux' and gtk3_dep.found() and appindicator_dep.found()
+  executable(
+    'smashed-pumpkin-tray',
+    ['tray.c', config_h, resources],
+    include_directories: inc,
+    dependencies: [gtk3_dep, appindicator_dep],
+    install: true
+  )
+endif
