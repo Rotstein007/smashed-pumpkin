@@ -29,7 +29,7 @@ jobs:
           export XDG_RUNTIME_DIR=/tmp/xdg-runtime-$UID
           mkdir -p "$XDG_RUNTIME_DIR"
           chmod 700 "$XDG_RUNTIME_DIR"
-          flatpak-builder --user --repo=flatpak-repo --install-deps-from=flathub --install-deps-from=flathub-beta --force-clean --disable-rofiles-fuse build-dir .flathub/dev.rotstein.SmashedPumpkin.json
+          flatpak-builder --user --repo=flatpak-repo --install-deps-from=flathub --install-deps-from=flathub-beta --force-clean --disable-rofiles-fuse build-dir build-aux/flatpak/dev.rotstein.SmashedPumpkin.json
 
       - name: Bundle Flatpak
         run: |
