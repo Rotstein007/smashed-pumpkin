@@ -14,18 +14,37 @@
   ],
   "modules": [
     {
-      "name": "libdbusmenu",
+      "name": "intltool",
       "buildsystem": "autotools",
       "config-opts": [
-        "--with-gtk=3",
-        "--disable-gtk-doc",
         "--disable-static"
       ],
       "sources": [
         {
           "type": "archive",
+          "url": "https://launchpad.net/intltool/trunk/0.51.0/+download/intltool-0.51.0.tar.gz",
+          "sha256": "67c74d94196b153b774ab9f89b2fa6c6ba79352407037c8c14d5aeb334e959cd"
+        }
+      ]
+    },
+    {
+      "name": "libdbusmenu",
+      "buildsystem": "simple",
+      "build-commands": [
+        "cd libdbusmenu-16.04.0 && python - <<'PY'\nfrom pathlib import Path\nimport re\npath = Path('configure.ac')\ntext = path.read_text()\nstart = text.index('AC_ARG_ENABLE([dumper]')\nend = text.index('AC_SUBST(DBUSMENUDUMPER_LIBS)', start)\nend = text.index('\\n', end) + 1\nnew = \"\"\"AC_ARG_ENABLE([dumper],\\n\\tAC_HELP_STRING([--disable-dumper], [Disable dbusmenudumper tool]),\\n\\t[enable_dumper=$enableval], [enable_dumper=no])\\nAM_CONDITIONAL([WANT_DBUSMENUDUMPER], [test \\\"x$enable_dumper\\\" = \\\"xyes\\\"])\\n\\nAC_SUBST(DBUSMENUDUMPER_CFLAGS)\\nAC_SUBST(DBUSMENUDUMPER_LIBS)\\n\"\"\"\ntext = text[:start] + new + text[end:]\ntext = re.sub(r\"PKG_CHECK_MODULES\\(DBUSMENUDUMPER[\\s\\S]*?\\n\\)\", \"\", text)\npath.write_text(text)\nPY",
+        "cd libdbusmenu-16.04.0 && grep -n \"gtk+-2.0\" configure.ac || true",
+        "cd libdbusmenu-16.04.0 && grep -n \"DBUSMENUDUMPER\" configure.ac || true",
+        "cd libdbusmenu-16.04.0 && autoreconf -vif",
+        "cd libdbusmenu-16.04.0 && CFLAGS=\"${CFLAGS} -Wno-error=deprecated-declarations -DGLIB_DISABLE_DEPRECATION_WARNINGS\" CXXFLAGS=\"${CXXFLAGS} -Wno-error=deprecated-declarations -DGLIB_DISABLE_DEPRECATION_WARNINGS\" ./configure --with-gtk=3 --disable-gtk-doc --disable-dumper --disable-static --prefix=/app --disable-introspection --libdir=/app/lib --disable-vala",
+        "cd libdbusmenu-16.04.0 && make -j$(nproc)",
+        "cd libdbusmenu-16.04.0 && make install"
+      ],
+      "sources": [
+        {
+          "type": "archive",
           "url": "https://launchpad.net/libdbusmenu/16.04/16.04.0/+download/libdbusmenu-16.04.0.tar.gz",
-          "sha256": "b9cc4a2acd74509435892823607d966d424bd9ad5d0b00938f27240a1bfa878a"
+          "sha256": "b9cc4a2acd74509435892823607d966d424bd9ad5d0b00938f27240a1bfa878a",
+          "dest": "libdbusmenu-16.04.0"
         }
       ]
     },
@@ -40,7 +59,7 @@
       "sources": [
         {
           "type": "archive",
-          "url": "https://codeload.github.com/AyatanaIndicators/ayatana-ido/tar.gz/0.10.4",
+          "url": "https://github.com/AyatanaIndicators/ayatana-ido/archive/refs/tags/0.10.4.tar.gz",
           "sha256": "bd59abd5f1314e411d0d55ce3643e91cef633271f58126be529de5fb71c5ab38"
         }
       ]
@@ -59,7 +78,7 @@
       "sources": [
         {
           "type": "archive",
-          "url": "https://codeload.github.com/AyatanaIndicators/libayatana-indicator/tar.gz/0.9.4",
+          "url": "https://github.com/AyatanaIndicators/libayatana-indicator/archive/refs/tags/0.9.4.tar.gz",
           "sha256": "a18d3c682e29afd77db24366f8475b26bda22b0e16ff569a2ec71cd6eb4eac95"
         }
       ]
@@ -80,7 +99,7 @@
       "sources": [
         {
           "type": "archive",
-          "url": "https://codeload.github.com/AyatanaIndicators/libayatana-appindicator/tar.gz/0.5.94",
+          "url": "https://github.com/AyatanaIndicators/libayatana-appindicator/archive/refs/tags/0.5.94.tar.gz",
           "sha256": "884a6bc77994c0b58c961613ca4c4b974dc91aa0f804e70e92f38a542d0d0f90"
         }
       ]
@@ -94,9 +113,8 @@
       ],
       "sources": [
         {
-          "type": "git",
-          "url": "https://github.com/Rotstein007/smashed-pumpkin.git",
-          "branch": "master"
+          "type": "dir",
+          "path": "."
         }
       ]
     }

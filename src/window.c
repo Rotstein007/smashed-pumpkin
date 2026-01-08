@@ -3091,6 +3091,9 @@ update_stats_tick(gpointer data)
       self->label_srv_cpu == NULL || self->label_srv_ram == NULL) {
     return G_SOURCE_CONTINUE;
   }
+  gboolean server_running = self->current != NULL && pumpkin_server_get_running(self->current);
+  gtk_widget_set_visible(GTK_WIDGET(self->label_srv_cpu), server_running);
+  gtk_widget_set_visible(GTK_WIDGET(self->label_srv_ram), server_running);
 
   unsigned long long total = 0, idle = 0;
   unsigned long long mem_total = 0, mem_avail = 0;
@@ -3180,17 +3183,21 @@ update_stats_tick(gpointer data)
     }
   }
 
-  if (pid > 0 && rss > 0) {
+  if (server_running && pid > 0 && rss > 0) {
     g_autofree char *rss_str = g_format_size_full(rss, G_FORMAT_SIZE_IEC_UNITS);
     g_autofree char *ram = g_strdup_printf("Pumpkin RAM: %s", rss_str);
     gtk_label_set_text(self->label_srv_ram, ram);
+  } else if (!server_running) {
+    gtk_label_set_text(self->label_srv_ram, "");
   } else {
     gtk_label_set_text(self->label_srv_ram, "Pumpkin RAM: --");
   }
 
-  if (pid > 0) {
+  if (server_running && pid > 0) {
     g_autofree char *pcpu = g_strdup_printf("Pumpkin CPU: %.1f%%", proc_cpu);
     gtk_label_set_text(self->label_srv_cpu, pcpu);
+  } else if (!server_running) {
+    gtk_label_set_text(self->label_srv_cpu, "");
   } else {
     gtk_label_set_text(self->label_srv_cpu, "Pumpkin CPU: --");
   }
