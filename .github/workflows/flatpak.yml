@@ -33,7 +33,7 @@ jobs:
 
       - name: Bundle Flatpak
         run: |
-          flatpak build-bundle flatpak-repo SmashedPumpkin.flatpak dev.rotstein.SmashedPumpkin x86_64 master
+          flatpak build-bundle --arch=x86_64 flatpak-repo SmashedPumpkin.flatpak dev.rotstein.SmashedPumpkin master
 
       - name: Upload Bundle
         uses: actions/upload-artifact@v4
