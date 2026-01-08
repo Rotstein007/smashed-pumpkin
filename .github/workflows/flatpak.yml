@@ -1,0 +1,36 @@
+name: Flatpak
+
+on:
+  push:
+    branches: ["master"]
+  pull_request:
+    branches: ["master"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Flatpak
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y flatpak flatpak-builder
+          flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+          flatpak remote-add --if-not-exists flathub-beta https://dl.flathub.org/beta-repo/flathub-beta.flatpakrepo
+
+      - name: Build Flatpak
+        run: |
+          flatpak-builder --repo=flatpak-repo --force-clean --disable-rofiles-fuse build-dir .flathub/dev.rotstein.SmashedPumpkin.json
+
+      - name: Bundle Flatpak
+        run: |
+          flatpak build-bundle flatpak-repo SmashedPumpkin.flatpak dev.rotstein.SmashedPumpkin x86_64 master
+
+      - name: Upload Bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: SmashedPumpkin.flatpak
+          path: SmashedPumpkin.flatpak
