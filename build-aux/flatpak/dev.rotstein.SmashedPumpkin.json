@@ -12,6 +12,11 @@
     "--device=dri",
     "--talk-name=org.kde.StatusNotifierWatcher"
   ],
+  "build-options": {
+    "env": {
+      "PKG_CONFIG_PATH": "/app/lib/pkgconfig:/app/lib64/pkgconfig"
+    }
+  },
   "modules": [
     {
       "name": "intltool",
