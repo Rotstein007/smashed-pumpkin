@@ -32,3 +32,5 @@ cache/
 
 # OS files
 .DS_Store
+
+.flathub
