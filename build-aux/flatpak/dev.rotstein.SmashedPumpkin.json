@@ -54,7 +54,9 @@
       "config-opts": [
         "-DENABLE_TESTS=OFF",
         "-DENABLE_COVERAGE=OFF",
-        "-DENABLE_WERROR=OFF"
+        "-DENABLE_WERROR=OFF",
+        "-DCMAKE_INSTALL_PREFIX=/app",
+        "-DCMAKE_INSTALL_LIBDIR=lib"
       ],
       "sources": [
         {
@@ -73,7 +75,9 @@
         "-DENABLE_WERROR=OFF",
         "-DENABLE_IDO=ON",
         "-DFLAVOUR_GTK3=ON",
-        "-DFLAVOUR_GTK2=OFF"
+        "-DFLAVOUR_GTK2=OFF",
+        "-DCMAKE_INSTALL_PREFIX=/app",
+        "-DCMAKE_INSTALL_LIBDIR=lib"
       ],
       "sources": [
         {
@@ -94,7 +98,9 @@
         "-DENABLE_BINDINGS_MONO=OFF",
         "-DENABLE_BINDINGS_VALA=OFF",
         "-DFLAVOUR_GTK3=ON",
-        "-DFLAVOUR_GTK2=OFF"
+        "-DFLAVOUR_GTK2=OFF",
+        "-DCMAKE_INSTALL_PREFIX=/app",
+        "-DCMAKE_INSTALL_LIBDIR=lib"
       ],
       "sources": [
         {
