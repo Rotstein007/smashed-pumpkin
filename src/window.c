@@ -92,7 +92,6 @@ struct _PumpkinWindow {
   GtkButton *btn_details_update;
   GtkButton *btn_details_check_updates;
   GtkEntry *entry_command;
-  GtkButton *btn_send_command;
   GtkButton *btn_console_copy;
   GtkButton *btn_console_clear;
   GtkButton *btn_open_server_root;
@@ -264,7 +263,7 @@ static void on_settings_leave_confirmed(GObject *dialog, GAsyncResult *res, gpoi
 static gboolean on_window_close_request(GtkWindow *window, gpointer user_data);
 static void on_window_visible_changed(GObject *object, GParamSpec *pspec, gpointer user_data);
 static gboolean query_minecraft_players(const char *host, int port, int *out_players, int *out_max_players);
-static void on_send_command(GtkButton *button, PumpkinWindow *self);
+static void on_send_command(GtkWidget *widget, PumpkinWindow *self);
 static void on_choose_icon(GtkButton *button, PumpkinWindow *self);
 static void on_reset_icon(GtkButton *button, PumpkinWindow *self);
 static void on_plugin_delete_clicked(GtkButton *button, PumpkinWindow *self);
@@ -2341,7 +2340,6 @@ update_details(PumpkinWindow *self)
     gtk_widget_set_sensitive(GTK_WIDGET(self->btn_details_update), FALSE);
     gtk_widget_set_visible(GTK_WIDGET(self->btn_details_update), TRUE);
     gtk_widget_set_sensitive(GTK_WIDGET(self->btn_details_check_updates), FALSE);
-    gtk_widget_set_sensitive(GTK_WIDGET(self->btn_send_command), FALSE);
     return;
   }
 
@@ -2398,7 +2396,6 @@ update_details(PumpkinWindow *self)
   gtk_widget_set_sensitive(GTK_WIDGET(self->btn_details_update), update_available && !running && !busy);
   gtk_widget_set_visible(GTK_WIDGET(self->btn_details_update), TRUE);
   gtk_widget_set_sensitive(GTK_WIDGET(self->btn_details_check_updates), installed && !running && !busy);
-  gtk_widget_set_sensitive(GTK_WIDGET(self->btn_send_command), running && self->ui_state == UI_STATE_RUNNING);
   if (self->btn_console_copy != NULL) {
     gtk_widget_set_sensitive(GTK_WIDGET(self->btn_console_copy), self->current != NULL);
   }
@@ -5206,9 +5203,9 @@ on_details_check_updates(GtkButton *button, PumpkinWindow *self)
 }
 
 static void
-on_send_command(GtkButton *button, PumpkinWindow *self)
+on_send_command(GtkWidget *widget, PumpkinWindow *self)
 {
-  (void)button;
+  (void)widget;
   if (self->current == NULL) {
     return;
   }
@@ -5633,7 +5630,6 @@ pumpkin_window_init(PumpkinWindow *self)
   g_signal_connect(self->btn_details_install, "clicked", G_CALLBACK(on_details_install), self);
   g_signal_connect(self->btn_details_update, "clicked", G_CALLBACK(on_details_update), self);
   g_signal_connect(self->btn_details_check_updates, "clicked", G_CALLBACK(on_details_check_updates), self);
-  g_signal_connect(self->btn_send_command, "clicked", G_CALLBACK(on_send_command), self);
   g_signal_connect(self->entry_command, "activate", G_CALLBACK(on_send_command), self);
   g_signal_connect(self->btn_choose_icon, "clicked", G_CALLBACK(on_choose_icon), self);
   g_signal_connect(self->btn_reset_icon, "clicked", G_CALLBACK(on_reset_icon), self);
@@ -5756,7 +5752,6 @@ pumpkin_window_init(PumpkinWindow *self)
   gtk_widget_set_sensitive(GTK_WIDGET(self->btn_details_update), FALSE);
   gtk_widget_set_visible(GTK_WIDGET(self->btn_details_update), FALSE);
   gtk_widget_set_sensitive(GTK_WIDGET(self->btn_details_check_updates), FALSE);
-  gtk_widget_set_sensitive(GTK_WIDGET(self->btn_send_command), FALSE);
 
   apply_compact_button(GTK_WIDGET(self->btn_details_check_updates));
   apply_compact_button(GTK_WIDGET(self->btn_details_install));
@@ -5973,7 +5968,6 @@ pumpkin_window_class_init(PumpkinWindowClass *class)
   gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, btn_details_update);
   gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, btn_details_check_updates);
   gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, entry_command);
-  gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, btn_send_command);
   gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, btn_console_copy);
   gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, btn_console_clear);
   gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, btn_open_server_root);
