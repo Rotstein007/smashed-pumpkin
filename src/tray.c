@@ -70,8 +70,8 @@ tray_server_free(TrayServer *server)
 static gint
 tray_server_compare(gconstpointer a, gconstpointer b)
 {
-  const TrayServer *sa = a;
-  const TrayServer *sb = b;
+  const TrayServer *sa = *(const TrayServer *const *)a;
+  const TrayServer *sb = *(const TrayServer *const *)b;
   if (sa == NULL || sa->name == NULL) {
     return -1;
   }
