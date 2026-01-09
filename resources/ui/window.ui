@@ -30,12 +30,6 @@
             <property name="show-start-title-buttons">true</property>
             <property name="show-end-title-buttons">true</property>
             <property name="decoration-layout">icon:minimize,maximize,close</property>
-            <property name="title-widget">
-              <object class="AdwWindowTitle">
-                <property name="title" translatable="yes">Smashed Pumpkin</property>
-                <property name="subtitle" translatable="yes">PumpkinMC Server Manager</property>
-              </object>
-            </property>
             <child type="end">
               <object class="GtkMenuButton">
                 <property name="icon-name">open-menu-symbolic</property>
