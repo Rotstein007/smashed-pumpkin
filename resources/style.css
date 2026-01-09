@@ -155,6 +155,8 @@ button.small > box > label {
 
 .drop-placeholder {
   padding: 24px;
+  min-width: 360px;
+  min-height: 160px;
   border-radius: 12px;
   border: 1px dashed alpha(currentColor, 0.2);
   color: alpha(currentColor, 0.85);
