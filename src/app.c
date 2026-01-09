@@ -151,6 +151,7 @@ pumpkin_app_command_line(GApplication *app, GApplicationCommandLine *command_lin
   char **argv = g_application_command_line_get_arguments(command_line, &argc);
   gboolean should_quit = FALSE;
   const char *server_id = NULL;
+  const char *server_name = NULL;
   for (int i = 1; i < argc; i++) {
     if (g_strcmp0(argv[i], "--quit") == 0) {
       should_quit = TRUE;
@@ -158,6 +159,9 @@ pumpkin_app_command_line(GApplication *app, GApplicationCommandLine *command_lin
     }
     if (g_str_has_prefix(argv[i], "--server-id=")) {
       server_id = argv[i] + strlen("--server-id=");
+    }
+    if (g_str_has_prefix(argv[i], "--server-name=")) {
+      server_name = argv[i] + strlen("--server-name=");
     }
   }
   g_strfreev(argv);
@@ -170,6 +174,9 @@ pumpkin_app_command_line(GApplication *app, GApplicationCommandLine *command_lin
   if (server_id != NULL && *server_id != '\0') {
     g_free(self->pending_server_id);
     self->pending_server_id = g_strdup(server_id);
+  } else if (server_name != NULL && *server_name != '\0') {
+    g_free(self->pending_server_id);
+    self->pending_server_id = g_strdup(server_name);
   }
   g_application_activate(app);
   return 0;

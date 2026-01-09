@@ -42,12 +42,12 @@ static void
 on_server_activate(GtkMenuItem *item, gpointer user_data)
 {
   (void)user_data;
-  const char *server_id = g_object_get_data(G_OBJECT(item), "server-id");
-  if (server_id == NULL || *server_id == '\0') {
+  const char *server_name = g_object_get_data(G_OBJECT(item), "server-name");
+  if (server_name == NULL || *server_name == '\0') {
     spawn_command(NULL);
     return;
   }
-  g_autofree char *arg = g_strdup_printf("--server-id=%s", server_id);
+  g_autofree char *arg = g_strdup_printf("--server-name=%s", server_name);
   spawn_command(arg);
 }
 
@@ -160,6 +160,7 @@ populate_menu(GtkWidget *menu)
       TrayServer *server = g_ptr_array_index(servers, i);
       GtkWidget *item = gtk_menu_item_new_with_label(server->name);
       g_object_set_data_full(G_OBJECT(item), "server-id", g_strdup(server->id), g_free);
+      g_object_set_data_full(G_OBJECT(item), "server-name", g_strdup(server->name), g_free);
       g_signal_connect(item, "activate", G_CALLBACK(on_server_activate), NULL);
       gtk_menu_shell_append(GTK_MENU_SHELL(menu), item);
     }
@@ -182,6 +183,23 @@ on_menu_show(GtkWidget *menu, gpointer user_data)
 {
   (void)user_data;
   populate_menu(menu);
+}
+
+static void
+on_menu_popped_up(GtkWidget *menu, gpointer user_data)
+{
+  (void)user_data;
+  populate_menu(menu);
+}
+
+static gboolean
+refresh_menu_cb(gpointer user_data)
+{
+  GtkWidget *menu = GTK_WIDGET(user_data);
+  if (menu != NULL) {
+    populate_menu(menu);
+  }
+  return G_SOURCE_CONTINUE;
 }
 
 static gboolean
@@ -220,8 +238,10 @@ main(int argc, char *argv[])
 
   GtkWidget *menu = gtk_menu_new();
   g_signal_connect(menu, "show", G_CALLBACK(on_menu_show), NULL);
+  g_signal_connect(menu, "popped-up", G_CALLBACK(on_menu_popped_up), NULL);
   populate_menu(menu);
   app_indicator_set_menu(indicator, GTK_MENU(menu));
+  g_timeout_add_seconds(5, refresh_menu_cb, menu);
 
   if (parent_pid > 0) {
     g_timeout_add_seconds(5, check_parent_alive, GINT_TO_POINTER(parent_pid));
