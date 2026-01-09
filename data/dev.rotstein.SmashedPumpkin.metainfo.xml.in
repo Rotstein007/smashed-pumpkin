@@ -32,6 +32,16 @@
     <display_length compare="ge">360</display_length>
   </requires>
   <releases>
+    <release version="0.2.0" date="2026-01-09">
+      <description>
+        <ul>
+          <li>Tray indicator now stays visible and offers quick server shortcuts.</li>
+          <li>Plugin URL download removed; drag-and-drop is the primary install path.</li>
+          <li>Console toolbar simplified and window title bar cleaned up.</li>
+          <li>Background mode behavior is clearer when closing the window.</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.1.0" date="2026-01-05"/>
   </releases>
 </component>

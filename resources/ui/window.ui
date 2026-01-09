@@ -6,7 +6,7 @@
   <menu id="app-menu">
     <section>
       <item>
-        <attribute name="label" translatable="yes">_About</attribute>
+        <attribute name="label" translatable="yes">_Info</attribute>
         <attribute name="action">app.about</attribute>
       </item>
     </section>

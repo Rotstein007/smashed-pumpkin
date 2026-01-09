@@ -34,3 +34,7 @@ cache/
 .DS_Store
 
 .flathub
+# Build/test artifacts
+buildDir/
+tmp/
+*.flatpak
