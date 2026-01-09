@@ -8,6 +8,7 @@
 
 struct _PumpkinApp {
   AdwApplication parent_instance;
+  char *pending_server_id;
 };
 
 G_DEFINE_FINAL_TYPE(PumpkinApp, pumpkin_app, ADW_TYPE_APPLICATION)
@@ -86,12 +87,17 @@ pumpkin_app_set_tray_enabled(PumpkinApp *app, gboolean enabled)
 static void
 pumpkin_app_activate(GApplication *app)
 {
+  PumpkinApp *self = PUMPKIN_APP(app);
   GtkWindow *win = gtk_application_get_active_window(GTK_APPLICATION(app));
   if (win == NULL) {
     win = GTK_WINDOW(pumpkin_window_new(ADW_APPLICATION(app)));
     gtk_window_set_default_icon_name(APP_ID);
   }
   gtk_window_present(win);
+  if (self->pending_server_id != NULL) {
+    pumpkin_window_select_server(PUMPKIN_WINDOW(win), self->pending_server_id);
+    g_clear_pointer(&self->pending_server_id, g_free);
+  }
 }
 
 static void
@@ -136,13 +142,18 @@ static const GActionEntry app_actions[] = {
 static int
 pumpkin_app_command_line(GApplication *app, GApplicationCommandLine *command_line)
 {
+  PumpkinApp *self = PUMPKIN_APP(app);
   int argc = 0;
   char **argv = g_application_command_line_get_arguments(command_line, &argc);
   gboolean should_quit = FALSE;
+  const char *server_id = NULL;
   for (int i = 1; i < argc; i++) {
     if (g_strcmp0(argv[i], "--quit") == 0) {
       should_quit = TRUE;
       break;
+    }
+    if (g_str_has_prefix(argv[i], "--server-id=")) {
+      server_id = argv[i] + strlen("--server-id=");
     }
   }
   g_strfreev(argv);
@@ -152,6 +163,10 @@ pumpkin_app_command_line(GApplication *app, GApplicationCommandLine *command_lin
     return 0;
   }
 
+  if (server_id != NULL && *server_id != '\0') {
+    g_free(self->pending_server_id);
+    self->pending_server_id = g_strdup(server_id);
+  }
   g_application_activate(app);
   return 0;
 }
@@ -173,13 +188,23 @@ pumpkin_app_startup(GApplication *app)
 }
 
 static void
+pumpkin_app_dispose(GObject *object)
+{
+  PumpkinApp *self = PUMPKIN_APP(object);
+  g_clear_pointer(&self->pending_server_id, g_free);
+  G_OBJECT_CLASS(pumpkin_app_parent_class)->dispose(object);
+}
+
+static void
 pumpkin_app_class_init(PumpkinAppClass *class)
 {
   GApplicationClass *app_class = G_APPLICATION_CLASS(class);
+  GObjectClass *object_class = G_OBJECT_CLASS(class);
 
   app_class->activate = pumpkin_app_activate;
   app_class->command_line = pumpkin_app_command_line;
   app_class->startup = pumpkin_app_startup;
+  object_class->dispose = pumpkin_app_dispose;
 }
 
 static void

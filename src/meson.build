@@ -75,7 +75,7 @@ appindicator_dep = dependency('ayatana-appindicator3-0.1', required: false)
 if host_machine.system() == 'linux' and gtk3_dep.found() and appindicator_dep.found()
   executable(
     'smashed-pumpkin-tray',
-    ['tray.c', config_h, resources],
+    ['tray.c', 'app-config.c', 'app-config.h', config_h, resources],
     include_directories: inc,
     dependencies: [gtk3_dep, appindicator_dep],
     install: true

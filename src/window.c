@@ -307,6 +307,7 @@ static gboolean update_stats_tick(gpointer data);
 static void on_install_plugin(GtkButton *button, PumpkinWindow *self);
 static void on_open_server_root(GtkButton *button, PumpkinWindow *self);
 static gboolean restart_after_delay(gpointer data);
+static void select_server_row(PumpkinWindow *self, PumpkinServer *server);
 
 static void
 apply_compact_button(GtkWidget *button)
@@ -4055,6 +4056,28 @@ select_server(PumpkinWindow *self, PumpkinServer *server)
 }
 
 static void
+select_server_row(PumpkinWindow *self, PumpkinServer *server)
+{
+  if (self->server_list == NULL) {
+    select_server(self, server);
+    return;
+  }
+
+  GtkWidget *child = gtk_widget_get_first_child(GTK_WIDGET(self->server_list));
+  while (child != NULL) {
+    GtkListBoxRow *row = GTK_LIST_BOX_ROW(child);
+    PumpkinServer *row_server = g_object_get_data(G_OBJECT(row), "server");
+    if (row_server == server) {
+      gtk_list_box_select_row(self->server_list, row);
+      return;
+    }
+    child = gtk_widget_get_next_sibling(child);
+  }
+
+  select_server(self, server);
+}
+
+static void
 on_server_selected(GtkListBox *box, GtkListBoxRow *row, PumpkinWindow *self)
 {
   (void)box;
@@ -6079,4 +6102,34 @@ GtkWindow *
 pumpkin_window_new(AdwApplication *app)
 {
   return GTK_WINDOW(g_object_new(PUMPKIN_TYPE_WINDOW, "application", app, NULL));
+}
+
+void
+pumpkin_window_select_server(PumpkinWindow *self, const char *id_or_name)
+{
+  if (self == NULL || id_or_name == NULL || *id_or_name == '\0') {
+    return;
+  }
+  if (self->store == NULL) {
+    return;
+  }
+
+  GListModel *model = pumpkin_server_store_get_model(self->store);
+  guint n = g_list_model_get_n_items(model);
+  for (guint i = 0; i < n; i++) {
+    PumpkinServer *server = g_list_model_get_item(model, i);
+    if (server == NULL) {
+      continue;
+    }
+    const char *sid = pumpkin_server_get_id(server);
+    const char *sname = pumpkin_server_get_name(server);
+    gboolean match = (sid != NULL && g_strcmp0(sid, id_or_name) == 0) ||
+                     (sname != NULL && g_strcmp0(sname, id_or_name) == 0);
+    if (match) {
+      select_server_row(self, server);
+      g_object_unref(server);
+      return;
+    }
+    g_object_unref(server);
+  }
 }

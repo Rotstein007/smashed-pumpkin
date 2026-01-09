@@ -3,6 +3,7 @@
 #include <gtk/gtk.h>
 #include <libayatana-appindicator/app-indicator.h>
 #include "smashed-pumpkin-resources.h"
+#include "app-config.h"
 
 #include <errno.h>
 #include <signal.h>
@@ -35,6 +36,152 @@ on_quit_activate(GtkMenuItem *item, gpointer user_data)
   (void)user_data;
   spawn_command("--quit");
   gtk_main_quit();
+}
+
+static void
+on_server_activate(GtkMenuItem *item, gpointer user_data)
+{
+  (void)user_data;
+  const char *server_id = g_object_get_data(G_OBJECT(item), "server-id");
+  if (server_id == NULL || *server_id == '\0') {
+    spawn_command(NULL);
+    return;
+  }
+  g_autofree char *arg = g_strdup_printf("--server-id=%s", server_id);
+  spawn_command(arg);
+}
+
+typedef struct {
+  char *id;
+  char *name;
+} TrayServer;
+
+static void
+tray_server_free(TrayServer *server)
+{
+  if (server == NULL) {
+    return;
+  }
+  g_free(server->id);
+  g_free(server->name);
+  g_free(server);
+}
+
+static gint
+tray_server_compare(gconstpointer a, gconstpointer b)
+{
+  const TrayServer *sa = a;
+  const TrayServer *sb = b;
+  if (sa == NULL || sa->name == NULL) {
+    return -1;
+  }
+  if (sb == NULL || sb->name == NULL) {
+    return 1;
+  }
+  return g_ascii_strcasecmp(sa->name, sb->name);
+}
+
+static char *
+get_base_dir(void)
+{
+  PumpkinConfig *config = pumpkin_config_load(NULL);
+  if (config != NULL) {
+    char *base = g_strdup(pumpkin_config_get_base_dir(config));
+    pumpkin_config_free(config);
+    return base;
+  }
+  return g_build_filename(g_get_user_data_dir(), "smashed-pumpkin", "servers", NULL);
+}
+
+static GPtrArray *
+load_servers(void)
+{
+  g_autofree char *base_dir = get_base_dir();
+  GPtrArray *servers = g_ptr_array_new_with_free_func((GDestroyNotify)tray_server_free);
+  if (base_dir == NULL) {
+    return servers;
+  }
+
+  GDir *dir = g_dir_open(base_dir, 0, NULL);
+  if (dir == NULL) {
+    return servers;
+  }
+
+  const char *entry = NULL;
+  while ((entry = g_dir_read_name(dir)) != NULL) {
+    g_autofree char *server_dir = g_build_filename(base_dir, entry, NULL);
+    g_autofree char *ini = g_build_filename(server_dir, "server.ini", NULL);
+    if (!g_file_test(ini, G_FILE_TEST_EXISTS)) {
+      continue;
+    }
+    g_autoptr(GKeyFile) key = g_key_file_new();
+    if (!g_key_file_load_from_file(key, ini, G_KEY_FILE_NONE, NULL)) {
+      continue;
+    }
+    g_autofree char *id = g_key_file_get_string(key, "server", "id", NULL);
+    g_autofree char *name = g_key_file_get_string(key, "server", "name", NULL);
+    TrayServer *server = g_new0(TrayServer, 1);
+    server->id = g_strdup(id != NULL ? id : entry);
+    server->name = g_strdup(name != NULL ? name : entry);
+    g_ptr_array_add(servers, server);
+  }
+  g_dir_close(dir);
+
+  g_ptr_array_sort(servers, (GCompareFunc)tray_server_compare);
+  return servers;
+}
+
+static void
+clear_menu(GtkWidget *menu)
+{
+  GList *children = gtk_container_get_children(GTK_CONTAINER(menu));
+  for (GList *l = children; l != NULL; l = l->next) {
+    gtk_widget_destroy(GTK_WIDGET(l->data));
+  }
+  g_list_free(children);
+}
+
+static void
+populate_menu(GtkWidget *menu)
+{
+  clear_menu(menu);
+
+  GtkWidget *servers_header = gtk_menu_item_new_with_label("Servers");
+  gtk_widget_set_sensitive(servers_header, FALSE);
+  gtk_menu_shell_append(GTK_MENU_SHELL(menu), servers_header);
+
+  g_autoptr(GPtrArray) servers = load_servers();
+  if (servers->len == 0) {
+    GtkWidget *empty = gtk_menu_item_new_with_label("No servers");
+    gtk_widget_set_sensitive(empty, FALSE);
+    gtk_menu_shell_append(GTK_MENU_SHELL(menu), empty);
+  } else {
+    for (guint i = 0; i < servers->len; i++) {
+      TrayServer *server = g_ptr_array_index(servers, i);
+      GtkWidget *item = gtk_menu_item_new_with_label(server->name);
+      g_object_set_data_full(G_OBJECT(item), "server-id", g_strdup(server->id), g_free);
+      g_signal_connect(item, "activate", G_CALLBACK(on_server_activate), NULL);
+      gtk_menu_shell_append(GTK_MENU_SHELL(menu), item);
+    }
+  }
+
+  gtk_menu_shell_append(GTK_MENU_SHELL(menu), gtk_separator_menu_item_new());
+
+  GtkWidget *show_item = gtk_menu_item_new_with_label("Show");
+  GtkWidget *quit_item = gtk_menu_item_new_with_label("Quit");
+  g_signal_connect(show_item, "activate", G_CALLBACK(on_show_activate), NULL);
+  g_signal_connect(quit_item, "activate", G_CALLBACK(on_quit_activate), NULL);
+  gtk_menu_shell_append(GTK_MENU_SHELL(menu), show_item);
+  gtk_menu_shell_append(GTK_MENU_SHELL(menu), quit_item);
+
+  gtk_widget_show_all(menu);
+}
+
+static void
+on_menu_show(GtkWidget *menu, gpointer user_data)
+{
+  (void)user_data;
+  populate_menu(menu);
 }
 
 static gboolean
@@ -72,15 +219,8 @@ main(int argc, char *argv[])
   app_indicator_set_icon_full(indicator, APP_ID, "Smashed Pumpkin");
 
   GtkWidget *menu = gtk_menu_new();
-  GtkWidget *show_item = gtk_menu_item_new_with_label("Show");
-  GtkWidget *quit_item = gtk_menu_item_new_with_label("Quit");
-
-  g_signal_connect(show_item, "activate", G_CALLBACK(on_show_activate), NULL);
-  g_signal_connect(quit_item, "activate", G_CALLBACK(on_quit_activate), NULL);
-
-  gtk_menu_shell_append(GTK_MENU_SHELL(menu), show_item);
-  gtk_menu_shell_append(GTK_MENU_SHELL(menu), quit_item);
-  gtk_widget_show_all(menu);
+  g_signal_connect(menu, "show", G_CALLBACK(on_menu_show), NULL);
+  populate_menu(menu);
   app_indicator_set_menu(indicator, GTK_MENU(menu));
 
   if (parent_pid > 0) {
