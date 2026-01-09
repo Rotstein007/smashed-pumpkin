@@ -1,4 +1,5 @@
 #include "window.h"
+#include "app.h"
 
 #include "app-config.h"
 #include "download.h"
@@ -5629,6 +5630,13 @@ on_save_settings(GtkButton *button, PumpkinWindow *self)
       pumpkin_config_set_run_in_background(self->config, gtk_switch_get_active(self->switch_run_in_background));
     }
     pumpkin_config_save(self->config, NULL);
+    if (self->switch_run_in_background != NULL) {
+      GApplication *app = g_application_get_default();
+      if (PUMPKIN_IS_APP(app)) {
+        pumpkin_app_set_tray_enabled(PUMPKIN_APP(app),
+                                     gtk_switch_get_active(self->switch_run_in_background));
+      }
+    }
   }
 
   self->settings_dirty = FALSE;

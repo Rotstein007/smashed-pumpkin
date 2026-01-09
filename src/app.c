@@ -12,11 +12,25 @@ struct _PumpkinApp {
 
 G_DEFINE_FINAL_TYPE(PumpkinApp, pumpkin_app, ADW_TYPE_APPLICATION)
 
+static GPid tray_pid = 0;
+static gboolean tray_spawned = FALSE;
+
+static void
+on_tray_exit(GPid pid, int status, gpointer user_data)
+{
+  (void)status;
+  (void)user_data;
+  if (pid == tray_pid) {
+    tray_pid = 0;
+    tray_spawned = FALSE;
+  }
+  g_spawn_close_pid(pid);
+}
+
 static void
 spawn_tray_helper(void)
 {
-  static gboolean spawned = FALSE;
-  if (spawned) {
+  if (tray_spawned) {
     return;
   }
   g_autofree char *tray_path = g_find_program_in_path("smashed-pumpkin-tray");
@@ -31,17 +45,42 @@ spawn_tray_helper(void)
     g_warning("Could not find smashed-pumpkin-tray helper");
     return;
   }
-  spawned = TRUE;
   char *arg = g_strdup_printf("--parent-pid=%d", (int)getpid());
   gchar *argv[] = { tray_path, arg, NULL };
   GError *error = NULL;
-  if (!g_spawn_async(NULL, argv, NULL, G_SPAWN_SEARCH_PATH, NULL, NULL, NULL, &error)) {
+  if (!g_spawn_async(NULL, argv, NULL, G_SPAWN_SEARCH_PATH | G_SPAWN_DO_NOT_REAP_CHILD,
+                     NULL, NULL, &tray_pid, &error)) {
     g_warning("Failed to start tray helper: %s", error->message);
     g_clear_error(&error);
     g_free(arg);
     return;
   }
+  tray_spawned = TRUE;
+  g_child_watch_add(tray_pid, on_tray_exit, NULL);
   g_free(arg);
+}
+
+static void
+stop_tray_helper(void)
+{
+  if (!tray_spawned || tray_pid <= 0) {
+    return;
+  }
+  kill(tray_pid, SIGTERM);
+  g_spawn_close_pid(tray_pid);
+  tray_pid = 0;
+  tray_spawned = FALSE;
+}
+
+void
+pumpkin_app_set_tray_enabled(PumpkinApp *app, gboolean enabled)
+{
+  (void)app;
+  if (enabled) {
+    spawn_tray_helper();
+  } else {
+    stop_tray_helper();
+  }
 }
 
 static void
@@ -85,6 +124,7 @@ pumpkin_app_quit_action(GSimpleAction *action,
 {
   (void)action;
   (void)parameter;
+  stop_tray_helper();
   g_application_quit(G_APPLICATION(user_data));
 }
 
@@ -129,13 +169,7 @@ pumpkin_app_startup(GApplication *app)
   g_action_map_add_action_entries(G_ACTION_MAP(app), app_actions, G_N_ELEMENTS(app_actions), app);
   gtk_application_set_accels_for_action(GTK_APPLICATION(app), "app.quit", (const char*[]) { "<primary>q", NULL });
 
-  PumpkinConfig *config = pumpkin_config_load(NULL);
-  if (config != NULL && pumpkin_config_get_run_in_background(config)) {
-    spawn_tray_helper();
-  }
-  if (config != NULL) {
-    pumpkin_config_free(config);
-  }
+  pumpkin_app_set_tray_enabled(PUMPKIN_APP(app), TRUE);
 }
 
 static void
