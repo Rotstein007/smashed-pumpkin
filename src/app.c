@@ -111,16 +111,52 @@ pumpkin_app_about_action(GSimpleAction *action,
   GtkWindow *win = gtk_application_get_active_window(GTK_APPLICATION(app));
 
   AdwAboutDialog *about = ADW_ABOUT_DIALOG(adw_about_dialog_new());
+  gboolean is_de = FALSE;
+  const char *const *langs = g_get_language_names();
+  for (const char *const *lang = langs; lang != NULL && *lang != NULL; lang++) {
+    if (g_str_has_prefix(*lang, "de")) {
+      is_de = TRUE;
+      break;
+    }
+  }
   adw_about_dialog_set_application_name(about, APP_NAME);
   adw_about_dialog_set_application_icon(about, APP_ID);
   adw_about_dialog_set_version(about, APP_VERSION);
+  adw_about_dialog_set_release_notes_version(about, "0.2.0");
+  if (is_de) {
+    adw_about_dialog_set_release_notes(
+      about,
+      "<p>Neuerungen</p>"
+      "<ul>"
+      "<li>Tray-Icon mit Schnellwechsel zwischen Servern und Hintergrundmodus.</li>"
+      "<li>Drag &amp; Drop für Plugins und Welten.</li>"
+      "<li>Ressourcenlimits für CPU-Kerne und RAM.</li>"
+      "<li>Überarbeitete und klarere Einstellungen.</li>"
+      "</ul>");
+  } else {
+    adw_about_dialog_set_release_notes(
+      about,
+      "<p>What’s new</p>"
+      "<ul>"
+      "<li>Tray icon with quick server switching and background mode support.</li>"
+      "<li>Drag and drop to add plugins and worlds.</li>"
+      "<li>Resource limits for CPU cores and RAM.</li>"
+      "<li>Settings overhaul for clarity.</li>"
+      "</ul>");
+  }
   adw_about_dialog_set_developer_name(about, "Rotstein");
   adw_about_dialog_set_comments(about,
-                                "This is an independend tool.");
-  adw_about_dialog_set_website(about, "https://github.com/Rotstein007/smashed-pumpkin");
+                                is_de
+                                  ? "Dies ist ein unabhängiges Tool und steht nicht in Verbindung mit PumpkinMC. "
+                                    "Die folgenden Links führen zum PumpkinMC-Projekt."
+                                  : "This is an independend tool and is not related to PumpkinMC. "
+                                    "The following links lead to the PumpkinMC project.");
+  adw_about_dialog_set_support_url(about, "https://github.com/Rotstein007/smashed-pumpkin");
   adw_about_dialog_set_issue_url(about, "https://github.com/Rotstein007/smashed-pumpkin/issues");
-  adw_about_dialog_add_link(about, "Website", "https://pumpkinmc.org/");
-  adw_about_dialog_add_link(about, "Contribute", "https://docs.pumpkinmc.org/developer/contributing");
+  adw_about_dialog_set_license_type(about, GTK_LICENSE_GPL_3_0);
+  adw_about_dialog_add_link(about, is_de ? "Webseite" : "Website", "https://pumpkinmc.org/");
+  adw_about_dialog_add_link(about, is_de ? "Mitwirken" : "Contribute",
+                            "https://docs.pumpkinmc.org/developer/contributing");
   adw_about_dialog_add_link(about, "Issues", "https://github.com/Pumpkin-MC/Pumpkin/issues");
   adw_dialog_present(ADW_DIALOG(about), GTK_WIDGET(win));
 }
