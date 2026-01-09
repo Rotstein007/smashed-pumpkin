@@ -116,12 +116,12 @@ pumpkin_app_about_action(GSimpleAction *action,
   adw_about_dialog_set_version(about, APP_VERSION);
   adw_about_dialog_set_developer_name(about, "Rotstein");
   adw_about_dialog_set_comments(about,
-                                "Independent community tool, not affiliated with PumpkinMC.");
+                                "This is an independend tool.");
   adw_about_dialog_set_website(about, "https://github.com/Rotstein007/smashed-pumpkin");
   adw_about_dialog_set_issue_url(about, "https://github.com/Rotstein007/smashed-pumpkin/issues");
-  adw_about_dialog_add_link(about, "PumpkinMC · Website", "https://pumpkinmc.org/");
-  adw_about_dialog_add_link(about, "PumpkinMC · Contribute", "https://docs.pumpkinmc.org/developer/contributing");
-  adw_about_dialog_add_link(about, "PumpkinMC · Issues", "https://github.com/Pumpkin-MC/Pumpkin/issues");
+  adw_about_dialog_add_link(about, "Website", "https://pumpkinmc.org/");
+  adw_about_dialog_add_link(about, "Contribute", "https://docs.pumpkinmc.org/developer/contributing");
+  adw_about_dialog_add_link(about, "Issues", "https://github.com/Pumpkin-MC/Pumpkin/issues");
   adw_dialog_present(ADW_DIALOG(about), GTK_WIDGET(win));
 }
 
