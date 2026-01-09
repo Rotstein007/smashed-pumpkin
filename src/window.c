@@ -2026,7 +2026,7 @@ refresh_overview_list(PumpkinWindow *self)
     g_signal_connect(btn_settings, "clicked", G_CALLBACK(on_overview_settings_clicked), self);
     gtk_box_append(GTK_BOX(btn_box), btn_settings);
 
-    GtkWidget *btn_remove = gtk_button_new_with_label("Remove");
+    GtkWidget *btn_remove = gtk_button_new_with_label("Delete");
     gtk_widget_add_css_class(btn_remove, "card-button");
     gtk_widget_add_css_class(btn_remove, "destructive-action");
     g_object_set_data_full(G_OBJECT(btn_remove), "server", g_object_ref(server), g_object_unref);

@@ -1285,7 +1285,7 @@
                         </child>
                         <child>
                           <object class="GtkButton" id="btn_remove_server">
-                            <property name="label" translatable="yes">Remove</property>
+                            <property name="label" translatable="yes">Delete</property>
                           </object>
                         </child>
                       </object>
