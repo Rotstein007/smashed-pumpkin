@@ -120,6 +120,7 @@ pumpkin_app_about_action(GSimpleAction *action,
                                 "It is not affiliated with, endorsed by, or sponsored by the PumpkinMC project.");
   adw_about_dialog_set_website(about, "https://github.com/Pumpkin-MC/Pumpkin");
   adw_about_dialog_set_issue_url(about, "https://github.com/Pumpkin-MC/Pumpkin/issues");
+  adw_about_dialog_add_link(about, "PumpkinMC", "https://pumpkinmc.org");
   adw_dialog_present(ADW_DIALOG(about), GTK_WIDGET(win));
 }
 
