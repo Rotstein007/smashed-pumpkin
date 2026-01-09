@@ -52,8 +52,6 @@ struct _PumpkinWindow {
   GtkButton *btn_open_players;
   GtkButton *btn_open_worlds;
   GtkButton *btn_save_settings;
-  GtkEntry *entry_plugin_url;
-  GtkButton *btn_install_plugin;
 
   GtkListBox *plugin_list;
   GtkListBox *world_list;
@@ -304,7 +302,6 @@ static void set_console_warning(PumpkinWindow *self, const char *message, gboole
 static char *strip_ansi(const char *line);
 static gboolean hide_status_cb(gpointer data);
 static gboolean update_stats_tick(gpointer data);
-static void on_install_plugin(GtkButton *button, PumpkinWindow *self);
 static void on_open_server_root(GtkButton *button, PumpkinWindow *self);
 static gboolean restart_after_delay(gpointer data);
 static void select_server_row(PumpkinWindow *self, PumpkinServer *server);
@@ -5330,92 +5327,6 @@ refresh_log_files(PumpkinWindow *self)
   g_dir_close(dir);
 }
 
-typedef struct {
-  PumpkinWindow *self;
-  char *dest_path;
-  char *tmp_path;
-} PluginDownloadContext;
-
-static void
-plugin_download_context_free(PluginDownloadContext *ctx)
-{
-  if (ctx == NULL) {
-    return;
-  }
-  g_clear_object(&ctx->self);
-  g_clear_pointer(&ctx->dest_path, g_free);
-  g_clear_pointer(&ctx->tmp_path, g_free);
-  g_free(ctx);
-}
-
-static void
-on_plugin_download_done(GObject *source, GAsyncResult *res, gpointer user_data)
-{
-  (void)source;
-  PluginDownloadContext *ctx = user_data;
-  PumpkinWindow *self = ctx->self;
-  g_autoptr(GError) error = NULL;
-
-  if (!pumpkin_download_file_finish(res, &error)) {
-    append_log(self, error->message);
-    plugin_download_context_free(ctx);
-    return;
-  }
-
-  if (ctx->tmp_path != NULL && ctx->dest_path != NULL) {
-    if (g_rename(ctx->tmp_path, ctx->dest_path) != 0) {
-      g_autofree char *msg = g_strdup_printf("Failed to install plugin: %s", g_strerror(errno));
-      append_log(self, msg);
-      plugin_download_context_free(ctx);
-      return;
-    }
-  }
-
-  append_log(self, "Plugin downloaded");
-  refresh_plugin_list(self);
-  plugin_download_context_free(ctx);
-}
-
-static void
-on_install_plugin(GtkButton *button, PumpkinWindow *self)
-{
-  (void)button;
-  if (self->current == NULL || self->entry_plugin_url == NULL) {
-    return;
-  }
-
-  const char *url = gtk_editable_get_text(GTK_EDITABLE(self->entry_plugin_url));
-  if (url == NULL || *url == '\0') {
-    append_log(self, "Plugin URL is empty.");
-    return;
-  }
-
-  g_autoptr(GUri) uri = g_uri_parse(url, G_URI_FLAGS_NONE, NULL);
-  const char *path = uri != NULL ? g_uri_get_path(uri) : NULL;
-  if (path == NULL || *path == '\0') {
-    append_log(self, "Invalid plugin URL.");
-    return;
-  }
-
-  g_autofree char *filename = g_path_get_basename(path);
-  if (filename == NULL || *filename == '\0') {
-    append_log(self, "Invalid plugin URL.");
-    return;
-  }
-
-  g_autofree char *plugins_dir = pumpkin_server_get_plugins_dir(self->current);
-  g_autofree char *dest = g_build_filename(plugins_dir, filename, NULL);
-  g_autofree char *tmp = g_strconcat(dest, ".tmp", NULL);
-
-  PluginDownloadContext *ctx = g_new0(PluginDownloadContext, 1);
-  ctx->self = g_object_ref(self);
-  ctx->dest_path = g_strdup(dest);
-  ctx->tmp_path = g_strdup(tmp);
-
-  pumpkin_download_file_async(url, tmp, NULL, NULL, NULL, on_plugin_download_done, ctx);
-  append_log(self, "Downloading plugin...");
-  gtk_editable_set_text(GTK_EDITABLE(self->entry_plugin_url), "");
-}
 
 static void
 on_log_filter_changed(GObject *object, GParamSpec *pspec, PumpkinWindow *self)
@@ -5780,9 +5691,6 @@ pumpkin_window_init(PumpkinWindow *self)
     g_signal_connect(self->switch_run_in_background, "notify::active",
                      G_CALLBACK(on_settings_switch_changed), self);
   }
-  if (self->btn_install_plugin != NULL) {
-    g_signal_connect(self->btn_install_plugin, "clicked", G_CALLBACK(on_install_plugin), self);
-  }
   if (self->btn_open_server_root != NULL) {
     g_signal_connect(self->btn_open_server_root, "clicked", G_CALLBACK(on_open_server_root), self);
   }
@@ -6014,8 +5922,6 @@ pumpkin_window_class_init(PumpkinWindowClass *class)
   gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, btn_add_server_overview);
   gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, btn_import_server);
   gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, btn_import_server_overview);
-  gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, entry_plugin_url);
-  gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, btn_install_plugin);
   gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, btn_remove_server);
   gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, btn_open_plugins);
   gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, btn_open_players);
