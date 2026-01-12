@@ -7,13 +7,6 @@
     <p>Smashed Pumpkin helps you install, update, start and manage PumpkinMC servers without losing worlds or plugins. It keeps track of server instances, provides clear status information with logs and organizes everything in a modern GNOME interface.</p>
     <p>Planned management features include plugin directories, player lists, permissions and world data with safe defaults plus quick access to configuration files.</p>
   </description>
-  <icons>
-    <icon type="cached" width="128" height="128">dev.rotstein.SmashedPumpkin.png</icon>
-    <icon type="cached" width="64" height="64">dev.rotstein.SmashedPumpkin.png</icon>
-    <icon type="cached" width="64" height="64" scale="2">dev.rotstein.SmashedPumpkin.png</icon>
-    <icon type="cached" width="32" height="32">dev.rotstein.SmashedPumpkin.svg</icon>
-    <icon type="cached" width="128" height="128" scale="2">dev.rotstein.SmashedPumpkin.png</icon>
-  </icons>
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>GPL-3.0-or-later</project_license>
   <developer_name>Rotstein</developer_name>
