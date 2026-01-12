@@ -353,6 +353,11 @@
                                       </object>
                                     </child>
                                     <child>
+                                      <object class="GtkButton" id="btn_console_send">
+                                        <property name="label" translatable="yes">Send</property>
+                                      </object>
+                                    </child>
+                                    <child>
                                       <object class="GtkButton" id="btn_console_copy">
                                         <property name="label" translatable="yes">Copy</property>
                                       </object>

@@ -92,6 +92,7 @@ struct _PumpkinWindow {
   GtkButton *btn_details_update;
   GtkButton *btn_details_check_updates;
   GtkEntry *entry_command;
+  GtkButton *btn_console_send;
   GtkButton *btn_console_copy;
   GtkButton *btn_console_clear;
   GtkButton *btn_open_server_root;
@@ -2398,6 +2399,9 @@ update_details(PumpkinWindow *self)
   gtk_widget_set_sensitive(GTK_WIDGET(self->btn_details_check_updates), installed && !running && !busy);
   if (self->btn_console_copy != NULL) {
     gtk_widget_set_sensitive(GTK_WIDGET(self->btn_console_copy), self->current != NULL);
+  }
+  if (self->btn_console_send != NULL) {
+    gtk_widget_set_sensitive(GTK_WIDGET(self->btn_console_send), self->current != NULL);
   }
   if (self->btn_console_clear != NULL) {
     gtk_widget_set_sensitive(GTK_WIDGET(self->btn_console_clear), self->current != NULL);
@@ -5708,6 +5712,9 @@ pumpkin_window_init(PumpkinWindow *self)
   if (self->btn_console_copy != NULL) {
     g_signal_connect(self->btn_console_copy, "clicked", G_CALLBACK(on_console_copy), self);
   }
+  if (self->btn_console_send != NULL) {
+    g_signal_connect(self->btn_console_send, "clicked", G_CALLBACK(on_send_command), self);
+  }
   if (self->btn_console_clear != NULL) {
     g_signal_connect(self->btn_console_clear, "clicked", G_CALLBACK(on_console_clear), self);
   }
@@ -5968,6 +5975,7 @@ pumpkin_window_class_init(PumpkinWindowClass *class)
   gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, btn_details_update);
   gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, btn_details_check_updates);
   gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, entry_command);
+  gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, btn_console_send);
   gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, btn_console_copy);
   gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, btn_console_clear);
   gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, btn_open_server_root);
