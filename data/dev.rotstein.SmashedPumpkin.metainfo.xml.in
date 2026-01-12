@@ -32,7 +32,7 @@
     <display_length compare="ge">360</display_length>
   </requires>
   <releases>
-    <release version="0.2.0" date="2026-01-09">
+    <release version="0.2.0" date="2026-01-12">
       <description>
         <ul>
           <li>Tray indicator now stays visible and offers quick server shortcuts.</li>
