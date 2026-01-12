@@ -1,4 +1,4 @@
-<h1><img src="data/icons/hicolor/scalable/apps/dev.rotstein.SmashedPumpkin.svg" width="30" alt="Smashed Pumpkin" style="vertical-align:middle"> Smashed Pumpkin</h1>
+<h1><img src="data/icons/hicolor/scalable/apps/dev.rotstein.SmashedPumpkin.svg" width="35" alt="Smashed Pumpkin" style="vertical-align:middle"> Smashed Pumpkin</h1>
 
 Manage PumpkinMC servers with a modern GNOME desktop app.
 
