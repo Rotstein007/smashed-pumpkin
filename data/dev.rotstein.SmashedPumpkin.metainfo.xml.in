@@ -30,6 +30,14 @@
     <control>touch</control>
   </supports>
   <releases>
+    <release version="0.2.1" date="2026-01-12">
+      <description>
+        <ul>
+          <li>Console now has a Send button for commands.</li>
+          <li>Hardware controls metadata added for keyboard, mouse and touch.</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.2.0" date="2026-01-12">
       <description>
         <ul>
