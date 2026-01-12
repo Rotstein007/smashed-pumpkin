@@ -10,6 +10,9 @@
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>GPL-3.0-or-later</project_license>
   <developer_name>Rotstein</developer_name>
+  <branding>
+    <color type="primary">#FA8213</color>
+  </branding>
   <url type="homepage">https://github.com/Rotstein007/smashed-pumpkin</url>
   <url type="bugtracker">https://github.com/Rotstein007/smashed-pumpkin/issues</url>
   <url type="vcs-browser">https://github.com/Rotstein007/smashed-pumpkin</url>
@@ -18,7 +21,7 @@
   <screenshots>
     <screenshot type="default">
       <image type="source">https://raw.githubusercontent.com/Rotstein007/smashed-pumpkin/master/data/screenshots/smashed-pumpkin-1.png</image>
-      <caption>Server overview and controls</caption>
+      <caption xml:lang="en">Server overview and controls</caption>
     </screenshot>
   </screenshots>
   <requires>
