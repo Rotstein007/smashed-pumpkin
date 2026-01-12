@@ -1,13 +1,11 @@
-# Smashed Pumpkin
+<h1 style="display:flex;align-items:center;gap:12px;"><img src="data/icons/hicolor/scalable/apps/dev.rotstein.SmashedPumpkin.svg" width="64" alt="Smashed Pumpkin"> Smashed Pumpkin</h1>
 
-GTK4 + libadwaita GNOME-style manager for PumpkinMC servers.
+Manage PumpkinMC servers with a modern GNOME desktop app.
 
-## What it does
-- Create and manage multiple Pumpkin server instances
-- Install/update Pumpkin without touching worlds/plugins
-- Start/stop/restart with live console + logs
-- Manage plugins/worlds/players folders
-- Quick settings for download URL, ports, RCON, auto-restart
+## Get it
+```
+https://flathub.org/apps/dev.rotstein.SmashedPumpkin
+```
 
 ## Build (Meson)
 ```bash
@@ -16,34 +14,13 @@ meson compile -C buildDir
 ./buildDir/src/smashed-pumpkin
 ```
 
-## Flatpak
-```bash
-flatpak-builder --disable-rofiles-fuse --user --install --force-clean buildDir/flatpak \
-  build-aux/flatpak/dev.rotstein.SmashedPumpkin.json
-flatpak run dev.rotstein.SmashedPumpkin
-```
-
-### Shareable bundle
-```bash
-flatpak build-bundle ~/.local/share/flatpak/repo buildDir/SmashedPumpkin.flatpak dev.rotstein.SmashedPumpkin
-```
-
-## Data layout
-Server instances are stored in:
-```
-~/PumpkinServer/<id>/
-  bin/pumpkin
-  data/
-    plugins/
-    worlds/
-    players/
-  server.ini
-```
-
-## Notes
-- Updates are resolved from Pumpkin’s download page (no GitHub release fallback).
-- Worlds/plugins are kept in `data/` so updates only replace `bin/pumpkin`.
-- Global config is stored at `~/.config/smashed-pumpkin/config.ini`.
+## Screenshots
+![Server console](data/screenshots/smashed-pumpkin-console.png)
+![Resource stats](data/screenshots/smashed-pumpkin-stats.png)
+![Log files](data/screenshots/smashed-pumpkin-logs.png)
+![Plugin manager](data/screenshots/smashed-pumpkin-plugins.png)
+![Worlds](data/screenshots/smashed-pumpkin-worlds.png)
+![Server settings](data/screenshots/smashed-pumpkin-settings.png)
 
 ## License
 GPL-3.0-or-later. See `LICENSE`.
