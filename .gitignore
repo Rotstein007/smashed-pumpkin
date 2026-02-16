@@ -34,6 +34,7 @@ cache/
 .DS_Store
 
 .flathub
+AGENTS.md
 # Build/test artifacts
 buildDir/
 tmp/
