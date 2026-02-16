@@ -71,6 +71,9 @@ executable(
 
 gtk3_dep = dependency('gtk+-3.0', required: false)
 appindicator_dep = dependency('ayatana-appindicator3-0.1', required: false)
+if not appindicator_dep.found()
+  appindicator_dep = dependency('appindicator3-0.1', required: false)
+endif
 
 if host_machine.system() == 'linux' and gtk3_dep.found() and appindicator_dep.found()
   executable(
@@ -80,4 +83,6 @@ if host_machine.system() == 'linux' and gtk3_dep.found() and appindicator_dep.fo
     dependencies: [gtk3_dep, appindicator_dep],
     install: true
   )
+elif host_machine.system() == 'linux'
+  warning('Tray helper disabled: missing gtk+-3.0 and/or appindicator (ayatana-appindicator3-0.1 or appindicator3-0.1)')
 endif

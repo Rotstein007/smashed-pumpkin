@@ -253,7 +253,6 @@ static void on_settings_changed(GtkEditable *editable, PumpkinWindow *self);
 static void on_settings_switch_changed(GObject *object, GParamSpec *pspec, PumpkinWindow *self);
 static void on_details_stack_changed(GObject *object, GParamSpec *pspec, PumpkinWindow *self);
 static void update_save_button(PumpkinWindow *self);
-static void update_save_button(PumpkinWindow *self);
 static gboolean widget_has_label(GtkWidget *widget, const char *label);
 static void disable_players_tab(PumpkinWindow *self);
 static void get_system_limits(int *max_cores, int *max_ram_mb);

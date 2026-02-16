@@ -14,6 +14,10 @@ meson compile -C buildDir
 ./buildDir/src/smashed-pumpkin
 ```
 
+## Tray icon on GNOME
+GNOME Shell does not show legacy tray icons by default.
+Install and enable the `AppIndicator and KStatusNotifierItem Support` extension to see the tray icon.
+
 ## Screenshots
 ![Server console](data/screenshots/smashed-pumpkin-console.png)
 ![Resource stats](data/screenshots/smashed-pumpkin-stats.png)

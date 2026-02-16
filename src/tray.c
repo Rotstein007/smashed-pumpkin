@@ -6,6 +6,7 @@
 #include "app-config.h"
 
 #include <errno.h>
+#include <glib/gstdio.h>
 #include <signal.h>
 #include <stdlib.h>
 #include <string.h>
@@ -216,6 +217,48 @@ check_parent_alive(gpointer user_data)
   return G_SOURCE_CONTINUE;
 }
 
+static gboolean
+icon_exists_in_dir(const char *dir)
+{
+  if (dir == NULL || *dir == '\0') {
+    return FALSE;
+  }
+  g_autofree char *svg = g_build_filename(dir, APP_ID ".svg", NULL);
+  g_autofree char *png = g_build_filename(dir, APP_ID ".png", NULL);
+  return g_file_test(svg, G_FILE_TEST_EXISTS) || g_file_test(png, G_FILE_TEST_EXISTS);
+}
+
+static char *
+resolve_icon_theme_path(void)
+{
+#if defined(__linux__)
+  g_autofree char *exe = g_file_read_link("/proc/self/exe", NULL);
+  if (exe != NULL) {
+    g_autofree char *exe_dir = g_path_get_dirname(exe);
+    g_autofree char *from_install = g_build_filename(exe_dir, "..", "share", "icons", "hicolor", "scalable", "apps", NULL);
+    if (icon_exists_in_dir(from_install)) {
+      return g_canonicalize_filename(from_install, NULL);
+    }
+    g_autofree char *from_build = g_build_filename(exe_dir, "..", "..", "resources", "icons", "hicolor", "scalable", "apps", NULL);
+    if (icon_exists_in_dir(from_build)) {
+      return g_canonicalize_filename(from_build, NULL);
+    }
+  }
+#endif
+
+  g_autofree char *cwd = g_get_current_dir();
+  g_autofree char *local = g_build_filename(cwd, "resources", "icons", "hicolor", "scalable", "apps", NULL);
+  if (icon_exists_in_dir(local)) {
+    return g_steal_pointer(&local);
+  }
+  g_autofree char *parent = g_build_filename(cwd, "..", "resources", "icons", "hicolor", "scalable", "apps", NULL);
+  if (icon_exists_in_dir(parent)) {
+    return g_steal_pointer(&parent);
+  }
+
+  return NULL;
+}
+
 int
 main(int argc, char *argv[])
 {
@@ -234,6 +277,11 @@ main(int argc, char *argv[])
 
   AppIndicator *indicator = app_indicator_new(APP_ID, APP_ID, APP_INDICATOR_CATEGORY_APPLICATION_STATUS);
   app_indicator_set_status(indicator, APP_INDICATOR_STATUS_ACTIVE);
+
+  g_autofree char *icon_theme_path = resolve_icon_theme_path();
+  if (icon_theme_path != NULL) {
+    app_indicator_set_icon_theme_path(indicator, icon_theme_path);
+  }
   app_indicator_set_icon_full(indicator, APP_ID, "Smashed Pumpkin");
 
   GtkWidget *menu = gtk_menu_new();

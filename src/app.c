@@ -15,6 +15,35 @@ G_DEFINE_FINAL_TYPE(PumpkinApp, pumpkin_app, ADW_TYPE_APPLICATION)
 
 static GPid tray_pid = 0;
 static gboolean tray_spawned = FALSE;
+static guint tray_watch_id = 0;
+
+static char *
+resolve_tray_helper_path(void)
+{
+  g_autofree char *path = g_find_program_in_path("smashed-pumpkin-tray");
+  if (path != NULL) {
+    return g_steal_pointer(&path);
+  }
+
+#if defined(__linux__)
+  g_autofree char *exe = g_file_read_link("/proc/self/exe", NULL);
+  if (exe != NULL) {
+    g_autofree char *exe_dir = g_path_get_dirname(exe);
+    g_autofree char *sibling = g_build_filename(exe_dir, "smashed-pumpkin-tray", NULL);
+    if (g_file_test(sibling, G_FILE_TEST_IS_EXECUTABLE)) {
+      return g_steal_pointer(&sibling);
+    }
+  }
+#endif
+
+  g_autofree char *cwd = g_get_current_dir();
+  g_autofree char *candidate = g_build_filename(cwd, "buildDir", "src", "smashed-pumpkin-tray", NULL);
+  if (g_file_test(candidate, G_FILE_TEST_IS_EXECUTABLE)) {
+    return g_steal_pointer(&candidate);
+  }
+
+  return NULL;
+}
 
 static void
 on_tray_exit(GPid pid, int status, gpointer user_data)
@@ -24,6 +53,7 @@ on_tray_exit(GPid pid, int status, gpointer user_data)
   if (pid == tray_pid) {
     tray_pid = 0;
     tray_spawned = FALSE;
+    tray_watch_id = 0;
   }
   g_spawn_close_pid(pid);
 }
@@ -34,14 +64,7 @@ spawn_tray_helper(void)
   if (tray_spawned) {
     return;
   }
-  g_autofree char *tray_path = g_find_program_in_path("smashed-pumpkin-tray");
-  if (tray_path == NULL) {
-    g_autofree char *cwd = g_get_current_dir();
-    g_autofree char *candidate = g_build_filename(cwd, "buildDir", "src", "smashed-pumpkin-tray", NULL);
-    if (g_file_test(candidate, G_FILE_TEST_EXISTS)) {
-      tray_path = g_strdup(candidate);
-    }
-  }
+  g_autofree char *tray_path = resolve_tray_helper_path();
   if (tray_path == NULL) {
     g_warning("Could not find smashed-pumpkin-tray helper");
     return;
@@ -57,7 +80,7 @@ spawn_tray_helper(void)
     return;
   }
   tray_spawned = TRUE;
-  g_child_watch_add(tray_pid, on_tray_exit, NULL);
+  tray_watch_id = g_child_watch_add(tray_pid, on_tray_exit, NULL);
   g_free(arg);
 }
 
@@ -67,6 +90,12 @@ stop_tray_helper(void)
   if (!tray_spawned || tray_pid <= 0) {
     return;
   }
+
+  if (tray_watch_id > 0) {
+    g_source_remove(tray_watch_id);
+    tray_watch_id = 0;
+  }
+
   kill(tray_pid, SIGTERM);
   g_spawn_close_pid(tray_pid);
   tray_pid = 0;
