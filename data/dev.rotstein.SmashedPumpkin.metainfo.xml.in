@@ -53,6 +53,15 @@
     <control>touch</control>
   </supports>
   <releases>
+    <release version="0.2.2" date="2026-02-16">
+      <description>
+        <ul>
+          <li>Fixed GNOME tray icon visibility by setting a reliable icon theme path.</li>
+          <li>Improved tray helper discovery for installed and local build setups.</li>
+          <li>Added AppIndicator dependency fallback for broader Linux compatibility.</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.2.1" date="2026-01-12">
       <description>
         <ul>

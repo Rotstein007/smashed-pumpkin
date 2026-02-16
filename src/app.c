@@ -151,26 +151,24 @@ pumpkin_app_about_action(GSimpleAction *action,
   adw_about_dialog_set_application_name(about, APP_NAME);
   adw_about_dialog_set_application_icon(about, APP_ID);
   adw_about_dialog_set_version(about, APP_VERSION);
-  adw_about_dialog_set_release_notes_version(about, "0.2.0");
+  adw_about_dialog_set_release_notes_version(about, "0.2.2");
   if (is_de) {
     adw_about_dialog_set_release_notes(
       about,
       "<p>Neuerungen</p>"
       "<ul>"
-      "<li>Tray-Icon mit Schnellwechsel zwischen Servern und Hintergrundmodus.</li>"
-      "<li>Drag &amp; Drop für Plugins und Welten.</li>"
-      "<li>Ressourcenlimits für CPU-Kerne und RAM.</li>"
-      "<li>Überarbeitete und klarere Einstellungen.</li>"
+      "<li>Tray-Icon unter GNOME zuverlässiger sichtbar (korrekter Icon-Theme-Pfad).</li>"
+      "<li>Tray-Helfer wird robuster gefunden und gestartet.</li>"
+      "<li>Stabilere Prozessverwaltung für den Tray-Hintergrundprozess.</li>"
       "</ul>");
   } else {
     adw_about_dialog_set_release_notes(
       about,
       "<p>What’s new</p>"
       "<ul>"
-      "<li>Tray icon with quick server switching and background mode support.</li>"
-      "<li>Drag and drop to add plugins and worlds.</li>"
-      "<li>Resource limits for CPU cores and RAM.</li>"
-      "<li>Settings overhaul for clarity.</li>"
+      "<li>More reliable tray icon visibility on GNOME (correct icon theme path).</li>"
+      "<li>More robust tray helper discovery and startup behavior.</li>"
+      "<li>More stable process handling for the tray background helper.</li>"
       "</ul>");
   }
   adw_about_dialog_set_developer_name(about, "Rotstein");
