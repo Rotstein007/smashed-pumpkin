@@ -161,24 +161,22 @@ pumpkin_app_about_action(GSimpleAction *action,
   adw_about_dialog_set_application_name(about, APP_NAME);
   adw_about_dialog_set_application_icon(about, APP_ID);
   adw_about_dialog_set_version(about, APP_VERSION);
-  adw_about_dialog_set_release_notes_version(about, "0.2.2");
+  adw_about_dialog_set_release_notes_version(about, "0.2.3");
   if (is_de) {
     adw_about_dialog_set_release_notes(
       about,
       "<p>Neuerungen</p>"
       "<ul>"
-      "<li>Tray-Icon unter GNOME zuverlässiger sichtbar (korrekter Icon-Theme-Pfad).</li>"
-      "<li>Tray-Helfer wird robuster gefunden und gestartet.</li>"
-      "<li>Stabilere Prozessverwaltung für den Tray-Hintergrundprozess.</li>"
+      "<li>Tray-Icons funktionieren jetzt zuverlässig auch in der Flatpak-Version.</li>"
+      "<li>Die Hintergrundfunktion beim Schließen wurde verbessert.</li>"
       "</ul>");
   } else {
     adw_about_dialog_set_release_notes(
       about,
       "<p>What’s new</p>"
       "<ul>"
-      "<li>More reliable tray icon visibility on GNOME (correct icon theme path).</li>"
-      "<li>More robust tray helper discovery and startup behavior.</li>"
-      "<li>More stable process handling for the tray background helper.</li>"
+      "<li>Tray icons now work reliably in the Flatpak version.</li>"
+      "<li>Background behavior when closing the app has been improved.</li>"
       "</ul>");
   }
   adw_about_dialog_set_developer_name(about, "Rotstein");
