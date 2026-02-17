@@ -16,6 +16,7 @@ G_DEFINE_FINAL_TYPE(PumpkinApp, pumpkin_app, ADW_TYPE_APPLICATION)
 static GPid tray_pid = 0;
 static gboolean tray_spawned = FALSE;
 static guint tray_watch_id = 0;
+static gboolean tray_available = FALSE;
 
 static char *
 resolve_tray_helper_path(void)
@@ -53,6 +54,7 @@ on_tray_exit(GPid pid, int status, gpointer user_data)
   if (pid == tray_pid) {
     tray_pid = 0;
     tray_spawned = FALSE;
+    tray_available = FALSE;
     tray_watch_id = 0;
   }
   g_spawn_close_pid(pid);
@@ -80,6 +82,7 @@ spawn_tray_helper(void)
     return;
   }
   tray_spawned = TRUE;
+  tray_available = TRUE;
   tray_watch_id = g_child_watch_add(tray_pid, on_tray_exit, NULL);
   g_free(arg);
 }
@@ -111,6 +114,13 @@ pumpkin_app_set_tray_enabled(PumpkinApp *app, gboolean enabled)
   } else {
     stop_tray_helper();
   }
+}
+
+gboolean
+pumpkin_app_is_tray_available(PumpkinApp *app)
+{
+  (void)app;
+  return tray_available;
 }
 
 static void

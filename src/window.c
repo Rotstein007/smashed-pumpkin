@@ -1076,10 +1076,16 @@ on_window_close_request(GtkWindow *window, gpointer user_data)
   } else if (self->config != NULL) {
     run_in_background = pumpkin_config_get_run_in_background(self->config);
   }
+
+  GApplication *app = G_APPLICATION(gtk_window_get_application(window));
+  if (run_in_background && PUMPKIN_IS_APP(app) &&
+      !pumpkin_app_is_tray_available(PUMPKIN_APP(app))) {
+    run_in_background = FALSE;
+  }
+
   if (run_in_background) {
     gtk_widget_set_visible(GTK_WIDGET(window), FALSE);
     if (!self->background_hold) {
-      GApplication *app = G_APPLICATION(gtk_window_get_application(GTK_WINDOW(self)));
       if (app != NULL) {
         g_application_hold(app);
         self->background_hold = TRUE;
