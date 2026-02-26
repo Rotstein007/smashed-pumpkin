@@ -167,16 +167,14 @@ pumpkin_app_about_action(GSimpleAction *action,
       about,
       "<p>Neuerungen</p>"
       "<ul>"
-      "<li>Update-Pruefungen erkennen neue Nightly-Builds jetzt auch bei gleicher Download-URL.</li>"
-      "<li>Installierte Pumpkin-Builds zeigen jetzt eine lesbare Build-Version an.</li>"
+      "<li>Der Update-Check funktioniert jetzt zuverlaessig.</li>"
       "</ul>");
   } else {
     adw_about_dialog_set_release_notes(
       about,
       "<p>What’s new</p>"
       "<ul>"
-      "<li>Update checks now detect new nightly builds even when the download URL stays the same.</li>"
-      "<li>Installed Pumpkin builds now show a readable build version label.</li>"
+      "<li>The update check now works reliably.</li>"
       "</ul>");
   }
   adw_about_dialog_set_developer_name(about, "Rotstein");

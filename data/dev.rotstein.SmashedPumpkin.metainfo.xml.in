@@ -56,8 +56,7 @@
     <release version="0.3.0" date="2026-02-26">
       <description>
         <ul>
-          <li>Update checks now track changing nightly builds even when the download URL stays the same.</li>
-          <li>Installed Pumpkin builds now show a readable build version label.</li>
+          <li>The update check now works reliably.</li>
         </ul>
       </description>
     </release>
