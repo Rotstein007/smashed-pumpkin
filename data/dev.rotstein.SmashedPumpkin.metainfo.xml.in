@@ -53,6 +53,14 @@
     <control>touch</control>
   </supports>
   <releases>
+    <release version="0.3.0" date="2026-02-26">
+      <description>
+        <ul>
+          <li>Update checks now track changing nightly builds even when the download URL stays the same.</li>
+          <li>Installed Pumpkin builds now show a readable build version label.</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.2.3" date="2026-02-17">
       <description>
         <ul>

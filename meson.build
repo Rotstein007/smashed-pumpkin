@@ -1,5 +1,5 @@
 project('smashed-pumpkin', 'c',
-  version: '0.2.3',
+  version: '0.3.0',
   meson_version: '>= 1.4.0',
   default_options: [
     'warning_level=2',

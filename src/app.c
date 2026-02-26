@@ -161,22 +161,22 @@ pumpkin_app_about_action(GSimpleAction *action,
   adw_about_dialog_set_application_name(about, APP_NAME);
   adw_about_dialog_set_application_icon(about, APP_ID);
   adw_about_dialog_set_version(about, APP_VERSION);
-  adw_about_dialog_set_release_notes_version(about, "0.2.3");
+  adw_about_dialog_set_release_notes_version(about, "0.3.0");
   if (is_de) {
     adw_about_dialog_set_release_notes(
       about,
       "<p>Neuerungen</p>"
       "<ul>"
-      "<li>Tray-Icons funktionieren jetzt zuverlässig auch in der Flatpak-Version.</li>"
-      "<li>Die Hintergrundfunktion beim Schließen wurde verbessert.</li>"
+      "<li>Update-Pruefungen erkennen neue Nightly-Builds jetzt auch bei gleicher Download-URL.</li>"
+      "<li>Installierte Pumpkin-Builds zeigen jetzt eine lesbare Build-Version an.</li>"
       "</ul>");
   } else {
     adw_about_dialog_set_release_notes(
       about,
       "<p>What’s new</p>"
       "<ul>"
-      "<li>Tray icons now work reliably in the Flatpak version.</li>"
-      "<li>Background behavior when closing the app has been improved.</li>"
+      "<li>Update checks now detect new nightly builds even when the download URL stays the same.</li>"
+      "<li>Installed Pumpkin builds now show a readable build version label.</li>"
       "</ul>");
   }
   adw_about_dialog_set_developer_name(about, "Rotstein");
