@@ -2,8 +2,9 @@
 
 #include <libsoup/soup.h>
 #include <gio/gio.h>
+#include <stdio.h>
 
-#define PUMPKIN_DOWNLOAD_PAGE "https://pumpkinmc.org/download.html"
+#define PUMPKIN_DOWNLOAD_PAGE "https://pumpkinmc.org/download/"
 
 typedef struct {
   char *url;
@@ -21,6 +22,9 @@ typedef struct {
 
 typedef struct {
   SoupSession *session;
+  char *resolved_url;
+  gboolean used_fallback;
+  SoupMessage *metadata_message;
 } ResolveState;
 
 static void
@@ -48,8 +52,22 @@ resolve_state_free(ResolveState *state)
   if (state == NULL) {
     return;
   }
+  g_clear_pointer(&state->resolved_url, g_free);
   g_clear_object(&state->session);
+  g_clear_object(&state->metadata_message);
   g_free(state);
+}
+
+void
+pumpkin_resolved_download_free(PumpkinResolvedDownload *resolved)
+{
+  if (resolved == NULL) {
+    return;
+  }
+  g_clear_pointer(&resolved->url, g_free);
+  g_clear_pointer(&resolved->build_id, g_free);
+  g_clear_pointer(&resolved->build_label, g_free);
+  g_free(resolved);
 }
 
 static void on_read_chunk(GObject *source, GAsyncResult *res, gpointer user_data);
@@ -325,6 +343,108 @@ fallback_nightly_url(void)
   return g_strdup_printf("https://github.com/Pumpkin-MC/Pumpkin/releases/download/nightly/%s", asset);
 }
 
+static int
+month_to_num(const char *month)
+{
+  if (month == NULL) {
+    return 0;
+  }
+  if (g_ascii_strcasecmp(month, "Jan") == 0) return 1;
+  if (g_ascii_strcasecmp(month, "Feb") == 0) return 2;
+  if (g_ascii_strcasecmp(month, "Mar") == 0) return 3;
+  if (g_ascii_strcasecmp(month, "Apr") == 0) return 4;
+  if (g_ascii_strcasecmp(month, "May") == 0) return 5;
+  if (g_ascii_strcasecmp(month, "Jun") == 0) return 6;
+  if (g_ascii_strcasecmp(month, "Jul") == 0) return 7;
+  if (g_ascii_strcasecmp(month, "Aug") == 0) return 8;
+  if (g_ascii_strcasecmp(month, "Sep") == 0) return 9;
+  if (g_ascii_strcasecmp(month, "Oct") == 0) return 10;
+  if (g_ascii_strcasecmp(month, "Nov") == 0) return 11;
+  if (g_ascii_strcasecmp(month, "Dec") == 0) return 12;
+  return 0;
+}
+
+static char *
+normalize_etag(const char *etag)
+{
+  if (etag == NULL) {
+    return NULL;
+  }
+
+  const char *start = etag;
+  while (g_ascii_isspace(*start)) {
+    start++;
+  }
+  if (g_str_has_prefix(start, "W/")) {
+    start += 2;
+    while (g_ascii_isspace(*start)) {
+      start++;
+    }
+  }
+
+  g_autofree char *tmp = g_strdup(start);
+  g_strstrip(tmp);
+
+  gsize len = strlen(tmp);
+  if (len >= 2 && tmp[0] == '"' && tmp[len - 1] == '"') {
+    tmp[len - 1] = '\0';
+    return g_strdup(tmp + 1);
+  }
+
+  return g_strdup(tmp);
+}
+
+static char *
+build_label_from_last_modified(const char *last_modified)
+{
+  if (last_modified == NULL || *last_modified == '\0') {
+    return NULL;
+  }
+
+  char weekday[4] = { 0 };
+  char month[4] = { 0 };
+  char tz[4] = { 0 };
+  int day = 0;
+  int year = 0;
+  int hour = 0;
+  int minute = 0;
+  int second = 0;
+  int parsed = sscanf(last_modified, "%3[^,], %d %3s %d %d:%d:%d %3s",
+                      weekday, &day, month, &year, &hour, &minute, &second, tz);
+  int month_num = month_to_num(month);
+  if (parsed == 8 && month_num > 0 && year > 0 && day > 0) {
+    return g_strdup_printf("Build %04d-%02d-%02d %02d:%02d UTC",
+                           year, month_num, day, hour, minute);
+  }
+
+  return g_strdup_printf("Build %s", last_modified);
+}
+
+static void
+fill_build_metadata(SoupMessageHeaders *headers, PumpkinResolvedDownload *resolved)
+{
+  if (headers == NULL || resolved == NULL) {
+    return;
+  }
+
+  const char *etag = soup_message_headers_get_one(headers, "ETag");
+  const char *last_modified = soup_message_headers_get_one(headers, "Last-Modified");
+
+  g_clear_pointer(&resolved->build_id, g_free);
+  resolved->build_id = normalize_etag(etag);
+  if (resolved->build_id == NULL && last_modified != NULL) {
+    resolved->build_id = g_strdup(last_modified);
+  }
+
+  g_clear_pointer(&resolved->build_label, g_free);
+  resolved->build_label = build_label_from_last_modified(last_modified);
+  if (resolved->build_label == NULL && resolved->build_id != NULL) {
+    resolved->build_label = g_strdup_printf("Build %s", resolved->build_id);
+  }
+}
+
+static void on_resolve_metadata_ready(GObject *source, GAsyncResult *res, gpointer user_data);
+
 static void
 on_resolve_ready(GObject *source, GAsyncResult *res, gpointer user_data)
 {
@@ -354,15 +474,54 @@ on_resolve_ready(GObject *source, GAsyncResult *res, gpointer user_data)
     if (fallback == NULL) {
       g_task_return_new_error(task, G_IO_ERROR, G_IO_ERROR_FAILED,
                               "Failed to find download URL for %s", asset);
-    } else {
-      g_task_set_task_data(task, GUINT_TO_POINTER(PUMPKIN_DOWNLOAD_FALLBACK_USED), NULL);
-      g_task_return_pointer(task, g_strdup(fallback), g_free);
+      g_object_unref(task);
+      return;
     }
+    state->used_fallback = TRUE;
+    g_clear_pointer(&state->resolved_url, g_free);
+    state->resolved_url = g_strdup(fallback);
   } else {
-    g_task_set_task_data(task, GUINT_TO_POINTER(PUMPKIN_DOWNLOAD_OK), NULL);
-    g_task_return_pointer(task, g_strdup(url), g_free);
+    state->used_fallback = FALSE;
+    g_clear_pointer(&state->resolved_url, g_free);
+    state->resolved_url = g_strdup(url);
   }
 
+  g_clear_object(&state->metadata_message);
+  state->metadata_message = soup_message_new("HEAD", state->resolved_url);
+  if (state->metadata_message == NULL) {
+    PumpkinResolvedDownload *resolved = g_new0(PumpkinResolvedDownload, 1);
+    resolved->url = g_strdup(state->resolved_url);
+    resolved->result_code = state->used_fallback ? PUMPKIN_DOWNLOAD_FALLBACK_USED : PUMPKIN_DOWNLOAD_OK;
+    g_task_return_pointer(task, resolved, (GDestroyNotify)pumpkin_resolved_download_free);
+    g_object_unref(task);
+    return;
+  }
+
+  soup_session_send_and_read_async(state->session, state->metadata_message, G_PRIORITY_DEFAULT,
+                                   g_task_get_cancellable(task), on_resolve_metadata_ready, task);
+}
+
+static void
+on_resolve_metadata_ready(GObject *source, GAsyncResult *res, gpointer user_data)
+{
+  (void)source;
+  GTask *task = G_TASK(user_data);
+  ResolveState *state = g_task_get_task_data(task);
+  g_autoptr(GError) error = NULL;
+
+  g_autoptr(GBytes) ignored = soup_session_send_and_read_finish(state->session, res, &error);
+  (void)ignored;
+
+  PumpkinResolvedDownload *resolved = g_new0(PumpkinResolvedDownload, 1);
+  resolved->url = g_strdup(state->resolved_url);
+  resolved->result_code = state->used_fallback ? PUMPKIN_DOWNLOAD_FALLBACK_USED : PUMPKIN_DOWNLOAD_OK;
+
+  if (error == NULL && state->metadata_message != NULL) {
+    SoupMessageHeaders *headers = soup_message_get_response_headers(state->metadata_message);
+    fill_build_metadata(headers, resolved);
+  }
+
+  g_task_return_pointer(task, resolved, (GDestroyNotify)pumpkin_resolved_download_free);
   g_object_unref(task);
 }
 
@@ -382,14 +541,14 @@ pumpkin_resolve_latest_async(GCancellable *cancellable,
   g_object_unref(msg);
 }
 
-char *
+PumpkinResolvedDownload *
 pumpkin_resolve_latest_finish(GAsyncResult *result,
                               PumpkinDownloadResult *result_code,
                               GError **error)
 {
-  if (result_code != NULL) {
-    gpointer code = g_task_get_task_data(G_TASK(result));
-    *result_code = (PumpkinDownloadResult)GPOINTER_TO_UINT(code);
+  PumpkinResolvedDownload *resolved = g_task_propagate_pointer(G_TASK(result), error);
+  if (resolved != NULL && result_code != NULL) {
+    *result_code = resolved->result_code;
   }
-  return g_task_propagate_pointer(G_TASK(result), error);
+  return resolved;
 }

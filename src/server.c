@@ -50,6 +50,8 @@ struct _PumpkinServer {
   char *root_dir;
   char *download_url;
   char *installed_url;
+  char *installed_build_id;
+  char *installed_build_label;
   char *rcon_host;
   char *rcon_password;
   int rcon_port;
@@ -94,6 +96,8 @@ pumpkin_server_finalize(GObject *object)
   g_clear_pointer(&self->root_dir, g_free);
   g_clear_pointer(&self->download_url, g_free);
   g_clear_pointer(&self->installed_url, g_free);
+  g_clear_pointer(&self->installed_build_id, g_free);
+  g_clear_pointer(&self->installed_build_label, g_free);
   g_clear_pointer(&self->rcon_host, g_free);
   g_clear_pointer(&self->rcon_password, g_free);
   g_clear_object(&self->process);
@@ -322,6 +326,12 @@ pumpkin_server_load(const char *dir, GError **error)
   g_clear_pointer(&self->installed_url, g_free);
   self->installed_url = g_key_file_get_string(keyfile, "server", "installed_url", NULL);
 
+  g_clear_pointer(&self->installed_build_id, g_free);
+  self->installed_build_id = g_key_file_get_string(keyfile, "server", "installed_build_id", NULL);
+
+  g_clear_pointer(&self->installed_build_label, g_free);
+  self->installed_build_label = g_key_file_get_string(keyfile, "server", "installed_build_label", NULL);
+
   g_clear_pointer(&self->rcon_host, g_free);
   self->rcon_host = g_key_file_get_string(keyfile, "rcon", "host", NULL);
   if (self->rcon_host == NULL) {
@@ -394,6 +404,12 @@ pumpkin_server_save(PumpkinServer *self, GError **error)
   if (self->installed_url != NULL) {
     g_key_file_set_string(keyfile, "server", "installed_url", self->installed_url);
   }
+  if (self->installed_build_id != NULL) {
+    g_key_file_set_string(keyfile, "server", "installed_build_id", self->installed_build_id);
+  }
+  if (self->installed_build_label != NULL) {
+    g_key_file_set_string(keyfile, "server", "installed_build_label", self->installed_build_label);
+  }
 
   g_key_file_set_string(keyfile, "rcon", "host", self->rcon_host);
   g_key_file_set_integer(keyfile, "rcon", "port", self->rcon_port);
@@ -434,6 +450,18 @@ const char *
 pumpkin_server_get_installed_url(PumpkinServer *self)
 {
   return self->installed_url;
+}
+
+const char *
+pumpkin_server_get_installed_build_id(PumpkinServer *self)
+{
+  return self->installed_build_id;
+}
+
+const char *
+pumpkin_server_get_installed_build_label(PumpkinServer *self)
+{
+  return self->installed_build_label;
 }
 
 const char *
@@ -521,6 +549,20 @@ pumpkin_server_set_installed_url(PumpkinServer *self, const char *url)
 {
   g_free(self->installed_url);
   self->installed_url = g_strdup(url);
+}
+
+void
+pumpkin_server_set_installed_build_id(PumpkinServer *self, const char *build_id)
+{
+  g_free(self->installed_build_id);
+  self->installed_build_id = g_strdup(build_id);
+}
+
+void
+pumpkin_server_set_installed_build_label(PumpkinServer *self, const char *build_label)
+{
+  g_free(self->installed_build_label);
+  self->installed_build_label = g_strdup(build_label);
 }
 
 void

@@ -42,6 +42,8 @@ struct _PumpkinWindow {
   GtkTextView *log_view;
   GtkListBox *overview_list;
   char *latest_url;
+  char *latest_build_id;
+  char *latest_build_label;
 
   GtkButton *btn_add_server;
   GtkButton *btn_remove_server;
@@ -201,6 +203,8 @@ typedef struct DownloadContext {
   PumpkinWindow *self;
   PumpkinServer *server;
   char *used_url;
+  char *used_build_id;
+  char *used_build_label;
   char *dest_path;
   char *tmp_path;
   char *server_bin;
@@ -289,6 +293,7 @@ static void on_log_level_filter_changed(GObject *object, GParamSpec *pspec, Pump
 static void on_log_search_changed(GtkEditable *editable, PumpkinWindow *self);
 static void on_log_file_activated(GtkListBox *box, GtkListBoxRow *row, PumpkinWindow *self);
 static void on_open_logs(GtkButton *button, PumpkinWindow *self);
+static char *build_label_from_binary_path(const char *bin_path);
 static gboolean restart_after_delay(gpointer data);
 static gboolean start_after_delay(gpointer data);
 static gboolean on_plugins_drop(GtkDropTarget *target, const GValue *value, double x, double y, PumpkinWindow *self);
@@ -1525,7 +1530,58 @@ get_server_version(PumpkinServer *server)
     return g_strdup("Not installed");
   }
 
+  const char *stored_label = pumpkin_server_get_installed_build_label(server);
+  if (stored_label != NULL && *stored_label != '\0') {
+    return g_strdup(stored_label);
+  }
+
+  g_autofree char *mtime_label = build_label_from_binary_path(bin);
+  if (mtime_label != NULL) {
+    return g_strdup(mtime_label);
+  }
+
+  const char *stored_id = pumpkin_server_get_installed_build_id(server);
+  if (stored_id != NULL && *stored_id != '\0') {
+    return g_strdup_printf("Build %s", stored_id);
+  }
+
   return g_strdup("Installed");
+}
+
+static char *
+build_label_from_binary_path(const char *bin_path)
+{
+  if (bin_path == NULL) {
+    return NULL;
+  }
+
+  GStatBuf st;
+  if (g_stat(bin_path, &st) != 0) {
+    return NULL;
+  }
+
+  g_autoptr(GDateTime) dt = g_date_time_new_from_unix_local(st.st_mtime);
+  if (dt == NULL) {
+    return NULL;
+  }
+
+  return g_date_time_format(dt, "Build %Y-%m-%d %H:%M");
+}
+
+static gboolean
+is_update_available_for_server(PumpkinWindow *self, PumpkinServer *server, gboolean installed)
+{
+  if (!installed || self->latest_url == NULL || server == NULL) {
+    return FALSE;
+  }
+
+  const char *installed_build_id = pumpkin_server_get_installed_build_id(server);
+  if (self->latest_build_id != NULL && *self->latest_build_id != '\0') {
+    return (installed_build_id == NULL || g_strcmp0(self->latest_build_id, installed_build_id) != 0);
+  }
+
+  const char *installed_url = pumpkin_server_get_installed_url(server);
+  return (installed_url == NULL || g_strcmp0(self->latest_url, installed_url) != 0);
 }
 
 static guint64
@@ -1972,9 +2028,7 @@ refresh_overview_list(PumpkinWindow *self)
     g_autofree char *size = get_server_size(server);
     int players = get_overview_player_count(self, server);
     gboolean installed = g_strcmp0(version, "Not installed") != 0;
-    const char *installed_url = pumpkin_server_get_installed_url(server);
-    gboolean update_available = (installed && self->latest_url != NULL &&
-                                 (installed_url == NULL || g_strcmp0(self->latest_url, installed_url) != 0));
+    gboolean update_available = is_update_available_for_server(self, server, installed);
 
     GtkWidget *row = gtk_list_box_row_new();
     GtkWidget *card = gtk_frame_new(NULL);
@@ -2352,9 +2406,7 @@ update_details(PumpkinWindow *self)
   gboolean running = pumpkin_server_get_running(self->current);
   g_autofree char *bin = pumpkin_server_get_bin_path(self->current);
   gboolean installed = g_file_test(bin, G_FILE_TEST_EXISTS);
-  const char *installed_url = pumpkin_server_get_installed_url(self->current);
-  gboolean update_available = (installed && self->latest_url != NULL &&
-                               (installed_url == NULL || g_strcmp0(self->latest_url, installed_url) != 0));
+  gboolean update_available = is_update_available_for_server(self, self->current, installed);
 
   if (running && (self->ui_state == UI_STATE_IDLE || self->ui_state == UI_STATE_ERROR)) {
     self->ui_state = UI_STATE_RUNNING;
@@ -4725,6 +4777,8 @@ download_context_free(DownloadContext *ctx)
   g_clear_object(&ctx->self);
   g_clear_object(&ctx->server);
   g_clear_pointer(&ctx->used_url, g_free);
+  g_clear_pointer(&ctx->used_build_id, g_free);
+  g_clear_pointer(&ctx->used_build_label, g_free);
   g_clear_pointer(&ctx->dest_path, g_free);
   g_clear_pointer(&ctx->tmp_path, g_free);
   g_clear_pointer(&ctx->server_bin, g_free);
@@ -4737,6 +4791,10 @@ start_download_for_server(PumpkinWindow *self, PumpkinServer *server, const char
   if (server == NULL) {
     return;
   }
+
+  gboolean using_latest = (self->latest_url != NULL && g_strcmp0(url, self->latest_url) == 0);
+  const char *resolved_build_id = using_latest ? self->latest_build_id : NULL;
+  const char *resolved_build_label = using_latest ? self->latest_build_label : NULL;
 
   g_autofree char *bin = pumpkin_server_get_bin_path(server);
   gboolean use_cache = use_download_cache(self);
@@ -4766,6 +4824,13 @@ start_download_for_server(PumpkinWindow *self, PumpkinServer *server, const char
       }
       refresh_overview_list(self);
       pumpkin_server_set_installed_url(server, url);
+      pumpkin_server_set_installed_build_id(server, resolved_build_id);
+      if (resolved_build_label != NULL && *resolved_build_label != '\0') {
+        pumpkin_server_set_installed_build_label(server, resolved_build_label);
+      } else {
+        g_autofree char *local_label = build_label_from_binary_path(bin);
+        pumpkin_server_set_installed_build_label(server, local_label);
+      }
       pumpkin_server_save(server, NULL);
       update_overview(self);
       refresh_overview_list(self);
@@ -4793,6 +4858,8 @@ start_download_for_server(PumpkinWindow *self, PumpkinServer *server, const char
   ctx->self = g_object_ref(self);
   ctx->server = g_object_ref(server);
   ctx->used_url = g_strdup(url);
+  ctx->used_build_id = g_strdup(resolved_build_id);
+  ctx->used_build_label = g_strdup(resolved_build_label);
   ctx->dest_path = g_strdup(cache_path != NULL ? cache_path : bin);
   ctx->tmp_path = g_strdup(tmp);
   ctx->server_bin = g_strdup(bin);
@@ -4876,6 +4943,13 @@ on_download_done(GObject *source, GAsyncResult *res, gpointer user_data)
   }
   refresh_overview_list(self);
   pumpkin_server_set_installed_url(server, ctx->used_url);
+  pumpkin_server_set_installed_build_id(server, ctx->used_build_id);
+  if (ctx->used_build_label != NULL && *ctx->used_build_label != '\0') {
+    pumpkin_server_set_installed_build_label(server, ctx->used_build_label);
+  } else {
+    g_autofree char *local_label = build_label_from_binary_path(ctx->server_bin);
+    pumpkin_server_set_installed_build_label(server, local_label);
+  }
   pumpkin_server_save(server, NULL);
   update_overview(self);
   refresh_overview_list(self);
@@ -4891,10 +4965,13 @@ on_latest_only_resolve_done(GObject *source, GAsyncResult *res, gpointer user_da
   g_autoptr(GError) error = NULL;
 
   PumpkinDownloadResult result_code = PUMPKIN_DOWNLOAD_OK;
-  g_autofree char *url = pumpkin_resolve_latest_finish(res, &result_code, &error);
-  if (url == NULL) {
-    append_log(self, error->message);
-    set_details_error(self, error->message);
+  PumpkinResolvedDownload *resolved = pumpkin_resolve_latest_finish(res, &result_code, &error);
+  if (resolved == NULL || resolved->url == NULL) {
+    const char *message = (error != NULL && error->message != NULL)
+                            ? error->message
+                            : "Failed to resolve latest Pumpkin download.";
+    append_log(self, message);
+    set_details_error(self, message);
     return;
   }
   if (result_code == PUMPKIN_DOWNLOAD_FALLBACK_USED) {
@@ -4903,24 +4980,31 @@ on_latest_only_resolve_done(GObject *source, GAsyncResult *res, gpointer user_da
   }
 
   g_clear_pointer(&self->latest_url, g_free);
-  self->latest_url = g_strdup(url);
+  self->latest_url = g_strdup(resolved->url);
+  g_clear_pointer(&self->latest_build_id, g_free);
+  self->latest_build_id = g_strdup(resolved->build_id);
+  g_clear_pointer(&self->latest_build_label, g_free);
+  self->latest_build_label = g_strdup(resolved->build_label);
   refresh_overview_list(self);
   update_details(self);
 
   if (self->current != NULL) {
-    const char *installed_url = pumpkin_server_get_installed_url(self->current);
+    const char *installed_build_id = pumpkin_server_get_installed_build_id(self->current);
     g_autofree char *bin = pumpkin_server_get_bin_path(self->current);
     gboolean installed = g_file_test(bin, G_FILE_TEST_EXISTS);
-    if (installed && installed_url != NULL && g_strcmp0(self->latest_url, installed_url) == 0) {
+    if (installed && self->latest_build_id != NULL && installed_build_id != NULL &&
+        g_strcmp0(self->latest_build_id, installed_build_id) == 0) {
       append_log(self, "No updates available");
-    } else if (installed) {
+    } else if (installed && is_update_available_for_server(self, self->current, TRUE)) {
       append_log(self, "Update available");
     }
   }
   if (self->config != NULL) {
-    pumpkin_config_set_default_download_url(self->config, url);
+    pumpkin_config_set_default_download_url(self->config, resolved->url);
     pumpkin_config_save(self->config, NULL);
   }
+
+  pumpkin_resolved_download_free(resolved);
 }
 
 static void
@@ -5188,8 +5272,7 @@ on_details_update(GtkButton *button, PumpkinWindow *self)
     return;
   }
 
-  const char *installed_url = pumpkin_server_get_installed_url(self->current);
-  if (installed_url != NULL && g_strcmp0(self->latest_url, installed_url) == 0) {
+  if (!is_update_available_for_server(self, self->current, TRUE)) {
     return;
   }
 
@@ -5814,6 +5897,9 @@ pumpkin_window_dispose(GObject *object)
   g_clear_pointer(&self->pending_view_page, g_free);
   g_clear_pointer(&self->current_log_path, g_free);
   g_clear_pointer(&self->last_details_page, g_free);
+  g_clear_pointer(&self->latest_url, g_free);
+  g_clear_pointer(&self->latest_build_id, g_free);
+  g_clear_pointer(&self->latest_build_label, g_free);
   if (self->pending_server != NULL) {
     g_object_unref(self->pending_server);
     self->pending_server = NULL;

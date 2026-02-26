@@ -15,6 +15,13 @@ typedef enum {
   PUMPKIN_DOWNLOAD_FALLBACK_USED
 } PumpkinDownloadResult;
 
+typedef struct {
+  char *url;
+  char *build_id;
+  char *build_label;
+  PumpkinDownloadResult result_code;
+} PumpkinResolvedDownload;
+
 void pumpkin_download_file_async(const char *url,
                                  const char *dest_path,
                                  GCancellable *cancellable,
@@ -29,8 +36,10 @@ void pumpkin_resolve_latest_async(GCancellable *cancellable,
                                   GAsyncReadyCallback callback,
                                   gpointer user_data);
 
-char *pumpkin_resolve_latest_finish(GAsyncResult *result,
-                                    PumpkinDownloadResult *result_code,
-                                    GError **error);
+PumpkinResolvedDownload *pumpkin_resolve_latest_finish(GAsyncResult *result,
+                                                       PumpkinDownloadResult *result_code,
+                                                       GError **error);
+
+void pumpkin_resolved_download_free(PumpkinResolvedDownload *resolved);
 
 G_END_DECLS
