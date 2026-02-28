@@ -1,6 +1,8 @@
 #include "app.h"
 #include "app-config.h"
 #include "config.h"
+#include "server.h"
+#include "server-store.h"
 #include "window.h"
 
 #include <string.h>
@@ -9,6 +11,8 @@
 struct _PumpkinApp {
   AdwApplication parent_instance;
   char *pending_server_id;
+  gboolean start_minimized;
+  gboolean first_activation;
 };
 
 G_DEFINE_FINAL_TYPE(PumpkinApp, pumpkin_app, ADW_TYPE_APPLICATION)
@@ -132,7 +136,12 @@ pumpkin_app_activate(GApplication *app)
     win = GTK_WINDOW(pumpkin_window_new(ADW_APPLICATION(app)));
     gtk_window_set_default_icon_name(APP_ID);
   }
-  gtk_window_present(win);
+  if (self->start_minimized && self->first_activation) {
+    self->first_activation = FALSE;
+    gtk_widget_set_visible(GTK_WIDGET(win), FALSE);
+  } else {
+    gtk_window_present(win);
+  }
   if (self->pending_server_id != NULL) {
     pumpkin_window_select_server(PUMPKIN_WINDOW(win), self->pending_server_id);
     g_clear_pointer(&self->pending_server_id, g_free);
@@ -161,20 +170,30 @@ pumpkin_app_about_action(GSimpleAction *action,
   adw_about_dialog_set_application_name(about, APP_NAME);
   adw_about_dialog_set_application_icon(about, APP_ID);
   adw_about_dialog_set_version(about, APP_VERSION);
-  adw_about_dialog_set_release_notes_version(about, "0.3.0");
+  adw_about_dialog_set_release_notes_version(about, "0.4.0");
   if (is_de) {
     adw_about_dialog_set_release_notes(
       about,
       "<p>Neuerungen</p>"
       "<ul>"
-      "<li>Der Update-Check funktioniert jetzt zuverlaessig.</li>"
+      "<li>Der Spieler-Tab ist jetzt voll nutzbar: Online/Offline-Historie, Suche, Sortierung und mehr.</li>"
+      "<li>Moderation wurde erweitert: inklusive ban-ip, pardon-ip, banlist und Bann-Grundanzeige.</li>"
+      "<li>Die Konsole ist deutlich lesbarer mit besseren Zeitstempeln und Level-Filtern.</li>"
+      "<li>Update-Pruefungen laufen automatisch beim Start und danach minuetlich.</li>"
+      "<li>Das Tray-Menue oeffnet die App jetzt zuverlaessig per Open und bietet weiterhin Quit.</li>"
+      "<li>Wahrscheinlich das groesste Update bisher. Danke an jeden einzelnen Nutzer fuer euer Feedback.</li>"
       "</ul>");
   } else {
     adw_about_dialog_set_release_notes(
       about,
       "<p>What’s new</p>"
       "<ul>"
-      "<li>The update check now works reliably.</li>"
+      "<li>The Players tab is finally fully available with online/offline history, search, sorting, and more.</li>"
+      "<li>Moderation now includes ban-ip, pardon-ip, banlist, and visible ban reasons.</li>"
+      "<li>The console is cleaner and easier to read with better timestamps and level filters.</li>"
+      "<li>Update checks now run automatically on startup and every minute.</li>"
+      "<li>The tray menu now reliably opens the app via Open and still provides Quit.</li>"
+      "<li>This is probably the biggest update so far. Thank you to every single user for the feedback.</li>"
       "</ul>");
   }
   adw_about_dialog_set_developer_name(about, "Rotstein");
@@ -201,6 +220,12 @@ pumpkin_app_quit_action(GSimpleAction *action,
 {
   (void)action;
   (void)parameter;
+  GList *windows = gtk_application_get_windows(GTK_APPLICATION(user_data));
+  for (GList *l = windows; l != NULL; l = l->next) {
+    if (PUMPKIN_IS_WINDOW(l->data)) {
+      pumpkin_window_stop_all_servers(PUMPKIN_WINDOW(l->data));
+    }
+  }
   stop_tray_helper();
   g_application_quit(G_APPLICATION(user_data));
 }
@@ -217,12 +242,21 @@ pumpkin_app_command_line(GApplication *app, GApplicationCommandLine *command_lin
   int argc = 0;
   char **argv = g_application_command_line_get_arguments(command_line, &argc);
   gboolean should_quit = FALSE;
+  gboolean got_minimized = FALSE;
+  gboolean show_requested = FALSE;
   const char *server_id = NULL;
   const char *server_name = NULL;
   for (int i = 1; i < argc; i++) {
     if (g_strcmp0(argv[i], "--quit") == 0) {
       should_quit = TRUE;
       break;
+    }
+    if (g_strcmp0(argv[i], "--show") == 0) {
+      show_requested = TRUE;
+      continue;
+    }
+    if (g_strcmp0(argv[i], "--minimized") == 0) {
+      got_minimized = TRUE;
     }
     if (g_str_has_prefix(argv[i], "--server-id=")) {
       server_id = argv[i] + strlen("--server-id=");
@@ -245,6 +279,14 @@ pumpkin_app_command_line(GApplication *app, GApplicationCommandLine *command_lin
     g_free(self->pending_server_id);
     self->pending_server_id = g_strdup(server_name);
   }
+  if (got_minimized) {
+    self->start_minimized = TRUE;
+  }
+  if (show_requested ||
+      (server_id != NULL && *server_id != '\0') ||
+      (server_name != NULL && *server_name != '\0')) {
+    self->start_minimized = FALSE;
+  }
   g_application_activate(app);
   return 0;
 }
@@ -263,6 +305,16 @@ pumpkin_app_startup(GApplication *app)
   gtk_application_set_accels_for_action(GTK_APPLICATION(app), "app.quit", (const char*[]) { "<primary>q", NULL });
 
   pumpkin_app_set_tray_enabled(PUMPKIN_APP(app), TRUE);
+
+  /* Auto-start servers on launch */
+  PumpkinConfig *config = pumpkin_config_load(NULL);
+  if (config != NULL) {
+    if (pumpkin_config_get_autostart_on_boot(config) &&
+        pumpkin_config_get_auto_start_servers_enabled(config)) {
+      pumpkin_app_schedule_auto_start_servers(PUMPKIN_APP(app));
+    }
+    pumpkin_config_free(config);
+  }
 }
 
 static void
@@ -288,7 +340,7 @@ pumpkin_app_class_init(PumpkinAppClass *class)
 static void
 pumpkin_app_init(PumpkinApp *self)
 {
-  (void)self;
+  self->first_activation = TRUE;
 }
 
 PumpkinApp *
@@ -298,4 +350,83 @@ pumpkin_app_new(void)
                       "application-id", APP_ID,
                       "flags", G_APPLICATION_DEFAULT_FLAGS | G_APPLICATION_HANDLES_COMMAND_LINE,
                       NULL);
+}
+
+typedef struct {
+  PumpkinServer *server;
+} AutoStartData;
+
+static void
+auto_start_data_free(AutoStartData *data)
+{
+  if (data == NULL) {
+    return;
+  }
+  g_object_unref(data->server);
+  g_free(data);
+}
+
+static gboolean
+auto_start_server_cb(gpointer user_data)
+{
+  AutoStartData *data = user_data;
+  if (data == NULL || data->server == NULL) {
+    auto_start_data_free(data);
+    return G_SOURCE_REMOVE;
+  }
+
+  if (!pumpkin_server_get_running(data->server)) {
+    g_autoptr(GError) error = NULL;
+    pumpkin_server_start(data->server, &error);
+  }
+
+  auto_start_data_free(data);
+  return G_SOURCE_REMOVE;
+}
+
+void
+pumpkin_app_schedule_auto_start_servers(PumpkinApp *app)
+{
+  (void)app;
+
+  PumpkinConfig *config = pumpkin_config_load(NULL);
+  if (config == NULL) {
+    return;
+  }
+  const char *base_dir = pumpkin_config_get_base_dir(config);
+  if (base_dir == NULL) {
+    pumpkin_config_free(config);
+    return;
+  }
+
+  GDir *dir = g_dir_open(base_dir, 0, NULL);
+  if (dir == NULL) {
+    pumpkin_config_free(config);
+    return;
+  }
+
+  const char *entry = NULL;
+  while ((entry = g_dir_read_name(dir)) != NULL) {
+    g_autofree char *server_dir = g_build_filename(base_dir, entry, NULL);
+    g_autoptr(GError) error = NULL;
+    PumpkinServer *server = pumpkin_server_load(server_dir, &error);
+    if (server == NULL) {
+      continue;
+    }
+
+    if (pumpkin_server_get_auto_start_on_launch(server)) {
+      int delay = pumpkin_server_get_auto_start_delay(server);
+      if (delay <= 0) {
+        delay = 1;
+      }
+      AutoStartData *data = g_new0(AutoStartData, 1);
+      data->server = server; /* takes ownership */
+      g_timeout_add_seconds((guint)delay, auto_start_server_cb, data);
+    } else {
+      g_object_unref(server);
+    }
+  }
+
+  g_dir_close(dir);
+  pumpkin_config_free(config);
 }

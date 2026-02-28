@@ -6,6 +6,7 @@
 #include <errno.h>
 #include <signal.h>
 #include <stdio.h>
+#include <unistd.h>
 #if defined(G_OS_WIN32)
 #include <windows.h>
 #else
@@ -15,8 +16,15 @@
 #endif
 #if defined(__linux__)
 #include <sched.h>
+#include <sys/prctl.h>
 #endif
 #endif
+
+enum {
+  SERVER_STATS_SAMPLE_MSEC_DEFAULT = 200,
+  SERVER_STATS_SAMPLE_MSEC_MIN = 2,
+  SERVER_STATS_SAMPLE_MSEC_MAX = 2000
+};
 
 static const char *
 default_download_url(void)
@@ -60,8 +68,15 @@ struct _PumpkinServer {
   int max_players;
   int max_cpu_cores;
   int max_ram_mb;
+  int stats_sample_msec;
   gboolean auto_restart;
   int auto_restart_delay;
+  gboolean auto_update_enabled;
+  gboolean auto_update_use_schedule;
+  int auto_update_hour;
+  int auto_update_minute;
+  gboolean auto_start_on_launch;
+  int auto_start_delay;
   gboolean stop_requested;
   guint restart_source_id;
 #if defined(G_OS_WIN32)
@@ -148,8 +163,15 @@ pumpkin_server_init(PumpkinServer *self)
   self->max_players = 20;
   self->max_cpu_cores = 0;
   self->max_ram_mb = 0;
+  self->stats_sample_msec = SERVER_STATS_SAMPLE_MSEC_DEFAULT;
   self->auto_restart = FALSE;
   self->auto_restart_delay = 10000;
+  self->auto_update_enabled = FALSE;
+  self->auto_update_use_schedule = FALSE;
+  self->auto_update_hour = 1;
+  self->auto_update_minute = 0;
+  self->auto_start_on_launch = FALSE;
+  self->auto_start_delay = 10;
   self->pid = 0;
 }
 
@@ -224,16 +246,35 @@ clamp_ram_mb(int requested)
   return requested;
 }
 
+static int
+clamp_stats_sample_msec(int requested)
+{
+  if (requested < SERVER_STATS_SAMPLE_MSEC_MIN || requested > SERVER_STATS_SAMPLE_MSEC_MAX) {
+    return SERVER_STATS_SAMPLE_MSEC_DEFAULT;
+  }
+  return requested;
+}
+
 #if !defined(G_OS_WIN32)
 typedef struct {
   int max_cpu_cores;
   int max_ram_mb;
+  int parent_pid;
 } ChildLimits;
 
 static void
 child_setup_cb(gpointer data)
 {
   ChildLimits *limits = data;
+#if defined(__linux__) && defined(PR_SET_PDEATHSIG)
+  if (limits->parent_pid > 0) {
+    /* Ensure child exits when smashed-pumpkin parent dies unexpectedly. */
+    prctl(PR_SET_PDEATHSIG, SIGTERM);
+    if ((int)getppid() != limits->parent_pid) {
+      _exit(0);
+    }
+  }
+#endif
   if (limits->max_ram_mb > 0) {
     struct rlimit lim;
     rlim_t bytes = (rlim_t)limits->max_ram_mb * 1024ULL * 1024ULL;
@@ -259,6 +300,59 @@ static char *
 server_ini_path(const char *dir)
 {
   return g_build_filename(dir, "server.ini", NULL);
+}
+
+static gboolean
+ensure_dir(const char *path, GError **error);
+
+static char *
+toml_replace_or_append(const char *contents, const char *key, const char *value_literal)
+{
+  if (key == NULL || *key == '\0' || value_literal == NULL) {
+    return g_strdup(contents != NULL ? contents : "");
+  }
+  g_autofree char *base = g_strdup(contents != NULL ? contents : "");
+  g_autofree char *escaped_key = g_regex_escape_string(key, -1);
+  g_autofree char *pattern = g_strdup_printf("(?m)^\\s*%s\\s*=\\s*[^\\n\\r]*$", escaped_key);
+  g_autoptr(GRegex) regex = g_regex_new(pattern, 0, 0, NULL);
+  g_autofree char *replacement = g_strdup_printf("%s = %s", key, value_literal);
+
+  if (regex != NULL && g_regex_match(regex, base, 0, NULL)) {
+    return g_regex_replace_literal(regex, base, -1, 0, replacement, 0, NULL);
+  }
+
+  gboolean needs_nl = base[0] != '\0' && base[strlen(base) - 1] != '\n';
+  return g_strdup_printf("%s%s%s\n", base, needs_nl ? "\n" : "", replacement);
+}
+
+static gboolean
+sync_pumpkin_basic_configuration(PumpkinServer *self, GError **error)
+{
+  if (self == NULL || self->root_dir == NULL) {
+    return TRUE;
+  }
+
+  g_autofree char *data_dir = g_build_filename(self->root_dir, "data", NULL);
+  g_autofree char *config_dir = g_build_filename(data_dir, "config", NULL);
+  if (!ensure_dir(config_dir, error)) {
+    return FALSE;
+  }
+
+  g_autofree char *path = g_build_filename(config_dir, "configuration.toml", NULL);
+  g_autofree char *contents = NULL;
+  g_file_get_contents(path, &contents, NULL, NULL);
+  if (contents == NULL) {
+    contents = g_strdup("");
+  }
+
+  g_autofree char *java_addr = g_strdup_printf("\"0.0.0.0:%d\"", self->port > 0 ? self->port : 25565);
+  g_autofree char *bedrock_addr = g_strdup_printf("\"0.0.0.0:%d\"", self->bedrock_port > 0 ? self->bedrock_port : 19132);
+  g_autofree char *max_players = g_strdup_printf("%d", self->max_players > 0 ? self->max_players : 20);
+
+  g_autofree char *step1 = toml_replace_or_append(contents, "java_edition_address", java_addr);
+  g_autofree char *step2 = toml_replace_or_append(step1, "bedrock_edition_address", bedrock_addr);
+  g_autofree char *step3 = toml_replace_or_append(step2, "max_players", max_players);
+  return g_file_set_contents(path, step3, -1, error);
 }
 
 static gboolean
@@ -370,6 +464,8 @@ pumpkin_server_load(const char *dir, GError **error)
   if (self->max_ram_mb < 0) {
     self->max_ram_mb = 0;
   }
+  self->stats_sample_msec =
+    clamp_stats_sample_msec(g_key_file_get_integer(keyfile, "server", "stats_sample_msec", NULL));
 
   if (g_key_file_has_key(keyfile, "server", "auto_restart", NULL)) {
     self->auto_restart = g_key_file_get_boolean(keyfile, "server", "auto_restart", NULL);
@@ -381,6 +477,34 @@ pumpkin_server_load(const char *dir, GError **error)
   }
   if (self->auto_restart_delay <= 0) {
     self->auto_restart_delay = 10000;
+  }
+
+  if (g_key_file_has_key(keyfile, "server", "auto_update_enabled", NULL)) {
+    self->auto_update_enabled = g_key_file_get_boolean(keyfile, "server", "auto_update_enabled", NULL);
+  }
+  if (g_key_file_has_key(keyfile, "server", "auto_update_use_schedule", NULL)) {
+    self->auto_update_use_schedule = g_key_file_get_boolean(keyfile, "server", "auto_update_use_schedule", NULL);
+  }
+  if (g_key_file_has_key(keyfile, "server", "auto_update_hour", NULL)) {
+    self->auto_update_hour = g_key_file_get_integer(keyfile, "server", "auto_update_hour", NULL);
+  }
+  if (self->auto_update_hour < 0 || self->auto_update_hour > 23) {
+    self->auto_update_hour = 1;
+  }
+  if (g_key_file_has_key(keyfile, "server", "auto_update_minute", NULL)) {
+    self->auto_update_minute = g_key_file_get_integer(keyfile, "server", "auto_update_minute", NULL);
+  }
+  if (self->auto_update_minute < 0 || self->auto_update_minute > 59) {
+    self->auto_update_minute = 0;
+  }
+
+  if (g_key_file_has_key(keyfile, "server", "auto_start_on_launch", NULL)) {
+    self->auto_start_on_launch = g_key_file_get_boolean(keyfile, "server", "auto_start_on_launch", NULL);
+  }
+
+  self->auto_start_delay = g_key_file_get_integer(keyfile, "server", "auto_start_delay", NULL);
+  if (self->auto_start_delay <= 0) {
+    self->auto_start_delay = 10;
   }
 
   return self;
@@ -399,8 +523,15 @@ pumpkin_server_save(PumpkinServer *self, GError **error)
   g_key_file_set_integer(keyfile, "server", "max_players", self->max_players);
   g_key_file_set_integer(keyfile, "server", "max_cpu_cores", self->max_cpu_cores);
   g_key_file_set_integer(keyfile, "server", "max_ram_mb", self->max_ram_mb);
+  g_key_file_set_integer(keyfile, "server", "stats_sample_msec", self->stats_sample_msec);
   g_key_file_set_boolean(keyfile, "server", "auto_restart", self->auto_restart);
   g_key_file_set_integer(keyfile, "server", "auto_restart_delay", self->auto_restart_delay);
+  g_key_file_set_boolean(keyfile, "server", "auto_update_enabled", self->auto_update_enabled);
+  g_key_file_set_boolean(keyfile, "server", "auto_update_use_schedule", self->auto_update_use_schedule);
+  g_key_file_set_integer(keyfile, "server", "auto_update_hour", self->auto_update_hour);
+  g_key_file_set_integer(keyfile, "server", "auto_update_minute", self->auto_update_minute);
+  g_key_file_set_boolean(keyfile, "server", "auto_start_on_launch", self->auto_start_on_launch);
+  g_key_file_set_integer(keyfile, "server", "auto_start_delay", self->auto_start_delay);
   if (self->installed_url != NULL) {
     g_key_file_set_string(keyfile, "server", "installed_url", self->installed_url);
   }
@@ -419,7 +550,10 @@ pumpkin_server_save(PumpkinServer *self, GError **error)
 
   g_autofree char *ini = server_ini_path(self->root_dir);
   g_autofree char *data = g_key_file_to_data(keyfile, NULL, NULL);
-  return g_file_set_contents(ini, data, -1, error);
+  if (!g_file_set_contents(ini, data, -1, error)) {
+    return FALSE;
+  }
+  return sync_pumpkin_basic_configuration(self, error);
 }
 
 const char *
@@ -513,6 +647,12 @@ pumpkin_server_get_max_ram_mb(PumpkinServer *self)
 }
 
 int
+pumpkin_server_get_stats_sample_msec(PumpkinServer *self)
+{
+  return self->stats_sample_msec;
+}
+
+int
 pumpkin_server_get_pid(PumpkinServer *self)
 {
   return self->pid;
@@ -528,6 +668,30 @@ int
 pumpkin_server_get_auto_restart_delay(PumpkinServer *self)
 {
   return self->auto_restart_delay;
+}
+
+gboolean
+pumpkin_server_get_auto_update_enabled(PumpkinServer *self)
+{
+  return self->auto_update_enabled;
+}
+
+gboolean
+pumpkin_server_get_auto_update_use_schedule(PumpkinServer *self)
+{
+  return self->auto_update_use_schedule;
+}
+
+int
+pumpkin_server_get_auto_update_hour(PumpkinServer *self)
+{
+  return self->auto_update_hour;
+}
+
+int
+pumpkin_server_get_auto_update_minute(PumpkinServer *self)
+{
+  return self->auto_update_minute;
 }
 
 void
@@ -576,6 +740,34 @@ pumpkin_server_set_auto_restart_delay(PumpkinServer *self, int seconds)
 {
   if (seconds > 0) {
     self->auto_restart_delay = seconds;
+  }
+}
+
+void
+pumpkin_server_set_auto_update_enabled(PumpkinServer *self, gboolean enabled)
+{
+  self->auto_update_enabled = enabled;
+}
+
+void
+pumpkin_server_set_auto_update_use_schedule(PumpkinServer *self, gboolean enabled)
+{
+  self->auto_update_use_schedule = enabled;
+}
+
+void
+pumpkin_server_set_auto_update_hour(PumpkinServer *self, int hour)
+{
+  if (hour >= 0 && hour <= 23) {
+    self->auto_update_hour = hour;
+  }
+}
+
+void
+pumpkin_server_set_auto_update_minute(PumpkinServer *self, int minute)
+{
+  if (minute >= 0 && minute <= 59) {
+    self->auto_update_minute = minute;
   }
 }
 
@@ -640,9 +832,41 @@ pumpkin_server_set_max_ram_mb(PumpkinServer *self, int max_ram_mb)
 }
 
 void
+pumpkin_server_set_stats_sample_msec(PumpkinServer *self, int msec)
+{
+  self->stats_sample_msec = clamp_stats_sample_msec(msec);
+}
+
+void
 pumpkin_server_set_root_dir(PumpkinServer *self, const char *dir)
 {
   pumpkin_server_apply_defaults(self, dir);
+}
+
+gboolean
+pumpkin_server_get_auto_start_on_launch(PumpkinServer *self)
+{
+  return self->auto_start_on_launch;
+}
+
+int
+pumpkin_server_get_auto_start_delay(PumpkinServer *self)
+{
+  return self->auto_start_delay;
+}
+
+void
+pumpkin_server_set_auto_start_on_launch(PumpkinServer *self, gboolean enabled)
+{
+  self->auto_start_on_launch = enabled;
+}
+
+void
+pumpkin_server_set_auto_start_delay(PumpkinServer *self, int seconds)
+{
+  if (seconds > 0) {
+    self->auto_start_delay = seconds;
+  }
 }
 
 char *
@@ -850,6 +1074,10 @@ pumpkin_server_start(PumpkinServer *self, GError **error)
     return FALSE;
   }
 
+  if (!sync_pumpkin_basic_configuration(self, error)) {
+    return FALSE;
+  }
+
   ensure_log_stream(self);
   g_autofree char *data_dir = pumpkin_server_get_data_dir(self);
   const char *argv[] = { bin, NULL };
@@ -868,12 +1096,11 @@ pumpkin_server_start(PumpkinServer *self, GError **error)
     g_subprocess_launcher_setenv(launcher, "TOKIO_WORKER_THREADS", num, TRUE);
   }
 #if !defined(G_OS_WIN32)
-  if (max_cpu > 0 || max_ram > 0) {
-    ChildLimits *limits = g_new0(ChildLimits, 1);
-    limits->max_cpu_cores = max_cpu;
-    limits->max_ram_mb = max_ram;
-    g_subprocess_launcher_set_child_setup(launcher, child_setup_cb, limits, g_free);
-  }
+  ChildLimits *limits = g_new0(ChildLimits, 1);
+  limits->max_cpu_cores = max_cpu;
+  limits->max_ram_mb = max_ram;
+  limits->parent_pid = (int)getpid();
+  g_subprocess_launcher_set_child_setup(launcher, child_setup_cb, limits, g_free);
 #endif
 
   self->process = g_subprocess_launcher_spawnv(launcher, argv, error);

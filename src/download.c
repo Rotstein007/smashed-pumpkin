@@ -27,14 +27,22 @@ typedef struct {
   SoupMessage *metadata_message;
 } ResolveState;
 
+static SoupSession *shared_session = NULL;
+
+static SoupSession *
+get_shared_session(void)
+{
+  if (shared_session == NULL) {
+    shared_session = soup_session_new();
+  }
+  return shared_session;
+}
+
 static void
 download_state_free(DownloadState *state)
 {
   if (state == NULL) {
     return;
-  }
-  if (state->session != NULL) {
-    soup_session_abort(state->session);
   }
   g_clear_pointer(&state->url, g_free);
   g_clear_pointer(&state->dest, g_free);
@@ -184,7 +192,7 @@ pumpkin_download_file_async(const char *url,
   DownloadState *state = g_new0(DownloadState, 1);
   state->url = g_strdup(url);
   state->dest = g_strdup(dest_path);
-  state->session = soup_session_new();
+  state->session = g_object_ref(get_shared_session());
   state->message = soup_message_new("GET", url);
   state->progress_cb = progress_cb;
   state->progress_data = progress_data;
@@ -532,7 +540,7 @@ pumpkin_resolve_latest_async(GCancellable *cancellable,
 {
   GTask *task = g_task_new(NULL, cancellable, callback, user_data);
   ResolveState *state = g_new0(ResolveState, 1);
-  state->session = soup_session_new();
+  state->session = g_object_ref(get_shared_session());
   g_task_set_task_data(task, state, (GDestroyNotify)resolve_state_free);
 
   SoupMessage *msg = soup_message_new("GET", PUMPKIN_DOWNLOAD_PAGE);

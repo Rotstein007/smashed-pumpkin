@@ -53,6 +53,18 @@
     <control>touch</control>
   </supports>
   <releases>
+    <release version="0.4.0" date="2026-02-28">
+      <description>
+        <ul>
+          <li>The Players tab is now fully available with online/offline history, search, and sorting.</li>
+          <li>Moderation now includes ban-ip, pardon-ip, banlist, and visible ban reasons.</li>
+          <li>The console is cleaner and easier to read with improved timestamps and level filters.</li>
+          <li>Update checks now run automatically on startup and every minute.</li>
+          <li>The tray menu now reliably opens the app and still provides Quit.</li>
+          <li>This is probably the biggest update so far, and every user feedback message directly helps development.</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.3.0" date="2026-02-26">
       <description>
         <ul>

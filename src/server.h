@@ -25,6 +25,10 @@ const char *pumpkin_server_get_installed_build_id(PumpkinServer *self);
 const char *pumpkin_server_get_installed_build_label(PumpkinServer *self);
 gboolean pumpkin_server_get_auto_restart(PumpkinServer *self);
 int pumpkin_server_get_auto_restart_delay(PumpkinServer *self);
+gboolean pumpkin_server_get_auto_update_enabled(PumpkinServer *self);
+gboolean pumpkin_server_get_auto_update_use_schedule(PumpkinServer *self);
+int pumpkin_server_get_auto_update_hour(PumpkinServer *self);
+int pumpkin_server_get_auto_update_minute(PumpkinServer *self);
 const char *pumpkin_server_get_rcon_host(PumpkinServer *self);
 const char *pumpkin_server_get_rcon_password(PumpkinServer *self);
 int pumpkin_server_get_rcon_port(PumpkinServer *self);
@@ -33,6 +37,9 @@ int pumpkin_server_get_bedrock_port(PumpkinServer *self);
 int pumpkin_server_get_max_players(PumpkinServer *self);
 int pumpkin_server_get_max_cpu_cores(PumpkinServer *self);
 int pumpkin_server_get_max_ram_mb(PumpkinServer *self);
+int pumpkin_server_get_stats_sample_msec(PumpkinServer *self);
+gboolean pumpkin_server_get_auto_start_on_launch(PumpkinServer *self);
+int pumpkin_server_get_auto_start_delay(PumpkinServer *self);
 
 gboolean pumpkin_server_get_running(PumpkinServer *self);
 
@@ -43,6 +50,10 @@ void pumpkin_server_set_installed_build_id(PumpkinServer *self, const char *buil
 void pumpkin_server_set_installed_build_label(PumpkinServer *self, const char *build_label);
 void pumpkin_server_set_auto_restart(PumpkinServer *self, gboolean enabled);
 void pumpkin_server_set_auto_restart_delay(PumpkinServer *self, int seconds);
+void pumpkin_server_set_auto_update_enabled(PumpkinServer *self, gboolean enabled);
+void pumpkin_server_set_auto_update_use_schedule(PumpkinServer *self, gboolean enabled);
+void pumpkin_server_set_auto_update_hour(PumpkinServer *self, int hour);
+void pumpkin_server_set_auto_update_minute(PumpkinServer *self, int minute);
 void pumpkin_server_set_rcon_host(PumpkinServer *self, const char *host);
 void pumpkin_server_set_rcon_port(PumpkinServer *self, int port);
 void pumpkin_server_set_rcon_password(PumpkinServer *self, const char *password);
@@ -51,6 +62,9 @@ void pumpkin_server_set_bedrock_port(PumpkinServer *self, int port);
 void pumpkin_server_set_max_players(PumpkinServer *self, int max_players);
 void pumpkin_server_set_max_cpu_cores(PumpkinServer *self, int max_cpu_cores);
 void pumpkin_server_set_max_ram_mb(PumpkinServer *self, int max_ram_mb);
+void pumpkin_server_set_stats_sample_msec(PumpkinServer *self, int msec);
+void pumpkin_server_set_auto_start_on_launch(PumpkinServer *self, gboolean enabled);
+void pumpkin_server_set_auto_start_delay(PumpkinServer *self, int seconds);
 void pumpkin_server_set_root_dir(PumpkinServer *self, const char *dir);
 
 char *pumpkin_server_get_bin_path(PumpkinServer *self);

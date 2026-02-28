@@ -54,6 +54,18 @@ button.small > box > label {
   background: alpha(currentColor, 0.08);
 }
 
+.update-badge-current {
+  background: #dff3e4;
+  color: #1b5e20;
+  font-weight: 600;
+}
+
+.update-badge-available {
+  background: #fff3cd;
+  color: #8a6d3b;
+  font-weight: 600;
+}
+
 .status-badge {
   padding: 2px 8px;
   border-radius: 999px;
@@ -68,6 +80,15 @@ button.small > box > label {
 .status-stopped {
   background: #fbe9e7;
   color: #bf360c;
+}
+
+.player-platform-badge {
+  background: alpha(currentColor, 0.08);
+  color: alpha(currentColor, 0.9);
+}
+
+.player-offline-meta {
+  opacity: 0.75;
 }
 
 .warning-badge {
@@ -191,8 +212,7 @@ switch.compact-switch slider {
 }
 
 .plugin-delete-button {
-  min-height: 20px;
+  min-height: 26px;
   padding-top: 0;
   padding-bottom: 0;
-  line-height: 1;
 }

@@ -3,7 +3,6 @@
 #include <gtk/gtk.h>
 #include <libayatana-appindicator/app-indicator.h>
 #include "smashed-pumpkin-resources.h"
-#include "app-config.h"
 
 #include <errno.h>
 #include <glib/gstdio.h>
@@ -15,11 +14,55 @@
 static void
 spawn_command(const char *arg)
 {
-  const char *argv[3] = {"smashed-pumpkin", arg, NULL};
+  g_autofree char *binary = g_find_program_in_path("smashed-pumpkin");
+  if (binary == NULL) {
+#if defined(__linux__)
+    g_autofree char *exe = g_file_read_link("/proc/self/exe", NULL);
+    if (exe != NULL) {
+      g_autofree char *exe_dir = g_path_get_dirname(exe);
+      g_autofree char *sibling = g_build_filename(exe_dir, "smashed-pumpkin", NULL);
+      if (g_file_test(sibling, G_FILE_TEST_IS_EXECUTABLE)) {
+        binary = g_steal_pointer(&sibling);
+      }
+    }
+#endif
+  }
+  if (binary == NULL) {
+    g_autofree char *cwd = g_get_current_dir();
+    g_autofree char *candidate = g_build_filename(cwd, "buildDir", "src", "smashed-pumpkin", NULL);
+    if (g_file_test(candidate, G_FILE_TEST_IS_EXECUTABLE)) {
+      binary = g_steal_pointer(&candidate);
+    }
+  }
+  if (binary == NULL) {
+    g_warning("Could not find smashed-pumpkin binary for tray action");
+    return;
+  }
+
+  const char *argv[3] = {binary, arg, NULL};
   if (arg == NULL) {
     argv[1] = NULL;
   }
-  g_spawn_async(NULL, (char **)argv, NULL, G_SPAWN_SEARCH_PATH, NULL, NULL, NULL, NULL);
+  g_autoptr(GError) error = NULL;
+  if (!g_spawn_async(NULL, (char **)argv, NULL, 0, NULL, NULL, NULL, &error)) {
+    g_warning("Failed to launch smashed-pumpkin from tray: %s",
+              error != NULL ? error->message : "unknown error");
+  }
+}
+
+static void
+on_appindicator_log(const gchar *log_domain,
+                    GLogLevelFlags log_level,
+                    const gchar *message,
+                    gpointer user_data)
+{
+  (void)user_data;
+  if (message != NULL &&
+      strstr(message, "is deprecated") != NULL &&
+      strstr(message, "libayatana-appindicator-glib") != NULL) {
+    return;
+  }
+  g_log_default_handler(log_domain, log_level, message, NULL);
 }
 
 static void
@@ -27,7 +70,7 @@ on_show_activate(GtkMenuItem *item, gpointer user_data)
 {
   (void)item;
   (void)user_data;
-  spawn_command(NULL);
+  spawn_command("--show");
 }
 
 static void
@@ -37,99 +80,6 @@ on_quit_activate(GtkMenuItem *item, gpointer user_data)
   (void)user_data;
   spawn_command("--quit");
   gtk_main_quit();
-}
-
-static void
-on_server_activate(GtkMenuItem *item, gpointer user_data)
-{
-  (void)user_data;
-  const char *server_name = g_object_get_data(G_OBJECT(item), "server-name");
-  if (server_name == NULL || *server_name == '\0') {
-    spawn_command(NULL);
-    return;
-  }
-  g_autofree char *arg = g_strdup_printf("--server-name=%s", server_name);
-  spawn_command(arg);
-}
-
-typedef struct {
-  char *id;
-  char *name;
-} TrayServer;
-
-static void
-tray_server_free(TrayServer *server)
-{
-  if (server == NULL) {
-    return;
-  }
-  g_free(server->id);
-  g_free(server->name);
-  g_free(server);
-}
-
-static gint
-tray_server_compare(gconstpointer a, gconstpointer b)
-{
-  const TrayServer *sa = *(const TrayServer *const *)a;
-  const TrayServer *sb = *(const TrayServer *const *)b;
-  if (sa == NULL || sa->name == NULL) {
-    return -1;
-  }
-  if (sb == NULL || sb->name == NULL) {
-    return 1;
-  }
-  return g_ascii_strcasecmp(sa->name, sb->name);
-}
-
-static char *
-get_base_dir(void)
-{
-  PumpkinConfig *config = pumpkin_config_load(NULL);
-  if (config != NULL) {
-    char *base = g_strdup(pumpkin_config_get_base_dir(config));
-    pumpkin_config_free(config);
-    return base;
-  }
-  return g_build_filename(g_get_user_data_dir(), "smashed-pumpkin", "servers", NULL);
-}
-
-static GPtrArray *
-load_servers(void)
-{
-  g_autofree char *base_dir = get_base_dir();
-  GPtrArray *servers = g_ptr_array_new_with_free_func((GDestroyNotify)tray_server_free);
-  if (base_dir == NULL) {
-    return servers;
-  }
-
-  GDir *dir = g_dir_open(base_dir, 0, NULL);
-  if (dir == NULL) {
-    return servers;
-  }
-
-  const char *entry = NULL;
-  while ((entry = g_dir_read_name(dir)) != NULL) {
-    g_autofree char *server_dir = g_build_filename(base_dir, entry, NULL);
-    g_autofree char *ini = g_build_filename(server_dir, "server.ini", NULL);
-    if (!g_file_test(ini, G_FILE_TEST_EXISTS)) {
-      continue;
-    }
-    g_autoptr(GKeyFile) key = g_key_file_new();
-    if (!g_key_file_load_from_file(key, ini, G_KEY_FILE_NONE, NULL)) {
-      continue;
-    }
-    g_autofree char *id = g_key_file_get_string(key, "server", "id", NULL);
-    g_autofree char *name = g_key_file_get_string(key, "server", "name", NULL);
-    TrayServer *server = g_new0(TrayServer, 1);
-    server->id = g_strdup(id != NULL ? id : entry);
-    server->name = g_strdup(name != NULL ? name : entry);
-    g_ptr_array_add(servers, server);
-  }
-  g_dir_close(dir);
-
-  g_ptr_array_sort(servers, (GCompareFunc)tray_server_compare);
-  return servers;
 }
 
 static void
@@ -147,33 +97,11 @@ populate_menu(GtkWidget *menu)
 {
   clear_menu(menu);
 
-  GtkWidget *servers_header = gtk_menu_item_new_with_label("Servers");
-  gtk_widget_set_sensitive(servers_header, FALSE);
-  gtk_menu_shell_append(GTK_MENU_SHELL(menu), servers_header);
-
-  g_autoptr(GPtrArray) servers = load_servers();
-  if (servers->len == 0) {
-    GtkWidget *empty = gtk_menu_item_new_with_label("No servers");
-    gtk_widget_set_sensitive(empty, FALSE);
-    gtk_menu_shell_append(GTK_MENU_SHELL(menu), empty);
-  } else {
-    for (guint i = 0; i < servers->len; i++) {
-      TrayServer *server = g_ptr_array_index(servers, i);
-      GtkWidget *item = gtk_menu_item_new_with_label(server->name);
-      g_object_set_data_full(G_OBJECT(item), "server-id", g_strdup(server->id), g_free);
-      g_object_set_data_full(G_OBJECT(item), "server-name", g_strdup(server->name), g_free);
-      g_signal_connect(item, "activate", G_CALLBACK(on_server_activate), NULL);
-      gtk_menu_shell_append(GTK_MENU_SHELL(menu), item);
-    }
-  }
-
-  gtk_menu_shell_append(GTK_MENU_SHELL(menu), gtk_separator_menu_item_new());
-
-  GtkWidget *show_item = gtk_menu_item_new_with_label("Show");
+  GtkWidget *open_item = gtk_menu_item_new_with_label("Open");
   GtkWidget *quit_item = gtk_menu_item_new_with_label("Quit");
-  g_signal_connect(show_item, "activate", G_CALLBACK(on_show_activate), NULL);
+  g_signal_connect(open_item, "activate", G_CALLBACK(on_show_activate), NULL);
   g_signal_connect(quit_item, "activate", G_CALLBACK(on_quit_activate), NULL);
-  gtk_menu_shell_append(GTK_MENU_SHELL(menu), show_item);
+  gtk_menu_shell_append(GTK_MENU_SHELL(menu), open_item);
   gtk_menu_shell_append(GTK_MENU_SHELL(menu), quit_item);
 
   gtk_widget_show_all(menu);
@@ -229,8 +157,46 @@ icon_exists_in_dir(const char *dir)
 }
 
 static char *
+resolve_flatpak_icon_theme_path(void)
+{
+  /* Inside Flatpak the installed icon lives under /app/share/icons/ which is
+     only visible inside the sandbox.  The StatusNotifierWatcher (e.g. the
+     GNOME Shell AppIndicator extension) runs on the host and cannot read that
+     path.  Copy the icon to XDG_DATA_HOME/icons/… which is bind-mounted and
+     therefore accessible from both the sandbox and the host. */
+  const char *data_home = g_get_user_data_dir();
+  g_autofree char *dest_dir =
+    g_build_filename(data_home, "icons", "hicolor", "scalable", "apps", NULL);
+  g_autofree char *src =
+    g_build_filename("/app", "share", "icons", "hicolor", "scalable", "apps",
+                     APP_ID ".svg", NULL);
+
+  if (!g_file_test(src, G_FILE_TEST_EXISTS)) {
+    return NULL;
+  }
+
+  g_mkdir_with_parents(dest_dir, 0755);
+
+  g_autofree char *dest = g_build_filename(dest_dir, APP_ID ".svg", NULL);
+  g_autofree char *contents = NULL;
+  gsize len = 0;
+  if (g_file_get_contents(src, &contents, &len, NULL)) {
+    g_file_set_contents(dest, contents, (gssize)len, NULL);
+  }
+
+  if (icon_exists_in_dir(dest_dir)) {
+    return g_steal_pointer(&dest_dir);
+  }
+  return NULL;
+}
+
+static char *
 resolve_icon_theme_path(void)
 {
+  if (g_file_test("/.flatpak-info", G_FILE_TEST_EXISTS)) {
+    return resolve_flatpak_icon_theme_path();
+  }
+
 #if defined(__linux__)
   g_autofree char *exe = g_file_read_link("/proc/self/exe", NULL);
   if (exe != NULL) {
@@ -262,6 +228,8 @@ resolve_icon_theme_path(void)
 int
 main(int argc, char *argv[])
 {
+  g_log_set_handler("libayatana-appindicator", G_LOG_LEVEL_WARNING, on_appindicator_log, NULL);
+  g_log_set_handler("libappindicator", G_LOG_LEVEL_WARNING, on_appindicator_log, NULL);
   gtk_init(&argc, &argv);
   smashed_pumpkin_register_resource();
 

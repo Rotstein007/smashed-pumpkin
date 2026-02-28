@@ -8,6 +8,11 @@ struct _PumpkinConfig {
   char *default_download_url;
   gboolean use_cache;
   gboolean run_in_background;
+  gboolean autostart_on_boot;
+  gboolean start_minimized;
+  gboolean auto_start_servers_enabled;
+  PumpkinDateFormat date_format;
+  PumpkinTimeFormat time_format;
 };
 
 static char *
@@ -71,6 +76,11 @@ pumpkin_config_load(GError **error)
   config->default_download_url = g_strdup("");
   config->use_cache = TRUE;
   config->run_in_background = TRUE;
+  config->autostart_on_boot = FALSE;
+  config->start_minimized = FALSE;
+  config->auto_start_servers_enabled = FALSE;
+  config->date_format = PUMPKIN_DATE_FORMAT_DMY;
+  config->time_format = PUMPKIN_TIME_FORMAT_24H;
 
   g_autoptr(GKeyFile) key = g_key_file_new();
   if (g_key_file_load_from_file(key, config->path, G_KEY_FILE_NONE, NULL)) {
@@ -92,6 +102,32 @@ pumpkin_config_load(GError **error)
 
     if (g_key_file_has_key(key, "behavior", "run_in_background", NULL)) {
       config->run_in_background = g_key_file_get_boolean(key, "behavior", "run_in_background", NULL);
+    }
+
+    if (g_key_file_has_key(key, "behavior", "autostart_on_boot", NULL)) {
+      config->autostart_on_boot = g_key_file_get_boolean(key, "behavior", "autostart_on_boot", NULL);
+    }
+
+    if (g_key_file_has_key(key, "behavior", "start_minimized", NULL)) {
+      config->start_minimized = g_key_file_get_boolean(key, "behavior", "start_minimized", NULL);
+    }
+
+    if (g_key_file_has_key(key, "behavior", "auto_start_servers_enabled", NULL)) {
+      config->auto_start_servers_enabled = g_key_file_get_boolean(key, "behavior", "auto_start_servers_enabled", NULL);
+    }
+
+    if (g_key_file_has_key(key, "behavior", "date_format", NULL)) {
+      int value = g_key_file_get_integer(key, "behavior", "date_format", NULL);
+      if (value >= PUMPKIN_DATE_FORMAT_YMD && value <= PUMPKIN_DATE_FORMAT_MDY) {
+        config->date_format = (PumpkinDateFormat)value;
+      }
+    }
+
+    if (g_key_file_has_key(key, "behavior", "time_format", NULL)) {
+      int value = g_key_file_get_integer(key, "behavior", "time_format", NULL);
+      if (value >= PUMPKIN_TIME_FORMAT_24H && value <= PUMPKIN_TIME_FORMAT_12H) {
+        config->time_format = (PumpkinTimeFormat)value;
+      }
     }
   }
 
@@ -137,6 +173,11 @@ pumpkin_config_save(PumpkinConfig *config, GError **error)
   g_key_file_set_boolean(key, "storage", "use_cache", config->use_cache);
   g_key_file_set_string(key, "updates", "default_download_url", config->default_download_url);
   g_key_file_set_boolean(key, "behavior", "run_in_background", config->run_in_background);
+  g_key_file_set_boolean(key, "behavior", "autostart_on_boot", config->autostart_on_boot);
+  g_key_file_set_boolean(key, "behavior", "start_minimized", config->start_minimized);
+  g_key_file_set_boolean(key, "behavior", "auto_start_servers_enabled", config->auto_start_servers_enabled);
+  g_key_file_set_integer(key, "behavior", "date_format", config->date_format);
+  g_key_file_set_integer(key, "behavior", "time_format", config->time_format);
 
   g_autofree char *data = g_key_file_to_data(key, NULL, NULL);
   g_autofree char *dir = g_path_get_dirname(config->path);
@@ -205,4 +246,101 @@ void
 pumpkin_config_set_run_in_background(PumpkinConfig *config, gboolean enabled)
 {
   config->run_in_background = enabled;
+}
+
+gboolean
+pumpkin_config_get_autostart_on_boot(PumpkinConfig *config)
+{
+  return config->autostart_on_boot;
+}
+
+gboolean
+pumpkin_config_get_start_minimized(PumpkinConfig *config)
+{
+  return config->start_minimized;
+}
+
+gboolean
+pumpkin_config_get_auto_start_servers_enabled(PumpkinConfig *config)
+{
+  return config->auto_start_servers_enabled;
+}
+
+PumpkinDateFormat
+pumpkin_config_get_date_format(PumpkinConfig *config)
+{
+  return config->date_format;
+}
+
+PumpkinTimeFormat
+pumpkin_config_get_time_format(PumpkinConfig *config)
+{
+  return config->time_format;
+}
+
+void
+pumpkin_config_set_autostart_on_boot(PumpkinConfig *config, gboolean enabled)
+{
+  config->autostart_on_boot = enabled;
+}
+
+void
+pumpkin_config_set_start_minimized(PumpkinConfig *config, gboolean enabled)
+{
+  config->start_minimized = enabled;
+}
+
+void
+pumpkin_config_set_auto_start_servers_enabled(PumpkinConfig *config, gboolean enabled)
+{
+  config->auto_start_servers_enabled = enabled;
+}
+
+void
+pumpkin_config_set_date_format(PumpkinConfig *config, PumpkinDateFormat format)
+{
+  if (format < PUMPKIN_DATE_FORMAT_YMD || format > PUMPKIN_DATE_FORMAT_MDY) {
+    format = PUMPKIN_DATE_FORMAT_DMY;
+  }
+  config->date_format = format;
+}
+
+void
+pumpkin_config_set_time_format(PumpkinConfig *config, PumpkinTimeFormat format)
+{
+  if (format < PUMPKIN_TIME_FORMAT_24H || format > PUMPKIN_TIME_FORMAT_12H) {
+    format = PUMPKIN_TIME_FORMAT_24H;
+  }
+  config->time_format = format;
+}
+
+void
+pumpkin_config_manage_autostart_desktop(gboolean enabled)
+{
+  g_autofree char *autostart_dir = g_build_filename(g_get_user_config_dir(), "autostart", NULL);
+  g_autofree char *desktop_path = g_build_filename(autostart_dir, "dev.rotstein.SmashedPumpkin.desktop", NULL);
+
+  if (!enabled) {
+    g_remove(desktop_path);
+    return;
+  }
+
+  g_mkdir_with_parents(autostart_dir, 0755);
+
+  PumpkinConfig *config = pumpkin_config_load(NULL);
+  gboolean minimized = config != NULL && pumpkin_config_get_start_minimized(config);
+  if (config != NULL) {
+    pumpkin_config_free(config);
+  }
+
+  g_autofree char *contents = g_strdup_printf(
+    "[Desktop Entry]\n"
+    "Type=Application\n"
+    "Name=Smashed Pumpkin\n"
+    "Exec=smashed-pumpkin%s\n"
+    "Icon=dev.rotstein.SmashedPumpkin\n"
+    "X-GNOME-Autostart-enabled=true\n",
+    minimized ? " --minimized" : "");
+
+  g_file_set_contents(desktop_path, contents, -1, NULL);
 }
