@@ -177,24 +177,26 @@ pumpkin_app_about_action(GSimpleAction *action,
       "<p>Neuerungen</p>"
       "<ul>"
       "<li>Der Spieler-Tab ist jetzt voll nutzbar: Online/Offline-Historie, Suche, Sortierung und mehr.</li>"
-      "<li>Moderation wurde erweitert: inklusive ban-ip, pardon-ip, banlist und Bann-Grundanzeige.</li>"
+      "<li>Moderation wurde erweitert: inklusive ban-ip, pardon-ip und Bann-Grundanzeige.</li>"
       "<li>Die Konsole ist deutlich lesbarer mit besseren Zeitstempeln und Level-Filtern.</li>"
-      "<li>Update-Pruefungen laufen automatisch beim Start und danach minuetlich.</li>"
-      "<li>Das Tray-Menue oeffnet die App jetzt zuverlaessig per Open und bietet weiterhin Quit.</li>"
-      "<li>Wahrscheinlich das groesste Update bisher. Danke an jeden einzelnen Nutzer fuer euer Feedback.</li>"
-      "</ul>");
+      "<li>Allgemeine und server-spezifische Einstellungen sind jetzt klar getrennt und bieten mehr Einstellmöglichkeiten.</li>"
+      "<li>Update-Prüfungen laufen automatisch beim Start und danach minütlich.</li>"
+      "<li>Das Tray-Menü öffnet die App jetzt zuverlässig per Open und bietet weiterhin Quit.</li>"
+      "</ul>"
+      "<p>Wahrscheinlich das größte Update bisher. Danke an jeden einzelnen Nutzer für euer Feedback!</p>");
   } else {
     adw_about_dialog_set_release_notes(
       about,
       "<p>What’s new</p>"
       "<ul>"
       "<li>The Players tab is finally fully available with online/offline history, search, sorting, and more.</li>"
-      "<li>Moderation now includes ban-ip, pardon-ip, banlist, and visible ban reasons.</li>"
+      "<li>Moderation now includes ban-ip, pardon-ip, and visible ban reasons.</li>"
       "<li>The console is cleaner and easier to read with better timestamps and level filters.</li>"
+      "<li>General and server-specific settings are now clearly separated and provide more options.</li>"
       "<li>Update checks now run automatically on startup and every minute.</li>"
       "<li>The tray menu now reliably opens the app via Open and still provides Quit.</li>"
-      "<li>This is probably the biggest update so far. Thank you to every single user for the feedback.</li>"
-      "</ul>");
+      "</ul>"
+      "<p>This is probably the biggest update so far. Thank you to every single user for the feedback!</p>");
   }
   adw_about_dialog_set_developer_name(about, "Rotstein");
   adw_about_dialog_set_comments(about,

@@ -33,7 +33,6 @@
 #define STATS_HISTORY_SECONDS 180
 #define STATS_SAMPLES ((STATS_HISTORY_SECONDS * 1000) / DEFAULT_STATS_SAMPLE_MSEC)
 #define PLAYER_STATE_FLUSH_INTERVAL_USEC (15 * G_USEC_PER_SEC)
-#define COMMAND_HISTORY_MAX 200
 
 struct _PumpkinWindow {
   AdwApplicationWindow parent_instance;
@@ -132,6 +131,7 @@ struct _PumpkinWindow {
   guint start_delay_id;
   guint auto_update_countdown_id;
   GHashTable *download_progress_state;
+  gboolean close_while_download_confirmed;
   gboolean restart_requested;
   gboolean user_stop_requested;
   gboolean restart_pending;
@@ -325,6 +325,7 @@ typedef struct {
   char *name;
   char *uuid;
   char *last_ip;
+  gboolean ip_banned_hint;
   PlayerPlatform platform;
   gboolean online;
   gint64 first_joined_unix;
@@ -368,6 +369,7 @@ static void on_download_progress(goffset current, goffset total, gpointer user_d
 static void on_details_install(GtkButton *button, PumpkinWindow *self);
 static void on_details_update(GtkButton *button, PumpkinWindow *self);
 static void on_details_check_updates(GtkButton *button, PumpkinWindow *self);
+static void command_history_reset_navigation(PumpkinWindow *self);
 static void trigger_latest_resolve(PumpkinWindow *self);
 static gboolean poll_latest_release_tick(gpointer data);
 static void update_check_updates_badge(PumpkinWindow *self);
@@ -403,6 +405,7 @@ static int parse_limit_entry(GtkEntry *entry, int max_value);
 static gboolean parse_tps_from_line(const char *line, double *out);
 static void on_settings_leave_confirmed(GObject *dialog, GAsyncResult *res, gpointer user_data);
 static gboolean on_window_close_request(GtkWindow *window, gpointer user_data);
+static void on_close_during_update_confirmed(GObject *dialog, GAsyncResult *res, gpointer user_data);
 static void on_window_visible_changed(GObject *object, GParamSpec *pspec, gpointer user_data);
 static gboolean query_minecraft_players(const char *host, int port, int *out_players, int *out_max_players);
 static gboolean is_player_list_snapshot_line(const char *line);
@@ -450,6 +453,7 @@ static gboolean delete_player_tracking(PumpkinWindow *self,
 static void on_player_row_activated(GtkListBox *box, GtkListBoxRow *row, PumpkinWindow *self);
 static void on_player_action_confirmed(GObject *dialog, GAsyncResult *res, gpointer user_data);
 static void on_player_ban_reason_confirmed(GObject *dialog, GAsyncResult *res, gpointer user_data);
+static void on_player_pardon_ip_manual_confirmed(GObject *dialog, GAsyncResult *res, gpointer user_data);
 static void update_live_player_names(PumpkinWindow *self, const char *line);
 static void on_player_search_changed(GtkEditable *editable, PumpkinWindow *self);
 static void on_player_sort_button_clicked(GtkButton *button, PumpkinWindow *self);
@@ -509,11 +513,19 @@ static const char *platform_label(PlayerPlatform platform);
 static PlayerPlatform platform_from_line(const char *line);
 static PlayerPlatform platform_guess_from_uuid(const char *uuid);
 static char *extract_ip_from_socket_text(const char *text);
+static GPtrArray *build_ip_unban_candidates(const char *raw_ip);
+static gboolean refresh_player_list_deferred(gpointer data);
+static gboolean send_pardon_ip_for_player(PumpkinWindow *self, const char *raw_ip, const char *state_key);
 static void remember_platform_hint_for_ip(PumpkinWindow *self, const char *ip, PlayerPlatform platform);
 static PlayerPlatform platform_hint_for_ip(PumpkinWindow *self, const char *ip);
 static void set_player_head_image(PumpkinWindow *self, GtkImage *image, const char *uuid);
 static void on_player_head_download_done(GObject *source, GAsyncResult *res, gpointer user_data);
 static char *player_tracking_file(PumpkinServer *server);
+static char *command_history_file(PumpkinServer *server);
+static void command_history_load(PumpkinWindow *self, PumpkinServer *server);
+static gboolean server_download_active(PumpkinWindow *self, PumpkinServer *server);
+static gboolean any_download_active(PumpkinWindow *self);
+static char *pick_latest_banned_ip(PumpkinWindow *self);
 
 static void
 apply_compact_button(GtkWidget *button)
@@ -2115,6 +2127,23 @@ static gboolean
 on_window_close_request(GtkWindow *window, gpointer user_data)
 {
   PumpkinWindow *self = PUMPKIN_WINDOW(user_data);
+  if (self != NULL && any_download_active(self) && !self->close_while_download_confirmed) {
+    AdwDialog *dialog = adw_alert_dialog_new(
+      "Update in progress",
+      "A server update is currently running. Closing now may interrupt the installation.");
+    AdwAlertDialog *alert = ADW_ALERT_DIALOG(dialog);
+    adw_alert_dialog_add_response(alert, "cancel", "Cancel");
+    adw_alert_dialog_add_response(alert, "close_anyway", "Close anyway");
+    adw_alert_dialog_set_default_response(alert, "cancel");
+    adw_alert_dialog_set_close_response(alert, "cancel");
+    adw_alert_dialog_set_response_appearance(alert, "close_anyway", ADW_RESPONSE_DESTRUCTIVE);
+    adw_alert_dialog_choose(alert, GTK_WIDGET(self), NULL, on_close_during_update_confirmed, self);
+    return TRUE;
+  }
+  if (self != NULL && self->close_while_download_confirmed) {
+    self->close_while_download_confirmed = FALSE;
+  }
+
   gboolean run_in_background = FALSE;
   if (self->switch_run_in_background != NULL) {
     run_in_background = gtk_switch_get_active(self->switch_run_in_background);
@@ -2140,6 +2169,18 @@ on_window_close_request(GtkWindow *window, gpointer user_data)
   }
   pumpkin_window_stop_all_servers(self);
   return FALSE;
+}
+
+static void
+on_close_during_update_confirmed(GObject *dialog, GAsyncResult *res, gpointer user_data)
+{
+  PumpkinWindow *self = PUMPKIN_WINDOW(user_data);
+  const char *response = adw_alert_dialog_choose_finish(ADW_ALERT_DIALOG(dialog), res);
+  if (self == NULL || response == NULL || g_strcmp0(response, "close_anyway") != 0) {
+    return;
+  }
+  self->close_while_download_confirmed = TRUE;
+  gtk_window_close(GTK_WINDOW(self));
 }
 
 static void
@@ -2196,6 +2237,32 @@ get_download_progress_state(PumpkinWindow *self, PumpkinServer *server, gboolean
     g_hash_table_insert(self->download_progress_state, g_object_ref(server), state);
   }
   return state;
+}
+
+static gboolean
+server_download_active(PumpkinWindow *self, PumpkinServer *server)
+{
+  DownloadProgressState *state = get_download_progress_state(self, server, FALSE);
+  return state != NULL && state->active;
+}
+
+static gboolean
+any_download_active(PumpkinWindow *self)
+{
+  if (self == NULL || self->download_progress_state == NULL) {
+    return FALSE;
+  }
+  GHashTableIter iter;
+  gpointer key = NULL;
+  gpointer value = NULL;
+  g_hash_table_iter_init(&iter, self->download_progress_state);
+  while (g_hash_table_iter_next(&iter, &key, &value)) {
+    DownloadProgressState *state = value;
+    if (state != NULL && state->active) {
+      return TRUE;
+    }
+  }
+  return FALSE;
 }
 
 static void
@@ -2662,6 +2729,57 @@ player_tracking_file(PumpkinServer *server)
   return g_build_filename(data_dir, "player-tracking.ini", NULL);
 }
 
+static char *
+command_history_file(PumpkinServer *server)
+{
+  if (server == NULL) {
+    return NULL;
+  }
+  g_autofree char *data_dir = pumpkin_server_get_data_dir(server);
+  if (data_dir == NULL) {
+    return NULL;
+  }
+  return g_build_filename(data_dir, "command-history.log", NULL);
+}
+
+static void
+command_history_load(PumpkinWindow *self, PumpkinServer *server)
+{
+  if (self == NULL || self->command_history == NULL) {
+    return;
+  }
+
+  g_ptr_array_set_size(self->command_history, 0);
+  command_history_reset_navigation(self);
+
+  if (server == NULL) {
+    return;
+  }
+
+  g_autofree char *path = command_history_file(server);
+  if (path == NULL || !g_file_test(path, G_FILE_TEST_EXISTS)) {
+    return;
+  }
+
+  g_autofree char *contents = NULL;
+  if (!g_file_get_contents(path, &contents, NULL, NULL) || contents == NULL) {
+    return;
+  }
+
+  g_auto(GStrv) lines = g_strsplit(contents, "\n", -1);
+  for (int i = 0; lines[i] != NULL; i++) {
+    g_autofree char *line = g_strdup(lines[i]);
+    if (line == NULL) {
+      continue;
+    }
+    g_strstrip(line);
+    if (line[0] == '\0') {
+      continue;
+    }
+    g_ptr_array_add(self->command_history, g_strdup(line));
+  }
+}
+
 static void
 player_state_free(PlayerState *state)
 {
@@ -2760,6 +2878,7 @@ merge_player_states(PumpkinWindow *self, PlayerState *dst, PlayerState *src)
     g_free(dst->last_ip);
     dst->last_ip = g_strdup(src->last_ip);
   }
+  dst->ip_banned_hint = dst->ip_banned_hint || src->ip_banned_hint;
   if (dst->first_joined_unix <= 0 ||
       (src->first_joined_unix > 0 && src->first_joined_unix < dst->first_joined_unix)) {
     dst->first_joined_unix = src->first_joined_unix;
@@ -3349,6 +3468,120 @@ extract_ip_from_socket_text(const char *text)
   }
 
   return g_strdup(tmp);
+}
+
+static void
+add_ip_unban_candidate(GHashTable *seen, GPtrArray *targets, const char *candidate)
+{
+  if (seen == NULL || targets == NULL || candidate == NULL || *candidate == '\0') {
+    return;
+  }
+
+  g_autofree char *clean = extract_ip_from_socket_text(candidate);
+  const char *value = clean != NULL ? clean : candidate;
+  if (!g_hostname_is_ip_address(value)) {
+    return;
+  }
+
+  g_autofree char *normalized = normalized_key(value);
+  if (normalized == NULL || *normalized == '\0' || g_hash_table_contains(seen, normalized)) {
+    return;
+  }
+
+  g_hash_table_add(seen, g_strdup(normalized));
+  g_ptr_array_add(targets, g_strdup(value));
+}
+
+static GPtrArray *
+build_ip_unban_candidates(const char *raw_ip)
+{
+  if (raw_ip == NULL || *raw_ip == '\0') {
+    return NULL;
+  }
+
+  g_autoptr(GHashTable) seen = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, NULL);
+  g_autoptr(GPtrArray) targets = g_ptr_array_new_with_free_func(g_free);
+
+  g_autofree char *clean = extract_ip_from_socket_text(raw_ip);
+  const char *base = clean != NULL ? clean : raw_ip;
+  add_ip_unban_candidate(seen, targets, base);
+
+  if (strchr(base, '%') != NULL) {
+    g_auto(GStrv) parts = g_strsplit(base, "%", 2);
+    if (parts[0] != NULL && *parts[0] != '\0') {
+      add_ip_unban_candidate(seen, targets, parts[0]);
+    }
+  }
+
+  if (g_str_has_prefix(base, "::ffff:")) {
+    const char *mapped = base + strlen("::ffff:");
+    if (mapped != NULL && *mapped != '\0' && strchr(mapped, ':') == NULL) {
+      add_ip_unban_candidate(seen, targets, mapped);
+    }
+  } else if (strchr(base, ':') == NULL) {
+    g_autofree char *mapped = g_strdup_printf("::ffff:%s", base);
+    add_ip_unban_candidate(seen, targets, mapped);
+  }
+
+  if (targets->len == 0) {
+    return NULL;
+  }
+  return g_steal_pointer(&targets);
+}
+
+static gboolean
+refresh_player_list_deferred(gpointer data)
+{
+  PumpkinWindow *self = PUMPKIN_WINDOW(data);
+  if (self == NULL) {
+    return G_SOURCE_REMOVE;
+  }
+  invalidate_player_list_signature(self);
+  refresh_player_list(self);
+  g_object_unref(self);
+  return G_SOURCE_REMOVE;
+}
+
+static gboolean
+send_pardon_ip_for_player(PumpkinWindow *self, const char *raw_ip, const char *state_key)
+{
+  if (self == NULL || self->current == NULL || raw_ip == NULL || *raw_ip == '\0') {
+    return FALSE;
+  }
+
+  g_autoptr(GPtrArray) candidates = build_ip_unban_candidates(raw_ip);
+  if (candidates == NULL || candidates->len == 0) {
+    return FALSE;
+  }
+
+  gboolean sent_any = FALSE;
+  for (guint i = 0; i < candidates->len; i++) {
+    const char *candidate = g_ptr_array_index(candidates, i);
+    if (candidate == NULL || *candidate == '\0') {
+      continue;
+    }
+    g_autofree char *command = g_strdup_printf("pardon-ip %s", candidate);
+    g_autoptr(GError) error = NULL;
+    if (!pumpkin_server_send_command(self->current, command, &error)) {
+      if (error != NULL) {
+        append_log(self, error->message);
+      }
+      continue;
+    }
+    sent_any = TRUE;
+  }
+
+  if (sent_any && state_key != NULL && self->player_states != NULL) {
+    PlayerState *state = g_hash_table_lookup(self->player_states, state_key);
+    if (state != NULL && state->ip_banned_hint) {
+      state->ip_banned_hint = FALSE;
+    }
+    invalidate_player_list_signature(self);
+    refresh_player_list(self);
+    g_timeout_add(350, refresh_player_list_deferred, g_object_ref(self));
+  }
+
+  return sent_any;
 }
 
 static void
@@ -4419,6 +4652,43 @@ load_player_entries_from_file(const char *path)
   return g_steal_pointer(&entries);
 }
 
+static char *
+pick_latest_banned_ip(PumpkinWindow *self)
+{
+  if (self == NULL || self->current == NULL) {
+    return NULL;
+  }
+
+  g_autofree char *banned_ips_path = resolve_data_file(self->current, "banned-ips.json");
+  g_autoptr(GPtrArray) banned_ip_entries = load_player_entries_from_file(banned_ips_path);
+  if (banned_ip_entries == NULL || banned_ip_entries->len == 0) {
+    return NULL;
+  }
+
+  const char *best_ip = NULL;
+  const char *best_created = NULL;
+  for (guint i = 0; i < banned_ip_entries->len; i++) {
+    PlayerEntry *entry = g_ptr_array_index(banned_ip_entries, i);
+    if (entry == NULL || entry->ip == NULL || *entry->ip == '\0') {
+      continue;
+    }
+    if (best_ip == NULL) {
+      best_ip = entry->ip;
+      best_created = entry->created;
+      continue;
+    }
+
+    if (entry->created != NULL && *entry->created != '\0') {
+      if (best_created == NULL || *best_created == '\0' || g_strcmp0(entry->created, best_created) > 0) {
+        best_ip = entry->ip;
+        best_created = entry->created;
+      }
+    }
+  }
+
+  return best_ip != NULL ? g_strdup(best_ip) : NULL;
+}
+
 static void
 load_player_name_map(GHashTable *map, PumpkinServer *server)
 {
@@ -4571,6 +4841,10 @@ on_overview_update_clicked(GtkButton *button, gpointer user_data)
   if (server == NULL || self->latest_url == NULL) {
     return;
   }
+  if (server_download_active(self, server)) {
+    set_details_status_for_server(self, server, "Update already in progress", 3);
+    return;
+  }
 
   start_download_for_server(self, server, self->latest_url, FALSE, FALSE);
 }
@@ -4600,6 +4874,10 @@ on_overview_install_confirmed(GObject *dialog, GAsyncResult *res, gpointer user_
 
   const char *response = adw_alert_dialog_choose_finish(ADW_ALERT_DIALOG(dialog), res);
   if (g_strcmp0(response, "overwrite") == 0) {
+    if (server_download_active(self, server)) {
+      set_details_status_for_server(self, server, "Install/update already in progress", 3);
+      return;
+    }
     const char *url = self->latest_url != NULL ? self->latest_url : pumpkin_server_get_download_url(server);
     start_download_for_server(self, server, url, FALSE, FALSE);
   }
@@ -4653,6 +4931,7 @@ refresh_overview_list(PumpkinWindow *self)
     gtk_widget_set_hexpand(vbox, TRUE);
 
     DownloadProgressState *state = get_download_progress_state(self, server, FALSE);
+    gboolean download_active = (state != NULL && state->active);
     if (state != NULL && state->active) {
       GtkWidget *bar = gtk_progress_bar_new();
       gtk_progress_bar_set_show_text(GTK_PROGRESS_BAR(bar), TRUE);
@@ -4671,6 +4950,10 @@ refresh_overview_list(PumpkinWindow *self)
       gtk_widget_add_css_class(btn_update, "update-button");
       g_object_set_data_full(G_OBJECT(btn_update), "server", g_object_ref(server), g_object_unref);
       g_signal_connect(btn_update, "clicked", G_CALLBACK(on_overview_update_clicked), self);
+      gtk_widget_set_sensitive(btn_update, !download_active);
+      if (download_active) {
+        gtk_button_set_label(GTK_BUTTON(btn_update), "Updating...");
+      }
       gtk_box_append(GTK_BOX(btn_box), btn_update);
     }
 
@@ -5036,6 +5319,8 @@ update_details(PumpkinWindow *self)
   gboolean busy = (self->ui_state == UI_STATE_STARTING ||
                    self->ui_state == UI_STATE_STOPPING ||
                    self->ui_state == UI_STATE_RESTARTING);
+  gboolean download_busy = server_download_active(self, self->current);
+  busy = busy || download_busy;
   gboolean can_start = installed && !running && !busy &&
                        (self->ui_state == UI_STATE_IDLE || self->ui_state == UI_STATE_ERROR);
   gboolean can_stop = running && self->ui_state == UI_STATE_RUNNING;
@@ -5048,7 +5333,7 @@ update_details(PumpkinWindow *self)
   gtk_widget_set_sensitive(GTK_WIDGET(self->btn_details_install), !running && !busy);
   gtk_widget_set_sensitive(GTK_WIDGET(self->btn_details_update), update_available && !running && !busy);
   gtk_widget_set_visible(GTK_WIDGET(self->btn_details_update), TRUE);
-  gtk_widget_set_sensitive(GTK_WIDGET(self->btn_details_check_updates), self->current != NULL);
+  gtk_widget_set_sensitive(GTK_WIDGET(self->btn_details_check_updates), self->current != NULL && !download_busy);
   update_check_updates_badge(self);
   if (self->btn_console_copy != NULL) {
     gtk_widget_set_sensitive(GTK_WIDGET(self->btn_console_copy), self->current != NULL);
@@ -6385,6 +6670,28 @@ player_lookup_reason_for_ip(GHashTable *map, const char *ip)
   return g_hash_table_lookup(map, ip_key);
 }
 
+static const char *
+player_lookup_reason_for_ip_variants(GHashTable *map, const char *ip)
+{
+  if (map == NULL || ip == NULL || *ip == '\0') {
+    return NULL;
+  }
+
+  g_autoptr(GPtrArray) candidates = build_ip_unban_candidates(ip);
+  if (candidates == NULL || candidates->len == 0) {
+    return player_lookup_reason_for_ip(map, ip);
+  }
+
+  for (guint i = 0; i < candidates->len; i++) {
+    const char *candidate = g_ptr_array_index(candidates, i);
+    const char *reason = player_lookup_reason_for_ip(map, candidate);
+    if (reason != NULL) {
+      return reason;
+    }
+  }
+  return NULL;
+}
+
 static void
 append_player_state_row(PumpkinWindow *self,
                         GtkListBox *list,
@@ -6693,7 +7000,7 @@ refresh_player_list(PumpkinWindow *self)
       g_autofree char *uuid_key = normalized_key(state->uuid);
       g_autofree char *ip_key = normalized_key(state->last_ip);
       const char *ban_reason = player_lookup_reason_for_state(banned_reason_map, state);
-      const char *ip_ban_reason = player_lookup_reason_for_ip(banned_ip_reason_map, state->last_ip);
+      const char *ip_ban_reason = player_lookup_reason_for_ip_variants(banned_ip_reason_map, state->last_ip);
       g_autofree char *ban_reason_key = normalized_key(ban_reason);
       g_autofree char *ip_ban_reason_key = normalized_key(ip_ban_reason);
       gboolean match = FALSE;
@@ -6733,8 +7040,9 @@ refresh_player_list(PumpkinWindow *self)
     gboolean whitelisted = player_lookup_contains_state(whitelist_set, state);
     const char *ban_reason = player_lookup_reason_for_state(banned_reason_map, state);
     gboolean banned = (ban_reason != NULL);
-    const char *ip_ban_reason = player_lookup_reason_for_ip(banned_ip_reason_map, state->last_ip);
-    gboolean ip_banned = (ip_ban_reason != NULL);
+    const char *ip_ban_reason = player_lookup_reason_for_ip_variants(banned_ip_reason_map, state->last_ip);
+    gboolean ip_banned = (ip_ban_reason != NULL) ||
+                         (state->ip_banned_hint && (state->last_ip == NULL || state->last_ip[0] == '\0'));
     int op_level = player_lookup_op_level_for_state(op_level_map, state);
     signature = player_list_signature_mix_str(signature, state->key);
     signature = player_list_signature_mix_str(signature, state->name);
@@ -6771,8 +7079,9 @@ refresh_player_list(PumpkinWindow *self)
     gboolean whitelisted = player_lookup_contains_state(whitelist_set, state);
     const char *ban_reason = player_lookup_reason_for_state(banned_reason_map, state);
     gboolean banned = (ban_reason != NULL);
-    const char *ip_ban_reason = player_lookup_reason_for_ip(banned_ip_reason_map, state->last_ip);
-    gboolean ip_banned = (ip_ban_reason != NULL);
+    const char *ip_ban_reason = player_lookup_reason_for_ip_variants(banned_ip_reason_map, state->last_ip);
+    gboolean ip_banned = (ip_ban_reason != NULL) ||
+                         (state->ip_banned_hint && (state->last_ip == NULL || state->last_ip[0] == '\0'));
     int op_level = player_lookup_op_level_for_state(op_level_map, state);
     append_player_state_row(self, self->player_list, state, whitelisted, banned, ban_reason,
                             ip_banned, ip_ban_reason, op_level, TRUE);
@@ -6947,8 +7256,9 @@ refresh_whitelist_list(PumpkinWindow *self)
 
     const char *ban_reason = player_lookup_reason_for_state(banned_reason_map, state);
     gboolean banned = (ban_reason != NULL);
-    const char *ip_ban_reason = player_lookup_reason_for_ip(banned_ip_reason_map, state->last_ip);
-    gboolean ip_banned = (ip_ban_reason != NULL);
+    const char *ip_ban_reason = player_lookup_reason_for_ip_variants(banned_ip_reason_map, state->last_ip);
+    gboolean ip_banned = (ip_ban_reason != NULL) ||
+                         (state->ip_banned_hint && (state->last_ip == NULL || state->last_ip[0] == '\0'));
     int op_level = player_lookup_op_level_for_state(op_level_map, state);
 
     if (query_key != NULL && *query_key != '\0') {
@@ -7052,8 +7362,9 @@ refresh_banned_list(PumpkinWindow *self)
     }
     gboolean whitelisted = player_lookup_contains_state(whitelist_set, state);
     int op_level = player_lookup_op_level_for_state(op_level_map, state);
-    const char *ip_ban_reason = player_lookup_reason_for_ip(banned_ip_reason_map, state->last_ip);
-    gboolean ip_banned = (ip_ban_reason != NULL);
+    const char *ip_ban_reason = player_lookup_reason_for_ip_variants(banned_ip_reason_map, state->last_ip);
+    gboolean ip_banned = (ip_ban_reason != NULL) ||
+                         (state->ip_banned_hint && (state->last_ip == NULL || state->last_ip[0] == '\0'));
 
     if (query_key != NULL && *query_key != '\0') {
       g_autofree char *name_key = normalized_key(state->name);
@@ -7186,6 +7497,10 @@ on_player_action_confirmed(GObject *dialog, GAsyncResult *res, gpointer user_dat
   gboolean is_ip_banned = GPOINTER_TO_INT(g_object_get_data(G_OBJECT(dialog), "player-ip-banned")) != 0;
   int op_level = GPOINTER_TO_INT(g_object_get_data(G_OBJECT(dialog), "player-op-level")) - 1;
   gboolean is_op = op_level >= 0;
+  PlayerState *selected_state = NULL;
+  if (state_key != NULL && self->player_states != NULL) {
+    selected_state = g_hash_table_lookup(self->player_states, state_key);
+  }
 
   if (g_strcmp0(response, "delete_data") == 0) {
     if (self->current == NULL) {
@@ -7212,16 +7527,6 @@ on_player_action_confirmed(GObject *dialog, GAsyncResult *res, gpointer user_dat
   gboolean server_running = pumpkin_server_get_running(self->current);
   if (!server_running) {
     append_log(self, "Server is not running.");
-    return;
-  }
-
-  if (g_strcmp0(response, "banlist") == 0) {
-    g_autoptr(GError) error = NULL;
-    if (!pumpkin_server_send_command(self->current, "banlist", &error)) {
-      if (error != NULL) {
-        append_log(self, error->message);
-      }
-    }
     return;
   }
 
@@ -7255,6 +7560,9 @@ on_player_action_confirmed(GObject *dialog, GAsyncResult *res, gpointer user_dat
     adw_dialog_set_focus(ADW_DIALOG(reason_dialog), entry);
     g_object_set_data_full(G_OBJECT(reason_dialog), "ban-command", g_strdup("ban-ip"), g_free);
     g_object_set_data_full(G_OBJECT(reason_dialog), "ban-target", g_strdup(target), g_free);
+    if (state_key != NULL) {
+      g_object_set_data_full(G_OBJECT(reason_dialog), "player-key", g_strdup(state_key), g_free);
+    }
     g_object_set_data(G_OBJECT(reason_dialog), "reason-entry", entry);
     adw_alert_dialog_choose(alert, GTK_WIDGET(self), NULL, on_player_ban_reason_confirmed, self);
     return;
@@ -7266,15 +7574,37 @@ on_player_action_confirmed(GObject *dialog, GAsyncResult *res, gpointer user_dat
       return;
     }
     if (last_ip == NULL || *last_ip == '\0') {
-      append_log(self, "No known IP for this player; cannot run pardon-ip.");
+      g_autofree char *auto_ip = NULL;
+      if (selected_state != NULL && selected_state->ip_banned_hint) {
+        auto_ip = pick_latest_banned_ip(self);
+      }
+      if (auto_ip != NULL && *auto_ip != '\0') {
+        if (!send_pardon_ip_for_player(self, auto_ip, state_key)) {
+          append_log(self, "Failed to run pardon-ip.");
+        }
+        return;
+      }
+
+      AdwDialog *manual_dialog = adw_alert_dialog_new("Pardon IP", "Enter the IP address to unban.");
+      AdwAlertDialog *manual_alert = ADW_ALERT_DIALOG(manual_dialog);
+      adw_alert_dialog_add_response(manual_alert, "cancel", "Cancel");
+      adw_alert_dialog_add_response(manual_alert, "pardon", "Pardon");
+      adw_alert_dialog_set_default_response(manual_alert, "pardon");
+      adw_alert_dialog_set_close_response(manual_alert, "cancel");
+
+      GtkWidget *entry = gtk_entry_new();
+      gtk_entry_set_placeholder_text(GTK_ENTRY(entry), "IP (e.g. 127.0.0.1)");
+      adw_alert_dialog_set_extra_child(manual_alert, entry);
+      adw_dialog_set_focus(ADW_DIALOG(manual_dialog), entry);
+      g_object_set_data(G_OBJECT(manual_dialog), "ip-entry", entry);
+      if (state_key != NULL) {
+        g_object_set_data_full(G_OBJECT(manual_dialog), "player-key", g_strdup(state_key), g_free);
+      }
+      adw_alert_dialog_choose(manual_alert, GTK_WIDGET(self), NULL, on_player_pardon_ip_manual_confirmed, self);
       return;
     }
-    g_autofree char *command = g_strdup_printf("pardon-ip %s", last_ip);
-    g_autoptr(GError) error = NULL;
-    if (!pumpkin_server_send_command(self->current, command, &error)) {
-      if (error != NULL) {
-        append_log(self, error->message);
-      }
+    if (!send_pardon_ip_for_player(self, last_ip, state_key)) {
+      append_log(self, "Failed to run pardon-ip.");
     }
     return;
   }
@@ -7282,6 +7612,10 @@ on_player_action_confirmed(GObject *dialog, GAsyncResult *res, gpointer user_dat
   if (g_strcmp0(response, "ban") == 0) {
     if (is_banned) {
       append_log(self, "Player is already banned.");
+      return;
+    }
+    if (is_ip_banned) {
+      append_log(self, "Player IP is already banned.");
       return;
     }
     if (name == NULL || *name == '\0') {
@@ -7371,6 +7705,7 @@ on_player_ban_reason_confirmed(GObject *dialog, GAsyncResult *res, gpointer user
 
   const char *command_name = g_object_get_data(G_OBJECT(dialog), "ban-command");
   const char *target = g_object_get_data(G_OBJECT(dialog), "ban-target");
+  const char *state_key = g_object_get_data(G_OBJECT(dialog), "player-key");
   if (command_name == NULL || *command_name == '\0') {
     command_name = "ban";
   }
@@ -7411,6 +7746,62 @@ on_player_ban_reason_confirmed(GObject *dialog, GAsyncResult *res, gpointer user
     if (error != NULL) {
       append_log(self, error->message);
     }
+    return;
+  }
+
+  if (g_strcmp0(command_name, "ban-ip") == 0 && state_key != NULL && self->player_states != NULL) {
+    PlayerState *state = g_hash_table_lookup(self->player_states, state_key);
+    if (state != NULL) {
+      state->ip_banned_hint = TRUE;
+      if (target != NULL && g_hostname_is_ip_address(target) && g_strcmp0(state->last_ip, target) != 0) {
+        g_free(state->last_ip);
+        state->last_ip = g_strdup(target);
+        player_states_set_dirty(self);
+      } else if ((state->last_ip == NULL || state->last_ip[0] == '\0')) {
+        g_autofree char *resolved = pick_latest_banned_ip(self);
+        if (resolved != NULL && *resolved != '\0' && g_strcmp0(state->last_ip, resolved) != 0) {
+          g_free(state->last_ip);
+          state->last_ip = g_strdup(resolved);
+          player_states_set_dirty(self);
+        }
+      }
+    }
+    invalidate_player_list_signature(self);
+    refresh_player_list(self);
+    g_timeout_add(350, refresh_player_list_deferred, g_object_ref(self));
+  }
+}
+
+static void
+on_player_pardon_ip_manual_confirmed(GObject *dialog, GAsyncResult *res, gpointer user_data)
+{
+  PumpkinWindow *self = PUMPKIN_WINDOW(user_data);
+  const char *response = adw_alert_dialog_choose_finish(ADW_ALERT_DIALOG(dialog), res);
+  if (response == NULL || g_strcmp0(response, "pardon") != 0) {
+    return;
+  }
+
+  if (self->current == NULL) {
+    append_log(self, "No server selected.");
+    return;
+  }
+  if (!pumpkin_server_get_running(self->current)) {
+    append_log(self, "Server is not running.");
+    return;
+  }
+
+  GtkWidget *entry = g_object_get_data(G_OBJECT(dialog), "ip-entry");
+  const char *state_key = g_object_get_data(G_OBJECT(dialog), "player-key");
+  const char *raw_ip = entry != NULL ? gtk_editable_get_text(GTK_EDITABLE(entry)) : NULL;
+  g_autofree char *clean = g_strdup(raw_ip != NULL ? raw_ip : "");
+  g_strstrip(clean);
+  if (clean[0] == '\0') {
+    append_log(self, "IP address required for pardon-ip.");
+    return;
+  }
+
+  if (!send_pardon_ip_for_player(self, clean, state_key)) {
+    append_log(self, "Failed to run pardon-ip.");
   }
 }
 
@@ -7470,7 +7861,6 @@ on_player_row_activated(GtkListBox *box, GtkListBoxRow *row, PumpkinWindow *self
   adw_alert_dialog_add_response(alert, "unban", "Unban");
   adw_alert_dialog_add_response(alert, "ban_ip", "Ban IP");
   adw_alert_dialog_add_response(alert, "pardon_ip", "Pardon IP");
-  adw_alert_dialog_add_response(alert, "banlist", "Banlist");
   adw_alert_dialog_add_response(alert, "delete_data", "Delete Data");
   adw_alert_dialog_set_default_response(alert, "cancel");
 
@@ -7489,10 +7879,9 @@ on_player_row_activated(GtkListBox *box, GtkListBoxRow *row, PumpkinWindow *self
     adw_alert_dialog_set_response_enabled(alert, "deop", FALSE);
     adw_alert_dialog_set_response_enabled(alert, "ban_ip", FALSE);
     adw_alert_dialog_set_response_enabled(alert, "pardon_ip", FALSE);
-    adw_alert_dialog_set_response_enabled(alert, "banlist", FALSE);
   } else {
     gboolean running = pumpkin_server_get_running(self->current);
-    adw_alert_dialog_set_response_enabled(alert, "ban", running && !is_banned);
+    adw_alert_dialog_set_response_enabled(alert, "ban", running && !is_banned && !is_ip_banned);
     adw_alert_dialog_set_response_enabled(alert, "unban", running && is_banned);
     adw_alert_dialog_set_response_enabled(alert, "op", running && !is_op);
     adw_alert_dialog_set_response_enabled(alert, "deop", running && is_op);
@@ -7500,8 +7889,7 @@ on_player_row_activated(GtkListBox *box, GtkListBoxRow *row, PumpkinWindow *self
     adw_alert_dialog_set_response_enabled(alert, "ban_ip",
                                           running && !is_ip_banned && ((name != NULL && *name != '\0' && is_online) || has_last_ip));
     adw_alert_dialog_set_response_enabled(alert, "pardon_ip",
-                                          running && is_ip_banned && has_last_ip);
-    adw_alert_dialog_set_response_enabled(alert, "banlist", running);
+                                          running && is_ip_banned);
   }
 
   if (name != NULL) {
@@ -7835,6 +8223,7 @@ select_server(PumpkinWindow *self, PumpkinServer *server)
   } else {
     player_states_clear(self);
   }
+  command_history_load(self, server);
 
   if (self->log_view != NULL) {
     GtkTextBuffer *buffer = NULL;
@@ -8984,6 +9373,10 @@ start_download_for_server(PumpkinWindow *self,
   if (server == NULL) {
     return;
   }
+  if (server_download_active(self, server)) {
+    set_details_status_for_server(self, server, "Install/update already in progress", 3);
+    return;
+  }
 
   gboolean using_latest = (self->latest_url != NULL && g_strcmp0(url, self->latest_url) == 0);
   const char *resolved_build_id = using_latest ? self->latest_build_id : NULL;
@@ -9000,6 +9393,7 @@ start_download_for_server(PumpkinWindow *self,
     state->total = 0;
   }
   refresh_overview_list(self);
+  update_details(self);
 
   if (pumpkin_server_get_running(server)) {
     append_log_for_server(self, server, "Stopping server before install/update...");
@@ -9016,6 +9410,7 @@ start_download_for_server(PumpkinWindow *self,
         state->active = FALSE;
       }
       refresh_overview_list(self);
+      update_details(self);
       pumpkin_server_set_installed_url(server, url);
       pumpkin_server_set_installed_build_id(server, resolved_build_id);
       if (resolved_build_label != NULL && *resolved_build_label != '\0') {
@@ -9039,6 +9434,7 @@ start_download_for_server(PumpkinWindow *self,
       state->active = FALSE;
     }
     refresh_overview_list(self);
+    update_details(self);
   }
 
   g_autofree char *tmp = NULL;
@@ -9063,6 +9459,7 @@ start_download_for_server(PumpkinWindow *self,
   pumpkin_download_file_async(url, tmp, NULL, on_download_progress, ctx, on_download_done, ctx);
   set_download_busy(self, TRUE);
   append_log_for_server(self, server, "Downloading Pumpkin binary...");
+  update_details(self);
 }
 
 static void
@@ -9083,11 +9480,13 @@ on_download_done(GObject *source, GAsyncResult *res, gpointer user_data)
     }
     refresh_overview_list(self);
     set_download_busy(self, FALSE);
+    update_details(self);
     download_context_free(ctx);
     return;
   }
 
   if (server == NULL) {
+    update_details(self);
     download_context_free(ctx);
     return;
   }
@@ -9104,6 +9503,7 @@ on_download_done(GObject *source, GAsyncResult *res, gpointer user_data)
       }
       refresh_overview_list(self);
       set_download_busy(self, FALSE);
+      update_details(self);
       download_context_free(ctx);
       return;
     }
@@ -9124,6 +9524,7 @@ on_download_done(GObject *source, GAsyncResult *res, gpointer user_data)
       }
       refresh_overview_list(self);
       set_download_busy(self, FALSE);
+      update_details(self);
       download_context_free(ctx);
       return;
     }
@@ -9473,6 +9874,10 @@ on_details_install(GtkButton *button, PumpkinWindow *self)
   if (self->current == NULL) {
     return;
   }
+  if (server_download_active(self, self->current)) {
+    set_details_status(self, "Install/update already in progress", 3);
+    return;
+  }
   if (pumpkin_server_get_running(self->current)) {
     set_details_error(self, "Stop the server before installing.");
     return;
@@ -9502,6 +9907,10 @@ on_details_update(GtkButton *button, PumpkinWindow *self)
 {
   (void)button;
   if (self->current == NULL || self->latest_url == NULL) {
+    return;
+  }
+  if (server_download_active(self, self->current)) {
+    set_details_status(self, "Update already in progress", 3);
     return;
   }
   if (pumpkin_server_get_running(self->current)) {
@@ -9569,18 +9978,28 @@ command_history_push(PumpkinWindow *self, const char *command)
     return;
   }
 
-  if (self->command_history->len > 0) {
-    const char *last = g_ptr_array_index(self->command_history, self->command_history->len - 1);
-    if (g_strcmp0(last, command) == 0) {
-      command_history_reset_navigation(self);
-      return;
+  g_ptr_array_add(self->command_history, g_strdup(command));
+
+  if (self->current != NULL) {
+    g_autofree char *path = command_history_file(self->current);
+    if (path != NULL) {
+      g_autofree char *clean = g_strdup(command);
+      if (clean != NULL) {
+        for (char *p = clean; *p != '\0'; p++) {
+          if (*p == '\r' || *p == '\n') {
+            *p = ' ';
+          }
+        }
+      }
+      FILE *fp = fopen(path, "a");
+      if (fp != NULL) {
+        fputs(clean != NULL ? clean : command, fp);
+        fputc('\n', fp);
+        fclose(fp);
+      }
     }
   }
 
-  g_ptr_array_add(self->command_history, g_strdup(command));
-  if (self->command_history->len > COMMAND_HISTORY_MAX) {
-    g_ptr_array_remove_index(self->command_history, 0);
-  }
   command_history_reset_navigation(self);
 }
 
