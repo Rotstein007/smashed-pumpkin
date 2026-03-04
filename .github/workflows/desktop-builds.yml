@@ -193,6 +193,7 @@ jobs:
           $platform = if ($arch -eq 'x86') { 'x86' } elseif ($arch -eq 'arm64') { 'arm64' } else { 'x64' }
           $version = "${{ steps.version.outputs.value }}"
           $upgradeCode = '8E643E21-5F9C-4D1C-89F1-A6B72E01F620'
+          $programFilesDir = if ($platform -eq 'x86') { 'ProgramFilesFolder' } else { 'ProgramFiles64Folder' }
 
           @"
           <?xml version="1.0" encoding="UTF-8"?>
@@ -203,7 +204,7 @@ jobs:
               <MediaTemplate EmbedCab="yes" />
 
               <Directory Id="TARGETDIR" Name="SourceDir">
-                <Directory Id="ProgramFilesFolder">
+                <Directory Id="$programFilesDir">
                   <Directory Id="INSTALLDIR" Name="Smashed Pumpkin" />
                 </Directory>
               </Directory>
