@@ -1,0 +1,78 @@
+name: Submit WinGet Update
+
+on:
+  workflow_dispatch:
+    inputs:
+      package_identifier:
+        description: "WinGet package identifier"
+        required: true
+        default: "Rotstein.SmashedPumpkin"
+        type: string
+      version:
+        description: "Package version (e.g. 0.4.1)"
+        required: true
+        type: string
+      installer_url_x64:
+        description: "Direct HTTPS URL to x64 MSI"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  submit-winget-update:
+    runs-on: windows-latest
+    steps:
+      - name: Validate inputs
+        id: validate
+        shell: pwsh
+        run: |
+          $packageId = "${{ inputs.package_identifier }}"
+          $version = "${{ inputs.version }}"
+          $url = "${{ inputs.installer_url_x64 }}"
+
+          if ([string]::IsNullOrWhiteSpace($packageId) -or [string]::IsNullOrWhiteSpace($version) -or [string]::IsNullOrWhiteSpace($url)) {
+            throw "package_identifier, version and installer_url_x64 are required."
+          }
+
+          if (-not ($url -match '^https://')) {
+            throw "installer_url_x64 must be a direct HTTPS URL."
+          }
+
+          "package_id=$packageId" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          "installer_url_x64=$url" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+      - name: Verify secret
+        shell: pwsh
+        env:
+          WINGET_SUBMIT_TOKEN: ${{ secrets.WINGET_SUBMIT_TOKEN }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:WINGET_SUBMIT_TOKEN)) {
+            throw "Missing repository secret WINGET_SUBMIT_TOKEN."
+          }
+
+      - name: Install wingetcreate
+        shell: pwsh
+        run: |
+          Invoke-WebRequest https://aka.ms/wingetcreate/latest -OutFile wingetcreate.exe
+          .\wingetcreate.exe --version
+
+      - name: Submit update to winget-pkgs
+        shell: pwsh
+        env:
+          WINGET_SUBMIT_TOKEN: ${{ secrets.WINGET_SUBMIT_TOKEN }}
+        run: |
+          $packageId = "${{ steps.validate.outputs.package_id }}"
+          $version = "${{ steps.validate.outputs.version }}"
+          $url = "${{ steps.validate.outputs.installer_url_x64 }}"
+
+          Write-Host "Submitting WinGet update: $packageId $version"
+          Write-Host "Installer URL: $url"
+
+          .\wingetcreate.exe update $packageId `
+            --version $version `
+            --urls "$url|x64" `
+            --token $env:WINGET_SUBMIT_TOKEN `
+            --submit
