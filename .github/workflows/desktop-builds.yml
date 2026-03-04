@@ -3,10 +3,15 @@ name: Desktop Builds
 on:
   push:
     branches: ["master"]
-    tags: ["v*"]
   pull_request:
     branches: ["master"]
   workflow_dispatch:
+    inputs:
+      publish_release:
+        description: "Publish GitHub Release + winget manifests (run on tag v*)"
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: write
@@ -90,9 +95,17 @@ jobs:
       - name: Build macOS app bundle
         shell: bash
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
-          if [[ "${GITHUB_REF}" != refs/tags/v* ]]; then
-            VERSION="0.0.0"
+          VERSION="$(sed -n "s/.*version: '\\([^']*\\)'.*/\\1/p" meson.build | head -n1)"
+          if [[ -z "${VERSION}" ]]; then
+            echo "Could not resolve app version from meson.build"
+            exit 1
+          fi
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            TAG_VERSION="${GITHUB_REF_NAME#v}"
+            if [[ "${TAG_VERSION}" != "${VERSION}" ]]; then
+              echo "Tag version (${TAG_VERSION}) does not match meson.build version (${VERSION})."
+              exit 1
+            fi
           fi
 
           APP_NAME="Smashed Pumpkin.app"
@@ -228,10 +241,15 @@ jobs:
         id: version
         shell: powershell
         run: |
-          $version = "${{ github.ref_name }}"
-          if ($version.StartsWith("v")) { $version = $version.Substring(1) }
-          if ($version -notmatch '^\d+\.\d+\.\d+(\.\d+)?$') {
-            $version = "0.0.1"
+          $line = Select-String -Path meson.build -Pattern "version:\s*'([^']+)'" | Select-Object -First 1
+          if (-not $line) { throw "Could not resolve version from meson.build" }
+          $version = $line.Matches[0].Groups[1].Value
+          if (-not $version) { throw "Could not resolve version from meson.build" }
+          if ("${{ github.ref }}".StartsWith("refs/tags/v")) {
+            $tagVersion = "${{ github.ref_name }}".Substring(1)
+            if ($tagVersion -ne $version) {
+              throw "Tag version ($tagVersion) does not match meson.build version ($version)"
+            }
           }
           "value=$version" >> $env:GITHUB_OUTPUT
 
@@ -333,7 +351,7 @@ jobs:
 
   winget-manifests:
     name: Build winget manifests
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.publish_release == 'true' && startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     needs: [windows]
     steps:
@@ -352,7 +370,16 @@ jobs:
           set -euo pipefail
           shopt -s globstar nullglob
 
-          VERSION="${GITHUB_REF_NAME#v}"
+          VERSION="$(sed -n "s/.*version: '\\([^']*\\)'.*/\\1/p" meson.build | head -n1)"
+          if [[ -z "${VERSION}" ]]; then
+            echo "Could not resolve app version from meson.build"
+            exit 1
+          fi
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          if [[ "${TAG_VERSION}" != "${VERSION}" ]]; then
+            echo "Tag version (${TAG_VERSION}) does not match meson.build version (${VERSION})."
+            exit 1
+          fi
           OUT_DIR="winget"
           mkdir -p "$OUT_DIR"
 
@@ -423,7 +450,7 @@ jobs:
 
   release:
     name: Publish GitHub Release
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.publish_release == 'true' && startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     needs: [linux-native, macos, windows, flatpak, winget-manifests]
     steps:
