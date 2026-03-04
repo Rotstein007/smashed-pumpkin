@@ -68,9 +68,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: macos-13
+          - os: macos-15-intel
             arch: x64
-          - os: macos-14
+          - os: macos-15
             arch: arm64
     steps:
       - name: Checkout
@@ -103,7 +103,7 @@ jobs:
             --identifier dev.rotstein.SmashedPumpkin \
             --version "${VERSION}" \
             --install-location / \
-            pkgroot \
+            --root pkgroot \
             "smashed-pumpkin-macos-${{ matrix.arch }}.pkg"
 
       - name: Upload artifact
@@ -124,41 +124,13 @@ jobs:
             wix_arch: x64
             winget_arch: x64
             install: >-
-              meson
-              ninja
-              pkgconf
               mingw-w64-x86_64-toolchain
+              mingw-w64-x86_64-meson
+              mingw-w64-x86_64-ninja
+              mingw-w64-x86_64-pkgconf
               mingw-w64-x86_64-gtk4
               mingw-w64-x86_64-libadwaita
               mingw-w64-x86_64-libsoup3
-          - arch: x86
-            msystem: MINGW32
-            wix_arch: x86
-            winget_arch: x86
-            install: >-
-              meson
-              ninja
-              pkgconf
-              mingw-w64-i686-toolchain
-              mingw-w64-i686-gtk4
-              mingw-w64-i686-libadwaita
-              mingw-w64-i686-libsoup3
-          - arch: arm64
-            msystem: CLANGARM64
-            wix_arch: arm64
-            winget_arch: arm64
-            install: >-
-              meson
-              ninja
-              pkgconf
-              mingw-w64-clang-aarch64-clang
-              mingw-w64-clang-aarch64-lld
-              mingw-w64-clang-aarch64-gcc-compat
-              mingw-w64-clang-aarch64-meson
-              mingw-w64-clang-aarch64-pkgconf
-              mingw-w64-clang-aarch64-gtk4
-              mingw-w64-clang-aarch64-libadwaita
-              mingw-w64-clang-aarch64-libsoup3
     steps:
       - name: Checkout
         uses: actions/checkout@v4

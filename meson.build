@@ -1,6 +1,6 @@
 project('smashed-pumpkin', 'c',
   version: '0.4.1',
-  meson_version: '>= 1.4.0',
+  meson_version: '>= 1.3.2',
   default_options: [
     'warning_level=2',
     'buildtype=debugoptimized'
