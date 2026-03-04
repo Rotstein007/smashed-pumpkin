@@ -87,7 +87,7 @@ jobs:
       - name: Build
         run: meson compile -C build
 
-      - name: Build macOS installer (.pkg)
+      - name: Build macOS app bundle
         shell: bash
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
@@ -95,22 +95,104 @@ jobs:
             VERSION="0.0.0"
           fi
 
-          rm -rf pkgroot
-          mkdir -p pkgroot/usr/local/bin
-          cp build/src/smashed-pumpkin pkgroot/usr/local/bin/
+          APP_NAME="Smashed Pumpkin.app"
+          APP_ROOT="dist/${APP_NAME}"
+          CONTENTS="${APP_ROOT}/Contents"
+          MACOS_DIR="${CONTENTS}/MacOS"
+          RES_DIR="${CONTENTS}/Resources"
 
-          pkgbuild \
-            --identifier dev.rotstein.SmashedPumpkin \
-            --version "${VERSION}" \
-            --install-location / \
-            --root pkgroot \
-            "smashed-pumpkin-macos-${{ matrix.arch }}.pkg"
+          rm -rf dist
+          mkdir -p "${MACOS_DIR}" "${RES_DIR}"
+          cp build/src/smashed-pumpkin "${MACOS_DIR}/smashed-pumpkin"
+          chmod +x "${MACOS_DIR}/smashed-pumpkin"
+
+          cat > "${CONTENTS}/Info.plist" <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>CFBundleName</key>
+            <string>Smashed Pumpkin</string>
+            <key>CFBundleDisplayName</key>
+            <string>Smashed Pumpkin</string>
+            <key>CFBundleIdentifier</key>
+            <string>dev.rotstein.SmashedPumpkin</string>
+            <key>CFBundleVersion</key>
+            <string>${VERSION}</string>
+            <key>CFBundleShortVersionString</key>
+            <string>${VERSION}</string>
+            <key>CFBundleExecutable</key>
+            <string>smashed-pumpkin</string>
+            <key>CFBundlePackageType</key>
+            <string>APPL</string>
+            <key>LSMinimumSystemVersion</key>
+            <string>13.0</string>
+          </dict>
+          </plist>
+          EOF
+
+          ditto -c -k --sequesterRsrc --keepParent "${APP_ROOT}" "smashed-pumpkin-macos-${{ matrix.arch }}.app.zip"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: smashed-pumpkin-macos-${{ matrix.arch }}
-          path: smashed-pumpkin-macos-${{ matrix.arch }}.pkg
+          path: smashed-pumpkin-macos-${{ matrix.arch }}.app.zip
+
+  flatpak:
+    name: Flatpak ${{ matrix.flatpak_arch }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - flatpak_arch: x86_64
+            runner: ubuntu-latest
+          - flatpak_arch: aarch64
+            runner: ubuntu-24.04-arm
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Flatpak
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y flatpak flatpak-builder
+          export XDG_RUNTIME_DIR=/tmp/xdg-runtime-$UID
+          mkdir -p "$XDG_RUNTIME_DIR"
+          chmod 700 "$XDG_RUNTIME_DIR"
+          flatpak --user remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+          flatpak --user remote-add --if-not-exists flathub-beta https://dl.flathub.org/beta-repo/flathub-beta.flatpakrepo
+
+      - name: Build Flatpak
+        run: |
+          export XDG_RUNTIME_DIR=/tmp/xdg-runtime-$UID
+          mkdir -p "$XDG_RUNTIME_DIR"
+          chmod 700 "$XDG_RUNTIME_DIR"
+          flatpak-builder \
+            --user \
+            --repo=flatpak-repo \
+            --install-deps-from=flathub \
+            --install-deps-from=flathub-beta \
+            --force-clean \
+            --disable-rofiles-fuse \
+            build-dir \
+            build-aux/flatpak/dev.rotstein.SmashedPumpkin.json
+
+      - name: Bundle Flatpak
+        run: |
+          flatpak build-bundle \
+            --arch=${{ matrix.flatpak_arch }} \
+            flatpak-repo \
+            SmashedPumpkin-${{ matrix.flatpak_arch }}.flatpak \
+            dev.rotstein.SmashedPumpkin \
+            master
+
+      - name: Upload Flatpak Bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: SmashedPumpkin-${{ matrix.flatpak_arch }}.flatpak
+          path: SmashedPumpkin-${{ matrix.flatpak_arch }}.flatpak
 
   windows:
     name: Windows ${{ matrix.arch }} (MSI)
@@ -343,7 +425,7 @@ jobs:
     name: Publish GitHub Release
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
-    needs: [linux-native, macos, windows, winget-manifests]
+    needs: [linux-native, macos, windows, flatpak, winget-manifests]
     steps:
       - name: Download all release artifacts
         uses: actions/download-artifact@v4
