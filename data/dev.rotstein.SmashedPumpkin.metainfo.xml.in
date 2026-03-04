@@ -2,10 +2,10 @@
 <component type="desktop-application">
   <id>@APP_ID@</id>
   <name>@APP_NAME@</name>
-  <summary>Easy Minecraft server manager for Pumpkin</summary>
+  <summary>Manage Pumpkin Minecraft servers in GNOME style</summary>
   <description>
-    <p>Smashed Pumpkin is a desktop app to manage Minecraft servers that run on Pumpkin. You can create servers, start and stop them, install updates, and check their status in one place.</p>
-    <p>It also helps with everyday admin tasks like viewing the live console, managing worlds and plugins, and checking player activity without doing everything by terminal commands.</p>
+    <p>Smashed Pumpkin is a GNOME-style app for managing your Pumpkin Minecraft server.</p>
+    <p>It helps you run and maintain your server and checks automatically for new updates.</p>
   </description>
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>GPL-3.0-or-later</project_license>
