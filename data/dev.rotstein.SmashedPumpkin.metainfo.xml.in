@@ -3,9 +3,14 @@
   <id>@APP_ID@</id>
   <name>@APP_NAME@</name>
   <summary>Manage Pumpkin Minecraft servers in GNOME style</summary>
+  <summary xml:lang="de">Pumpkin-Minecraft-Server im GNOME-Stil verwalten</summary>
   <description>
     <p>Smashed Pumpkin is a GNOME-style app for managing your Pumpkin Minecraft server.</p>
     <p>It helps you run and maintain your server and checks automatically for new updates.</p>
+  </description>
+  <description xml:lang="de">
+    <p>Smashed Pumpkin ist eine App im GNOME-Stil zur Verwaltung deines Pumpkin-Minecraft-Servers.</p>
+    <p>Sie hilft dir beim Betrieb und bei der Pflege deines Servers und sucht automatisch nach Updates.</p>
   </description>
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>GPL-3.0-or-later</project_license>
