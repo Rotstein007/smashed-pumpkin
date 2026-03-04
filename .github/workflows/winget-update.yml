@@ -57,7 +57,9 @@ jobs:
         shell: pwsh
         run: |
           Invoke-WebRequest https://aka.ms/wingetcreate/latest -OutFile wingetcreate.exe
-          .\wingetcreate.exe version
+          if (-not (Test-Path .\wingetcreate.exe)) {
+            throw "wingetcreate.exe download failed."
+          }
 
       - name: Submit update to winget-pkgs
         shell: pwsh
