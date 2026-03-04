@@ -1,0 +1,383 @@
+name: Desktop Builds
+
+on:
+  push:
+    branches: ["master"]
+    tags: ["v*"]
+  pull_request:
+    branches: ["master"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  linux-native:
+    name: Linux ${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            runner: ubuntu-latest
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            meson \
+            ninja-build \
+            pkg-config \
+            libgtk-4-dev \
+            libadwaita-1-dev \
+            libsoup-3.0-dev \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev
+
+      - name: Configure
+        run: meson setup build --buildtype=release
+
+      - name: Build
+        run: meson compile -C build
+
+      - name: Package
+        run: |
+          mkdir -p dist
+          cp build/src/smashed-pumpkin dist/
+          if [ -f build/src/smashed-pumpkin-tray ]; then
+            cp build/src/smashed-pumpkin-tray dist/
+          fi
+          tar -czf "smashed-pumpkin-linux-${{ matrix.arch }}.tar.gz" -C dist .
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: smashed-pumpkin-linux-${{ matrix.arch }}
+          path: smashed-pumpkin-linux-${{ matrix.arch }}.tar.gz
+
+  macos:
+    name: macOS ${{ matrix.arch }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-13
+            arch: x64
+          - os: macos-14
+            arch: arm64
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          brew update
+          brew install meson ninja pkg-config gtk4 libadwaita libsoup
+
+      - name: Configure
+        run: meson setup build --buildtype=release
+
+      - name: Build
+        run: meson compile -C build
+
+      - name: Build macOS installer (.pkg)
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          if [[ "${GITHUB_REF}" != refs/tags/v* ]]; then
+            VERSION="0.0.0"
+          fi
+
+          rm -rf pkgroot
+          mkdir -p pkgroot/usr/local/bin
+          cp build/src/smashed-pumpkin pkgroot/usr/local/bin/
+
+          pkgbuild \
+            --identifier dev.rotstein.SmashedPumpkin \
+            --version "${VERSION}" \
+            --install-location / \
+            pkgroot \
+            "smashed-pumpkin-macos-${{ matrix.arch }}.pkg"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: smashed-pumpkin-macos-${{ matrix.arch }}
+          path: smashed-pumpkin-macos-${{ matrix.arch }}.pkg
+
+  windows:
+    name: Windows ${{ matrix.arch }} (MSI)
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            msystem: MINGW64
+            wix_arch: x64
+            winget_arch: x64
+            install: >-
+              meson
+              ninja
+              pkgconf
+              mingw-w64-x86_64-toolchain
+              mingw-w64-x86_64-gtk4
+              mingw-w64-x86_64-libadwaita
+              mingw-w64-x86_64-libsoup3
+          - arch: x86
+            msystem: MINGW32
+            wix_arch: x86
+            winget_arch: x86
+            install: >-
+              meson
+              ninja
+              pkgconf
+              mingw-w64-i686-toolchain
+              mingw-w64-i686-gtk4
+              mingw-w64-i686-libadwaita
+              mingw-w64-i686-libsoup3
+          - arch: arm64
+            msystem: CLANGARM64
+            wix_arch: arm64
+            winget_arch: arm64
+            install: >-
+              meson
+              ninja
+              pkgconf
+              mingw-w64-clang-aarch64-clang
+              mingw-w64-clang-aarch64-lld
+              mingw-w64-clang-aarch64-gcc-compat
+              mingw-w64-clang-aarch64-meson
+              mingw-w64-clang-aarch64-pkgconf
+              mingw-w64-clang-aarch64-gtk4
+              mingw-w64-clang-aarch64-libadwaita
+              mingw-w64-clang-aarch64-libsoup3
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup MSYS2
+        uses: msys2/setup-msys2@v2
+        with:
+          update: true
+          msystem: ${{ matrix.msystem }}
+          install: ${{ matrix.install }}
+
+      - name: Resolve app version
+        id: version
+        shell: powershell
+        run: |
+          $version = "${{ github.ref_name }}"
+          if ($version.StartsWith("v")) { $version = $version.Substring(1) }
+          if ($version -notmatch '^\d+\.\d+\.\d+(\.\d+)?$') {
+            $version = "0.0.1"
+          }
+          "value=$version" >> $env:GITHUB_OUTPUT
+
+      - name: Configure
+        shell: msys2 {0}
+        run: meson setup build --buildtype=release
+
+      - name: Build
+        shell: msys2 {0}
+        run: meson compile -C build
+
+      - name: Collect Windows bundle
+        shell: msys2 {0}
+        run: |
+          mkdir -p dist
+          cp build/src/smashed-pumpkin.exe dist/
+          if [ -f build/src/smashed-pumpkin-tray.exe ]; then
+            cp build/src/smashed-pumpkin-tray.exe dist/
+          fi
+          for exe in dist/*.exe; do
+            ldd "$exe" | awk '/mingw|clangarm64/ {print $3}' | while read -r dll; do
+              if [ -n "$dll" ] && [ -f "$dll" ]; then
+                cp -n "$dll" dist/
+              fi
+            done
+          done
+
+      - name: Install WiX Toolset
+        shell: powershell
+        run: choco install wixtoolset --yes --no-progress
+
+      - name: Build MSI
+        shell: powershell
+        run: |
+          $wixRoot = Get-ChildItem 'C:\Program Files (x86)' -Directory | Where-Object { $_.Name -like 'WiX Toolset*' } | Sort-Object Name -Descending | Select-Object -First 1
+          if (-not $wixRoot) { throw 'WiX Toolset installation not found.' }
+          $wixBin = Join-Path $wixRoot.FullName 'bin'
+          $env:PATH = "$wixBin;$env:PATH"
+
+          $arch = "${{ matrix.wix_arch }}"
+          $platform = if ($arch -eq 'x86') { 'x86' } elseif ($arch -eq 'arm64') { 'arm64' } else { 'x64' }
+          $version = "${{ steps.version.outputs.value }}"
+          $upgradeCode = '8E643E21-5F9C-4D1C-89F1-A6B72E01F620'
+
+          @"
+          <?xml version="1.0" encoding="UTF-8"?>
+          <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+            <Product Id="*" Name="Smashed Pumpkin" Language="1033" Version="$version" Manufacturer="Rotstein" UpgradeCode="$upgradeCode">
+              <Package InstallerVersion="500" Compressed="yes" InstallScope="perMachine" Platform="$platform" />
+              <MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
+              <MediaTemplate EmbedCab="yes" />
+
+              <Directory Id="TARGETDIR" Name="SourceDir">
+                <Directory Id="ProgramFilesFolder">
+                  <Directory Id="INSTALLDIR" Name="Smashed Pumpkin" />
+                </Directory>
+              </Directory>
+
+              <Feature Id="MainFeature" Title="Smashed Pumpkin" Level="1">
+                <ComponentGroupRef Id="AppFiles" />
+              </Feature>
+            </Product>
+          </Wix>
+          "@ | Set-Content Product.wxs
+
+          heat dir dist -nologo -gg -srd -sreg -scom -cg AppFiles -dr INSTALLDIR -var var.SourceDir -out Files.wxs
+          candle -nologo -arch $arch -dSourceDir="dist" Product.wxs Files.wxs
+          light -nologo Product.wixobj Files.wixobj -out "smashed-pumpkin-windows-${{ matrix.arch }}.msi"
+
+      - name: Generate winget metadata
+        shell: powershell
+        run: |
+          $msi = "smashed-pumpkin-windows-${{ matrix.arch }}.msi"
+          $sha = (Get-FileHash $msi -Algorithm SHA256).Hash.ToUpperInvariant()
+
+          $installer = New-Object -ComObject WindowsInstaller.Installer
+          $database = $installer.GetType().InvokeMember('OpenDatabase', 'InvokeMethod', $null, $installer, @($msi, 0))
+          $view = $database.OpenView("SELECT `Value` FROM `Property` WHERE `Property`='ProductCode'")
+          $view.Execute()
+          $record = $view.Fetch()
+          $productCode = $record.StringData(1)
+
+          New-Item -ItemType Directory -Path winget -Force | Out-Null
+          @{
+            architecture   = "${{ matrix.winget_arch }}"
+            installer_file = $msi
+            sha256         = $sha
+            product_code   = $productCode
+          } | ConvertTo-Json | Set-Content "winget/${{ matrix.arch }}.json"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: smashed-pumpkin-windows-${{ matrix.arch }}
+          path: |
+            smashed-pumpkin-windows-${{ matrix.arch }}.msi
+            winget/${{ matrix.arch }}.json
+
+  winget-manifests:
+    name: Build winget manifests
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    needs: [windows]
+    steps:
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      - name: Download Windows artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: smashed-pumpkin-windows-*
+          path: windows-artifacts
+
+      - name: Generate winget YAML files
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s globstar nullglob
+
+          VERSION="${GITHUB_REF_NAME#v}"
+          OUT_DIR="winget"
+          mkdir -p "$OUT_DIR"
+
+          PKG_ID="Rotstein.SmashedPumpkin"
+          INSTALLER_FILE="$OUT_DIR/${PKG_ID}.installer.yaml"
+          LOCALE_FILE="$OUT_DIR/${PKG_ID}.locale.en-US.yaml"
+          VERSION_FILE="$OUT_DIR/${PKG_ID}.yaml"
+
+          cat > "$INSTALLER_FILE" <<EOF
+          PackageIdentifier: ${PKG_ID}
+          PackageVersion: ${VERSION}
+          InstallerType: msi
+          Scope: machine
+          Installers:
+          EOF
+
+          found=0
+          for meta in windows-artifacts/**/winget/*.json; do
+            found=1
+            arch=$(jq -r '.architecture' "$meta")
+            file=$(jq -r '.installer_file' "$meta")
+            sha=$(jq -r '.sha256' "$meta")
+            product_code=$(jq -r '.product_code' "$meta")
+            url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}/${file}"
+
+            cat >> "$INSTALLER_FILE" <<EOF
+            - Architecture: ${arch}
+              InstallerUrl: ${url}
+              InstallerSha256: ${sha}
+              ProductCode: '${product_code}'
+            EOF
+          done
+
+          if [[ "$found" -eq 0 ]]; then
+            echo "No winget metadata found from Windows jobs."
+            exit 1
+          fi
+
+          cat >> "$INSTALLER_FILE" <<EOF
+          ManifestType: installer
+          ManifestVersion: 1.6.0
+          EOF
+
+          cat > "$LOCALE_FILE" <<EOF
+          PackageIdentifier: ${PKG_ID}
+          PackageVersion: ${VERSION}
+          PackageLocale: en-US
+          Publisher: Rotstein
+          PackageName: Smashed Pumpkin
+          ShortDescription: Desktop management app for Pumpkin servers.
+          ManifestType: defaultLocale
+          ManifestVersion: 1.6.0
+          EOF
+
+          cat > "$VERSION_FILE" <<EOF
+          PackageIdentifier: ${PKG_ID}
+          PackageVersion: ${VERSION}
+          DefaultLocale: en-US
+          ManifestType: version
+          ManifestVersion: 1.6.0
+          EOF
+
+      - name: Upload winget manifests
+        uses: actions/upload-artifact@v4
+        with:
+          name: winget-manifests
+          path: winget/
+
+  release:
+    name: Publish GitHub Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    needs: [linux-native, macos, windows, winget-manifests]
+    steps:
+      - name: Download all release artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+
+      - name: Publish release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release-assets/**/*
