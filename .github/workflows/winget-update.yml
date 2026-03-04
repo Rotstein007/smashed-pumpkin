@@ -40,6 +40,20 @@ jobs:
             throw "installer_url_x64 must be a direct HTTPS URL."
           }
 
+          try {
+            $uri = [System.Uri]::new($url)
+          } catch {
+            throw "installer_url_x64 is not a valid URL."
+          }
+
+          if ($uri.AbsolutePath -notmatch '\.msi$') {
+            throw "installer_url_x64 must point to a .msi file (not a .zip artifact)."
+          }
+
+          if ($url -match 'actions-results|blob\.core\.windows\.net') {
+            throw "installer_url_x64 appears to be a temporary Actions artifact URL. Use a permanent URL (for example a GitHub Release .msi asset URL)."
+          }
+
           "package_id=$packageId" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
           "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
           "installer_url_x64=$url" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
@@ -61,6 +75,15 @@ jobs:
             throw "wingetcreate.exe download failed."
           }
 
+      - name: Ensure package exists in winget-pkgs
+        shell: pwsh
+        run: |
+          $packageId = "${{ steps.validate.outputs.package_id }}"
+          .\wingetcreate.exe show $packageId *> $null
+          if ($LASTEXITCODE -ne 0) {
+            throw "Package '$packageId' does not exist in winget-pkgs yet. Initial onboarding must be submitted once before using this update workflow."
+          }
+
       - name: Submit update to winget-pkgs
         shell: pwsh
         env:
@@ -74,7 +97,7 @@ jobs:
           Write-Host "Installer URL: $url"
 
           .\wingetcreate.exe update $packageId `
-            --version $version `
-            --urls "$url|x64" `
-            --token $env:WINGET_SUBMIT_TOKEN `
+            -u "$url|x64" `
+            -v $version `
+            -t $env:WINGET_SUBMIT_TOKEN `
             --submit
