@@ -58,16 +58,28 @@
     <control>touch</control>
   </supports>
   <releases>
-    <release version="0.4.1" date="2026-03-01">
+    <release version="0.4.1" date="2026-03-04">
       <description>
         <ul>
-          <li>Player admin actions were hardened: op/deop now work reliably without syntax failures.</li>
-          <li>CPU spikes from aggressive background polling were reduced.</li>
-          <li>Added a new per-server Domains tab with Java/Bedrock DNS guidance.</li>
-          <li>Improved adaptive layout behavior for narrow portrait/mobile-like window sizes.</li>
-          <li>Desktop CI now includes Linux, macOS, and Windows builds.</li>
+          <li>Player management is much more stable: search, sorting, and admin actions are more reliable.</li>
+          <li>Moderation was expanded with ban reasons plus ban-ip and pardon-ip flows.</li>
+          <li>The console was refined with clearer timestamps, better filters, and less noisy output.</li>
+          <li>New per-server Domains tab with Java/Bedrock DNS guidance and Dynamic DNS options.</li>
+          <li>Desktop release pipeline now ships Flatpak (x86_64 + aarch64), Windows MSI (x64), and macOS app bundles.</li>
+          <li>Release publishing is now intentionally manual with strict version consistency checks.</li>
         </ul>
         <p>Android/APK was evaluated, but is not release-ready yet for the current GTK4+libadwaita stack.</p>
+      </description>
+      <description xml:lang="de">
+        <ul>
+          <li>Spielerverwaltung deutlich stabiler: Suchen, Sortieren und Admin-Aktionen funktionieren zuverlässiger.</li>
+          <li>Moderation wurde ausgebaut: inklusive Ban-Gründen sowie ban-ip und pardon-ip.</li>
+          <li>Die Konsole wurde überarbeitet: klarere Zeitstempel, bessere Filter und weniger Stör-Ausgaben.</li>
+          <li>Neuer Domains-Tab pro Server mit DNS-Anleitung für Java/Bedrock und Dynamic-DNS-Optionen.</li>
+          <li>Desktop-Release-Pipeline erweitert: Flatpak (x86_64 + aarch64), Windows MSI (x64) und macOS App-Bundles.</li>
+          <li>Release-Veröffentlichung ist jetzt bewusst manuell steuerbar, inklusive strikter Versionsprüfung.</li>
+        </ul>
+        <p>Android/APK wurde geprüft, ist für den aktuellen GTK4+libadwaita-Stack aber noch nicht release-reif.</p>
       </description>
     </release>
     <release version="0.4.0" date="2026-02-28">

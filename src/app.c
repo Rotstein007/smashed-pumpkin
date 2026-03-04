@@ -222,11 +222,12 @@ pumpkin_app_about_action(GSimpleAction *action,
       about,
       "<p>Neuerungen</p>"
       "<ul>"
-      "<li>Admin-Aktionen bei Spielern wurden stabilisiert: op/deop funktionieren jetzt zuverlässig ohne Syntax-Fehler.</li>"
-      "<li>CPU-Spitzen durch aggressive Hintergrundabfragen wurden reduziert.</li>"
-      "<li>Neuer Domains-Tab pro Server mit DNS-Anleitung für Java und Bedrock.</li>"
-      "<li>Desktop-Layout wurde konsolidiert und auf stabile Desktop-Nutzung fokussiert.</li>"
-      "<li>Die Desktop-Build-Pipeline wurde für Linux, macOS und Windows erweitert.</li>"
+      "<li>Spielerverwaltung deutlich stabiler: Suchen, Sortieren und Admin-Aktionen funktionieren zuverlässiger.</li>"
+      "<li>Moderation wurde ausgebaut: inklusive Ban-Gründen sowie ban-ip und pardon-ip.</li>"
+      "<li>Die Konsole wurde überarbeitet: klarere Zeitstempel, bessere Filter und weniger Stör-Ausgaben.</li>"
+      "<li>Neuer Domains-Tab pro Server mit DNS-Anleitung für Java/Bedrock und Dynamic-DNS-Optionen.</li>"
+      "<li>Desktop-Release-Pipeline erweitert: Flatpak (x86_64 + aarch64), Windows MSI (x64) und macOS App-Bundles.</li>"
+      "<li>Release-Veröffentlichung ist jetzt bewusst manuell steuerbar, inklusive strikter Versionsprüfung.</li>"
       "</ul>"
       "<p>Android/APK wurde geprüft, ist für den aktuellen GTK4+libadwaita-Stack aber noch nicht release-reif.</p>");
   } else {
@@ -234,11 +235,12 @@ pumpkin_app_about_action(GSimpleAction *action,
       about,
       "<p>What’s new</p>"
       "<ul>"
-      "<li>Player admin actions were hardened: op/deop now work reliably without syntax failures.</li>"
-      "<li>CPU spikes from aggressive background polling were reduced.</li>"
-      "<li>New per-server Domains tab with Java/Bedrock DNS setup guidance.</li>"
-      "<li>The desktop layout was consolidated and focused on stable desktop usage.</li>"
-      "<li>The desktop build pipeline now covers Linux, macOS, and Windows.</li>"
+      "<li>Player management is much more stable: search, sorting, and admin actions are more reliable.</li>"
+      "<li>Moderation was expanded with ban reasons plus ban-ip and pardon-ip flows.</li>"
+      "<li>The console was refined with clearer timestamps, better filters, and less noisy output.</li>"
+      "<li>New per-server Domains tab with Java/Bedrock DNS guidance and Dynamic DNS options.</li>"
+      "<li>Desktop release pipeline now ships Flatpak (x86_64 + aarch64), Windows MSI (x64), and macOS app bundles.</li>"
+      "<li>Release publishing is now intentionally manual with strict version consistency checks.</li>"
       "</ul>"
       "<p>Android/APK was evaluated, but is not release-ready yet for the current GTK4+libadwaita stack.</p>");
   }
