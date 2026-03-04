@@ -31,6 +31,28 @@
             <property name="show-end-title-buttons">true</property>
             <property name="decoration-layout">icon:minimize,maximize,close</property>
             <child type="end">
+              <object class="GtkButton" id="btn_sponsor_pumpkin">
+                <property name="tooltip-text" translatable="yes">Support Pumpkin development</property>
+                <property name="css-classes">small flat sponsor-heart-button</property>
+                <child>
+                  <object class="GtkBox">
+                    <property name="spacing">6</property>
+                    <child>
+                      <object class="GtkImage">
+                        <property name="icon-name">emblem-favorite-symbolic</property>
+                        <property name="css-classes">sponsor-heart-icon</property>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkLabel">
+                        <property name="label" translatable="yes">Sponsor Pumpkin</property>
+                      </object>
+                    </child>
+                  </object>
+                </child>
+              </object>
+            </child>
+            <child type="end">
               <object class="GtkMenuButton">
                 <property name="icon-name">open-menu-symbolic</property>
                 <property name="menu-model">app-menu</property>
@@ -47,7 +69,7 @@
                 <property name="title" translatable="yes">Overview</property>
                 <property name="icon-name">view-grid-symbolic</property>
                 <property name="child">
-                  <object class="GtkBox">
+                  <object class="GtkBox" id="overview_page_box">
                     <property name="orientation">vertical</property>
                     <property name="spacing">12</property>
                     <property name="margin-top">18</property>
@@ -56,6 +78,39 @@
                     <property name="margin-end">18</property>
                     <child>
                       <object class="GtkBox">
+                        <property name="orientation">vertical</property>
+                        <property name="spacing">8</property>
+                        <child>
+                          <object class="GtkBox">
+                            <property name="spacing">8</property>
+                            <child>
+                              <object class="GtkLabel">
+                                <property name="label" translatable="yes">Server Networks</property>
+                                <property name="xalign">0</property>
+                                <property name="hexpand">true</property>
+                                <style>
+                                  <class name="title-4"/>
+                                </style>
+                              </object>
+                            </child>
+                            <child>
+                              <object class="GtkButton" id="btn_add_network_overview">
+                                <property name="label" translatable="yes">Add Network</property>
+                              </object>
+                            </child>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkListBox" id="overview_network_list">
+                            <property name="selection-mode">none</property>
+                            <property name="show-separators">false</property>
+                            <property name="css-classes">overview-list</property>
+                          </object>
+                        </child>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkBox" id="overview_header_row">
                         <property name="spacing">8</property>
                         <child>
                           <object class="GtkLabel">
@@ -102,7 +157,7 @@
                 <property name="title" translatable="yes">Details</property>
                 <property name="icon-name">network-server-symbolic</property>
                 <property name="child">
-                  <object class="GtkBox">
+                  <object class="GtkBox" id="details_page_box">
                     <property name="orientation">vertical</property>
                     <property name="spacing">12</property>
                     <property name="margin-top">18</property>
@@ -110,7 +165,7 @@
                     <property name="margin-start">18</property>
                     <property name="margin-end">18</property>
                     <child>
-                      <object class="GtkBox">
+                      <object class="GtkBox" id="details_header_row">
                         <property name="spacing">12</property>
                         <child>
                           <object class="GtkButton" id="btn_details_back">
@@ -122,7 +177,7 @@
                           </object>
                         </child>
                         <child>
-                          <object class="GtkBox">
+                          <object class="GtkBox" id="details_identity_row">
                             <property name="spacing">10</property>
                             <property name="hexpand">true</property>
                             <property name="valign">center</property>
@@ -190,7 +245,7 @@
                           </object>
                         </child>
                         <child>
-                          <object class="GtkBox">
+                          <object class="GtkBox" id="details_action_row">
                             <property name="spacing">6</property>
                             <property name="halign">end</property>
                             <style>
@@ -344,7 +399,7 @@
                                   </object>
                                 </child>
                                 <child>
-                                  <object class="GtkBox">
+                                  <object class="GtkBox" id="console_command_row">
                                     <property name="spacing">8</property>
                                     <child>
                                       <object class="GtkEntry" id="entry_command">
@@ -822,7 +877,7 @@
                                 <property name="orientation">vertical</property>
                                 <property name="spacing">12</property>
                                 <child>
-                                  <object class="AdwViewSwitcher">
+                                  <object class="AdwViewSwitcher" id="players_switcher">
                                     <property name="stack">players_stack</property>
                                     <property name="policy">wide</property>
                                   </object>
@@ -1022,6 +1077,201 @@
                                 <child>
                                   <object class="GtkButton" id="btn_open_worlds">
                                     <property name="label" translatable="yes">Open Worlds Folder</property>
+                                  </object>
+                                </child>
+                              </object>
+                            </property>
+                          </object>
+                        </child>
+
+                        <child>
+                          <object class="AdwViewStackPage">
+                            <property name="name">domains</property>
+                            <property name="title" translatable="yes">Domains</property>
+                            <property name="icon-name">network-wired-symbolic</property>
+                            <property name="child">
+                              <object class="GtkScrolledWindow">
+                                <property name="vexpand">true</property>
+                                <child>
+                                  <object class="GtkBox" id="domains_page_box">
+                                    <property name="orientation">vertical</property>
+                                    <property name="spacing">12</property>
+                                    <property name="margin-top">12</property>
+                                    <property name="margin-bottom">18</property>
+                                    <property name="margin-start">12</property>
+                                    <property name="margin-end">12</property>
+                                    <child>
+                                      <object class="GtkLabel">
+                                        <property name="label" translatable="yes">Bind domains per server</property>
+                                        <property name="xalign">0</property>
+                                        <style><class name="title-4"/></style>
+                                      </object>
+                                    </child>
+                                    <child>
+                                      <object class="GtkLabel">
+                                        <property name="label" translatable="yes">Set hostnames for this server. Smashed Pumpkin stores them and shows the DNS records you should configure in your DNS provider (for example Cloudflare, Route53, or your registrar DNS).</property>
+                                        <property name="wrap">true</property>
+                                        <property name="xalign">0</property>
+                                        <style><class name="dim-label"/></style>
+                                      </object>
+                                    </child>
+                                    <child>
+                                      <object class="GtkEntry" id="entry_domain">
+                                        <property name="placeholder-text" translatable="yes">Domain or subdomain (e.g. pumpkin.rotstein.dev)</property>
+                                      </object>
+                                    </child>
+                                    <child>
+                                      <object class="GtkButton" id="btn_save_domains">
+                                        <property name="label" translatable="yes">Save Domain &amp; DDNS Settings</property>
+                                        <property name="css-classes">suggested-action</property>
+                                      </object>
+                                    </child>
+                                    <child>
+                                      <object class="GtkSeparator"/>
+                                    </child>
+                                    <child>
+                                      <object class="GtkLabel">
+                                        <property name="label" translatable="yes">Dynamic DNS (Cloudflare)</property>
+                                        <property name="xalign">0</property>
+                                        <style><class name="title-4"/></style>
+                                      </object>
+                                    </child>
+                                    <child>
+                                      <object class="GtkLabel">
+                                        <property name="label" translatable="yes">Use this if your home IP changes. Smashed Pumpkin will update your Cloudflare DNS record automatically.</property>
+                                        <property name="wrap">true</property>
+                                        <property name="xalign">0</property>
+                                        <style><class name="dim-label"/></style>
+                                      </object>
+                                    </child>
+                                    <child>
+                                      <object class="GtkBox">
+                                        <property name="spacing">8</property>
+                                        <child>
+                                          <object class="GtkLabel">
+                                            <property name="label" translatable="yes">Enable DDNS</property>
+                                            <property name="xalign">0</property>
+                                            <property name="hexpand">true</property>
+                                          </object>
+                                        </child>
+                                        <child>
+                                          <object class="GtkSwitch" id="switch_ddns_enabled">
+                                            <property name="halign">end</property>
+                                          </object>
+                                        </child>
+                                      </object>
+                                    </child>
+                                    <child>
+                                      <object class="GtkEntry" id="entry_ddns_cf_zone_id">
+                                        <property name="placeholder-text" translatable="yes">Cloudflare Zone ID (required)</property>
+                                      </object>
+                                    </child>
+                                    <child>
+                                      <object class="GtkPasswordEntry" id="entry_ddns_cf_api_token">
+                                        <property name="placeholder-text" translatable="yes">Cloudflare API Token (required)</property>
+                                      </object>
+                                    </child>
+                                    <child>
+                                      <object class="GtkEntry" id="entry_ddns_cf_record_id">
+                                        <property name="placeholder-text" translatable="yes">Cloudflare Record ID (optional, auto-discovered when empty)</property>
+                                      </object>
+                                    </child>
+                                    <child>
+                                      <object class="GtkBox">
+                                        <property name="spacing">8</property>
+                                        <child>
+                                          <object class="GtkLabel">
+                                            <property name="label" translatable="yes">Proxied (orange cloud)</property>
+                                            <property name="xalign">0</property>
+                                            <property name="hexpand">true</property>
+                                          </object>
+                                        </child>
+                                        <child>
+                                          <object class="GtkSwitch" id="switch_ddns_cf_proxied">
+                                            <property name="halign">end</property>
+                                          </object>
+                                        </child>
+                                      </object>
+                                    </child>
+                                    <child>
+                                      <object class="GtkBox">
+                                        <property name="spacing">8</property>
+                                        <child>
+                                          <object class="GtkLabel">
+                                            <property name="label" translatable="yes">Interval (30-86400 seconds)</property>
+                                            <property name="xalign">0</property>
+                                            <property name="hexpand">true</property>
+                                          </object>
+                                        </child>
+                                        <child>
+                                          <object class="GtkEntry" id="entry_ddns_interval_seconds">
+                                            <property name="width-chars">6</property>
+                                            <property name="max-width-chars">6</property>
+                                            <property name="input-purpose">digits</property>
+                                            <property name="text">300</property>
+                                          </object>
+                                        </child>
+                                      </object>
+                                    </child>
+                                    <child>
+                                      <object class="GtkBox">
+                                        <property name="spacing">8</property>
+                                        <child>
+                                          <object class="GtkButton" id="btn_ddns_sync_now">
+                                            <property name="label" translatable="yes">Sync now</property>
+                                          </object>
+                                        </child>
+                                        <child>
+                                          <object class="GtkLabel" id="label_ddns_status">
+                                            <property name="xalign">0</property>
+                                            <property name="hexpand">true</property>
+                                            <property name="label" translatable="yes">DDNS disabled.</property>
+                                            <property name="wrap">true</property>
+                                            <style><class name="dim-label"/></style>
+                                          </object>
+                                        </child>
+                                      </object>
+                                    </child>
+                                    <child>
+                                      <object class="GtkSeparator"/>
+                                    </child>
+                                    <child>
+                                      <object class="GtkLabel">
+                                        <property name="label" translatable="yes">DNS setup guide</property>
+                                        <property name="xalign">0</property>
+                                        <style><class name="title-4"/></style>
+                                      </object>
+                                    </child>
+                                    <child>
+                                      <object class="GtkLabel" id="label_domains_target">
+                                        <property name="label" translatable="yes">Target: your-public-ip (Java:25565, Bedrock:19132)</property>
+                                        <property name="xalign">0</property>
+                                      </object>
+                                    </child>
+                                    <child>
+                                      <object class="GtkLabel">
+                                        <property name="label" translatable="yes">1) Create one A/AAAA record for your domain to your public server IP.</property>
+                                        <property name="wrap">true</property>
+                                        <property name="xalign">0</property>
+                                        <style><class name="dim-label"/></style>
+                                      </object>
+                                    </child>
+                                    <child>
+                                      <object class="GtkLabel">
+                                        <property name="label" translatable="yes">2) If Java does not use port 25565, add an SRV record: _minecraft._tcp.&lt;domain&gt; with your Java port.</property>
+                                        <property name="wrap">true</property>
+                                        <property name="xalign">0</property>
+                                        <style><class name="dim-label"/></style>
+                                      </object>
+                                    </child>
+                                    <child>
+                                      <object class="GtkLabel">
+                                        <property name="label" translatable="yes">3) For Bedrock on the same domain, add an SRV record: _minecraft._udp.&lt;domain&gt; with your Bedrock port if needed.</property>
+                                        <property name="wrap">true</property>
+                                        <property name="xalign">0</property>
+                                        <style><class name="dim-label"/></style>
+                                      </object>
+                                    </child>
                                   </object>
                                 </child>
                               </object>
@@ -1784,7 +2034,7 @@
                 <property name="title" translatable="yes">Servers</property>
                 <property name="icon-name">network-server-symbolic</property>
                 <property name="child">
-                  <object class="GtkBox">
+                  <object class="GtkBox" id="servers_page_box">
                     <property name="orientation">vertical</property>
                     <property name="spacing">12</property>
                     <property name="margin-top">18</property>
@@ -1792,8 +2042,15 @@
                     <property name="margin-start">18</property>
                     <property name="margin-end">18</property>
                     <child>
-                      <object class="GtkBox">
+                      <object class="GtkBox" id="servers_header_row">
                         <property name="spacing">8</property>
+                        <child>
+                          <object class="GtkButton" id="btn_servers_back">
+                            <property name="icon-name">go-previous-symbolic</property>
+                            <property name="tooltip-text" translatable="yes">Back to Overview</property>
+                            <property name="css-classes">small flat</property>
+                          </object>
+                        </child>
                         <child>
                           <object class="GtkButton" id="btn_add_server">
                             <property name="label" translatable="yes">Add Server</property>

@@ -96,6 +96,25 @@ button.small > box > label {
   color: #8a6d3b;
 }
 
+.server-state-dot {
+  min-width: 16px;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.server-state-running {
+  color: #2f9e44;
+}
+
+.server-state-stopped {
+  color: #c92a2a;
+}
+
+.server-state-updating {
+  color: #f08c00;
+}
+
 .stats-legend-cpu {
   color: #ed5555;
   font-weight: 600;
@@ -215,4 +234,12 @@ switch.compact-switch slider {
   min-height: 26px;
   padding-top: 0;
   padding-bottom: 0;
+}
+
+.details-action-row-compact > button {
+  min-width: 160px;
+}
+
+.sponsor-heart-icon {
+  color: #bf3989;
 }

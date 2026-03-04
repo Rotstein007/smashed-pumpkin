@@ -1,18 +1,22 @@
 #include "app.h"
 #include "app-config.h"
 #include "config.h"
-#include "server.h"
-#include "server-store.h"
 #include "window.h"
 
 #include <string.h>
+#if defined(G_OS_WIN32)
+#include <windows.h>
+#include <process.h>
+#else
 #include <unistd.h>
+#endif
 
 struct _PumpkinApp {
   AdwApplication parent_instance;
   char *pending_server_id;
   gboolean start_minimized;
   gboolean first_activation;
+  gboolean auto_start_pending;
 };
 
 G_DEFINE_FINAL_TYPE(PumpkinApp, pumpkin_app, ADW_TYPE_APPLICATION)
@@ -30,6 +34,18 @@ resolve_tray_helper_path(void)
     return g_steal_pointer(&path);
   }
 
+#if defined(G_OS_WIN32)
+  char exe_path[MAX_PATH] = {0};
+  DWORD written = GetModuleFileNameA(NULL, exe_path, MAX_PATH);
+  if (written > 0 && written < MAX_PATH) {
+    g_autofree char *exe_dir = g_path_get_dirname(exe_path);
+    g_autofree char *sibling = g_build_filename(exe_dir, "smashed-pumpkin-tray.exe", NULL);
+    if (g_file_test(sibling, G_FILE_TEST_EXISTS)) {
+      return g_steal_pointer(&sibling);
+    }
+  }
+#endif
+
 #if defined(__linux__)
   g_autofree char *exe = g_file_read_link("/proc/self/exe", NULL);
   if (exe != NULL) {
@@ -42,8 +58,16 @@ resolve_tray_helper_path(void)
 #endif
 
   g_autofree char *cwd = g_get_current_dir();
+#if defined(G_OS_WIN32)
+  g_autofree char *candidate = g_build_filename(cwd, "buildDir", "src", "smashed-pumpkin-tray.exe", NULL);
+#else
   g_autofree char *candidate = g_build_filename(cwd, "buildDir", "src", "smashed-pumpkin-tray", NULL);
+#endif
+#if defined(G_OS_WIN32)
+  if (g_file_test(candidate, G_FILE_TEST_EXISTS)) {
+#else
   if (g_file_test(candidate, G_FILE_TEST_IS_EXECUTABLE)) {
+#endif
     return g_steal_pointer(&candidate);
   }
 
@@ -72,10 +96,19 @@ spawn_tray_helper(void)
   }
   g_autofree char *tray_path = resolve_tray_helper_path();
   if (tray_path == NULL) {
+#if defined(__linux__) || defined(G_OS_WIN32)
     g_warning("Could not find smashed-pumpkin-tray helper");
+#else
+    g_debug("No tray helper found for this platform");
+#endif
     return;
   }
-  char *arg = g_strdup_printf("--parent-pid=%d", (int)getpid());
+#if defined(G_OS_WIN32)
+  int parent_pid = (int)_getpid();
+#else
+  int parent_pid = (int)getpid();
+#endif
+  char *arg = g_strdup_printf("--parent-pid=%d", parent_pid);
   gchar *argv[] = { tray_path, arg, NULL };
   GError *error = NULL;
   if (!g_spawn_async(NULL, argv, NULL, G_SPAWN_SEARCH_PATH | G_SPAWN_DO_NOT_REAP_CHILD,
@@ -103,10 +136,19 @@ stop_tray_helper(void)
     tray_watch_id = 0;
   }
 
+#if defined(G_OS_WIN32)
+  HANDLE process = OpenProcess(PROCESS_TERMINATE, FALSE, (DWORD)tray_pid);
+  if (process != NULL) {
+    TerminateProcess(process, 0);
+    CloseHandle(process);
+  }
+#else
   kill(tray_pid, SIGTERM);
+#endif
   g_spawn_close_pid(tray_pid);
   tray_pid = 0;
   tray_spawned = FALSE;
+  tray_available = FALSE;
 }
 
 void
@@ -142,6 +184,10 @@ pumpkin_app_activate(GApplication *app)
   } else {
     gtk_window_present(win);
   }
+  if (self->auto_start_pending && PUMPKIN_IS_WINDOW(win)) {
+    pumpkin_window_schedule_auto_start_servers(PUMPKIN_WINDOW(win));
+    self->auto_start_pending = FALSE;
+  }
   if (self->pending_server_id != NULL) {
     pumpkin_window_select_server(PUMPKIN_WINDOW(win), self->pending_server_id);
     g_clear_pointer(&self->pending_server_id, g_free);
@@ -170,33 +216,31 @@ pumpkin_app_about_action(GSimpleAction *action,
   adw_about_dialog_set_application_name(about, APP_NAME);
   adw_about_dialog_set_application_icon(about, APP_ID);
   adw_about_dialog_set_version(about, APP_VERSION);
-  adw_about_dialog_set_release_notes_version(about, "0.4.0");
+  adw_about_dialog_set_release_notes_version(about, "0.4.1");
   if (is_de) {
     adw_about_dialog_set_release_notes(
       about,
       "<p>Neuerungen</p>"
       "<ul>"
-      "<li>Der Spieler-Tab ist jetzt voll nutzbar: Online/Offline-Historie, Suche, Sortierung und mehr.</li>"
-      "<li>Moderation wurde erweitert: inklusive ban-ip, pardon-ip und Bann-Grundanzeige.</li>"
-      "<li>Die Konsole ist deutlich lesbarer mit besseren Zeitstempeln und Level-Filtern.</li>"
-      "<li>Allgemeine und server-spezifische Einstellungen sind jetzt klar getrennt und bieten mehr Einstellmöglichkeiten.</li>"
-      "<li>Update-Prüfungen laufen automatisch beim Start und danach minütlich.</li>"
-      "<li>Das Tray-Menü öffnet die App jetzt zuverlässig per Open und bietet weiterhin Quit.</li>"
+      "<li>Admin-Aktionen bei Spielern wurden stabilisiert: op/deop funktionieren jetzt zuverlässig ohne Syntax-Fehler.</li>"
+      "<li>CPU-Spitzen durch aggressive Hintergrundabfragen wurden reduziert.</li>"
+      "<li>Neuer Domains-Tab pro Server mit DNS-Anleitung für Java und Bedrock.</li>"
+      "<li>Desktop-Layout wurde konsolidiert und auf stabile Desktop-Nutzung fokussiert.</li>"
+      "<li>Die Desktop-Build-Pipeline wurde für Linux, macOS und Windows erweitert.</li>"
       "</ul>"
-      "<p>Wahrscheinlich das größte Update bisher. Danke an jeden einzelnen Nutzer für euer Feedback!</p>");
+      "<p>Android/APK wurde geprüft, ist für den aktuellen GTK4+libadwaita-Stack aber noch nicht release-reif.</p>");
   } else {
     adw_about_dialog_set_release_notes(
       about,
       "<p>What’s new</p>"
       "<ul>"
-      "<li>The Players tab is finally fully available with online/offline history, search, sorting, and more.</li>"
-      "<li>Moderation now includes ban-ip, pardon-ip, and visible ban reasons.</li>"
-      "<li>The console is cleaner and easier to read with better timestamps and level filters.</li>"
-      "<li>General and server-specific settings are now clearly separated and provide more options.</li>"
-      "<li>Update checks now run automatically on startup and every minute.</li>"
-      "<li>The tray menu now reliably opens the app via Open and still provides Quit.</li>"
+      "<li>Player admin actions were hardened: op/deop now work reliably without syntax failures.</li>"
+      "<li>CPU spikes from aggressive background polling were reduced.</li>"
+      "<li>New per-server Domains tab with Java/Bedrock DNS setup guidance.</li>"
+      "<li>The desktop layout was consolidated and focused on stable desktop usage.</li>"
+      "<li>The desktop build pipeline now covers Linux, macOS, and Windows.</li>"
       "</ul>"
-      "<p>This is probably the biggest update so far. Thank you to every single user for the feedback!</p>");
+      "<p>Android/APK was evaluated, but is not release-ready yet for the current GTK4+libadwaita stack.</p>");
   }
   adw_about_dialog_set_developer_name(about, "Rotstein");
   adw_about_dialog_set_comments(about,
@@ -313,7 +357,7 @@ pumpkin_app_startup(GApplication *app)
   if (config != NULL) {
     if (pumpkin_config_get_autostart_on_boot(config) &&
         pumpkin_config_get_auto_start_servers_enabled(config)) {
-      pumpkin_app_schedule_auto_start_servers(PUMPKIN_APP(app));
+      PUMPKIN_APP(app)->auto_start_pending = TRUE;
     }
     pumpkin_config_free(config);
   }
@@ -343,6 +387,7 @@ static void
 pumpkin_app_init(PumpkinApp *self)
 {
   self->first_activation = TRUE;
+  self->auto_start_pending = FALSE;
 }
 
 PumpkinApp *
@@ -354,81 +399,17 @@ pumpkin_app_new(void)
                       NULL);
 }
 
-typedef struct {
-  PumpkinServer *server;
-} AutoStartData;
-
-static void
-auto_start_data_free(AutoStartData *data)
-{
-  if (data == NULL) {
-    return;
-  }
-  g_object_unref(data->server);
-  g_free(data);
-}
-
-static gboolean
-auto_start_server_cb(gpointer user_data)
-{
-  AutoStartData *data = user_data;
-  if (data == NULL || data->server == NULL) {
-    auto_start_data_free(data);
-    return G_SOURCE_REMOVE;
-  }
-
-  if (!pumpkin_server_get_running(data->server)) {
-    g_autoptr(GError) error = NULL;
-    pumpkin_server_start(data->server, &error);
-  }
-
-  auto_start_data_free(data);
-  return G_SOURCE_REMOVE;
-}
-
 void
 pumpkin_app_schedule_auto_start_servers(PumpkinApp *app)
 {
-  (void)app;
-
-  PumpkinConfig *config = pumpkin_config_load(NULL);
-  if (config == NULL) {
+  if (app == NULL) {
     return;
   }
-  const char *base_dir = pumpkin_config_get_base_dir(config);
-  if (base_dir == NULL) {
-    pumpkin_config_free(config);
-    return;
+  app->auto_start_pending = TRUE;
+
+  GtkWindow *win = gtk_application_get_active_window(GTK_APPLICATION(app));
+  if (win != NULL && PUMPKIN_IS_WINDOW(win)) {
+    pumpkin_window_schedule_auto_start_servers(PUMPKIN_WINDOW(win));
+    app->auto_start_pending = FALSE;
   }
-
-  GDir *dir = g_dir_open(base_dir, 0, NULL);
-  if (dir == NULL) {
-    pumpkin_config_free(config);
-    return;
-  }
-
-  const char *entry = NULL;
-  while ((entry = g_dir_read_name(dir)) != NULL) {
-    g_autofree char *server_dir = g_build_filename(base_dir, entry, NULL);
-    g_autoptr(GError) error = NULL;
-    PumpkinServer *server = pumpkin_server_load(server_dir, &error);
-    if (server == NULL) {
-      continue;
-    }
-
-    if (pumpkin_server_get_auto_start_on_launch(server)) {
-      int delay = pumpkin_server_get_auto_start_delay(server);
-      if (delay <= 0) {
-        delay = 1;
-      }
-      AutoStartData *data = g_new0(AutoStartData, 1);
-      data->server = server; /* takes ownership */
-      g_timeout_add_seconds((guint)delay, auto_start_server_cb, data);
-    } else {
-      g_object_unref(server);
-    }
-  }
-
-  g_dir_close(dir);
-  pumpkin_config_free(config);
 }

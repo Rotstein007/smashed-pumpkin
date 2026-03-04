@@ -8,6 +8,7 @@
 #include <gio/gio.h>
 #include <gdk-pixbuf/gdk-pixbuf.h>
 #include <glib/gstdio.h>
+#include <libsoup/soup.h>
 #if defined(G_OS_WIN32)
 #include <windows.h>
 #include <psapi.h>
@@ -33,6 +34,17 @@
 #define STATS_HISTORY_SECONDS 180
 #define STATS_SAMPLES ((STATS_HISTORY_SECONDS * 1000) / DEFAULT_STATS_SAMPLE_MSEC)
 #define PLAYER_STATE_FLUSH_INTERVAL_USEC (15 * G_USEC_PER_SEC)
+#define CONSOLE_MAX_LINES 5000
+#define NETWORK_PROXY_JAVA_PORT 25565
+#define NETWORK_PROXY_BEDROCK_PORT 19132
+#define NETWORK_PROXY_RCON_PORT 25575
+#define MIN_VALID_PUMPKIN_BINARY_BYTES (512 * 1024)
+#define DDNS_TICK_SECONDS 30
+#define DDNS_INTERVAL_SECONDS_MIN 30
+#define DDNS_INTERVAL_SECONDS_MAX 86400
+#define DDNS_INTERVAL_SECONDS_DEFAULT 300
+#define DDNS_API_IPIFY_URL "https://api.ipify.org?format=text"
+#define DDNS_API_CLOUDFLARE_BASE "https://api.cloudflare.com/client/v4"
 
 struct _PumpkinWindow {
   AdwApplicationWindow parent_instance;
@@ -40,10 +52,21 @@ struct _PumpkinWindow {
   AdwViewStack *view_stack;
   AdwViewStack *details_stack;
   AdwViewSwitcher *details_switcher;
+  AdwViewSwitcher *players_switcher;
+  GtkBox *overview_page_box;
+  GtkBox *overview_header_row;
+  GtkBox *details_page_box;
+  GtkBox *details_header_row;
+  GtkBox *details_identity_row;
+  GtkBox *console_command_row;
+  GtkBox *servers_page_box;
+  GtkBox *servers_header_row;
+  GtkBox *domains_page_box;
 
   GtkListBox *server_list;
   GtkTextView *log_view;
   GtkListBox *overview_list;
+  GtkListBox *overview_network_list;
   char *latest_url;
   char *latest_build_id;
   char *latest_build_label;
@@ -53,8 +76,11 @@ struct _PumpkinWindow {
   GtkButton *btn_add_server;
   GtkButton *btn_remove_server;
   GtkButton *btn_add_server_overview;
+  GtkButton *btn_add_network_overview;
+  GtkButton *btn_servers_back;
   GtkButton *btn_import_server;
   GtkButton *btn_import_server_overview;
+  GtkButton *btn_sponsor_pumpkin;
   GtkButton *btn_open_plugins;
   GtkButton *btn_open_players;
   GtkButton *btn_open_worlds;
@@ -106,6 +132,7 @@ struct _PumpkinWindow {
   GtkButton *btn_details_install;
   GtkButton *btn_details_update;
   GtkButton *btn_details_check_updates;
+  GtkBox *details_action_row;
   GtkEntry *entry_command;
   GtkButton *btn_console_send;
   GtkButton *btn_console_copy;
@@ -148,6 +175,7 @@ struct _PumpkinWindow {
   unsigned long long last_total_jiffies;
   unsigned long long last_idle_jiffies;
   unsigned long long last_proc_jiffies;
+  double last_proc_cpu_smoothed;
   int last_proc_pid;
   long clk_tck;
   double stats_cpu[STATS_SAMPLES];
@@ -164,6 +192,9 @@ struct _PumpkinWindow {
   gint64 query_updated_at;
   gboolean query_valid;
   gboolean query_in_flight;
+  int list_snapshot_players;
+  int list_snapshot_max_players;
+  gint64 list_snapshot_updated_at;
   gint64 last_tps_request_at;
   gint64 last_player_list_request_at;
   gint64 last_player_state_flush_at;
@@ -200,6 +231,17 @@ struct _PumpkinWindow {
   GtkEntry *entry_rcon_host;
   GtkEntry *entry_rcon_port;
   GtkPasswordEntry *entry_rcon_password;
+  GtkEntry *entry_domain;
+  GtkLabel *label_domains_target;
+  GtkButton *btn_save_domains;
+  GtkSwitch *switch_ddns_enabled;
+  GtkEntry *entry_ddns_cf_zone_id;
+  GtkPasswordEntry *entry_ddns_cf_api_token;
+  GtkEntry *entry_ddns_cf_record_id;
+  GtkSwitch *switch_ddns_cf_proxied;
+  GtkEntry *entry_ddns_interval_seconds;
+  GtkButton *btn_ddns_sync_now;
+  GtkLabel *label_ddns_status;
   GtkSwitch *switch_use_cache;
   GtkSwitch *switch_run_in_background;
   GtkSwitch *switch_autostart_on_boot;
@@ -233,6 +275,8 @@ struct _PumpkinWindow {
   gboolean player_list_signature_valid;
   guint64 player_list_signature;
   guint player_list_signature_count;
+  gboolean player_list_pointer_inside;
+  gint64 player_list_interaction_until;
   int player_sort_field;
   gboolean player_sort_ascending;
   GHashTable *live_player_names;
@@ -243,9 +287,23 @@ struct _PumpkinWindow {
   GHashTable *deleted_player_keys;
   GHashTable *player_head_downloads;
   GHashTable *console_buffers;
+  GHashTable *server_running_hints;
   GPtrArray *command_history;
   int command_history_index;
   char *command_history_draft;
+  GPtrArray *networks;
+  AdwDialog *network_details_dialog;
+  GtkBox *network_details_members_box;
+  GtkProgressBar *network_details_progress;
+  char *network_details_network_id;
+  guint overview_refresh_idle_id;
+  gboolean overview_refresh_needs_details;
+  guint network_details_refresh_idle_id;
+  gint64 suppress_warning_beep_until;
+  guint ddns_timer_id;
+  gboolean ddns_sync_in_flight;
+  GHashTable *ddns_last_sync_by_server;
+  GHashTable *ddns_status_by_server;
 };
 
 G_DEFINE_FINAL_TYPE(PumpkinWindow, pumpkin_window, ADW_TYPE_APPLICATION_WINDOW)
@@ -294,6 +352,17 @@ typedef struct {
 typedef struct {
   PumpkinWindow *self;
   PumpkinServer *server;
+  char *url;
+  char *build_id;
+  char *build_label;
+  char *cache_path;
+  gboolean restart_after_download;
+  guint attempts;
+} CacheWaitContext;
+
+typedef struct {
+  PumpkinWindow *self;
+  PumpkinServer *server;
   char *host;
   int port;
 } QueryPlayersContext;
@@ -338,6 +407,7 @@ typedef struct {
   int field;
   gboolean ascending;
   GHashTable *op_level_map;
+  gint64 now_unix;
 } PlayerSortSettings;
 
 typedef struct {
@@ -347,6 +417,57 @@ typedef struct {
   char *cache_path;
 } PlayerHeadDownloadContext;
 
+typedef struct {
+  char *id;
+  char *name;
+  char *proxy_server_id;
+  GPtrArray *member_server_ids; /* array of char* */
+} ServerNetwork;
+
+typedef struct {
+  char *server_id;
+  GtkCheckButton *check;
+} NetworkServerChoice;
+
+typedef struct {
+  char *network_id;
+  GPtrArray *choices; /* array of NetworkServerChoice* */
+  AdwDialog *owner_dialog;
+} NetworkProxyDialogContext;
+
+typedef struct {
+  PumpkinWindow *self;
+  PumpkinServer *server;
+} AutoStartContext;
+
+typedef struct {
+  char *server_id;
+  char *server_name;
+  char *domain;
+  char *provider;
+  char *api_token;
+  char *zone_id;
+  char *record_id;
+  gboolean proxied;
+} DdnsServerConfig;
+
+typedef struct {
+  char *server_id;
+  gboolean success;
+  gboolean changed;
+  char *record_id;
+  char *message;
+} DdnsServerResult;
+
+typedef struct {
+  GPtrArray *servers; /* array of DdnsServerConfig* */
+} DdnsSyncRequest;
+
+typedef struct {
+  char *public_ipv4;
+  GPtrArray *results; /* array of DdnsServerResult* */
+} DdnsSyncResult;
+
 static void start_download_for_server(PumpkinWindow *self,
                                       PumpkinServer *server,
                                       const char *url,
@@ -355,8 +476,31 @@ static void start_download_for_server(PumpkinWindow *self,
 static void on_download_done(GObject *source, GAsyncResult *res, gpointer user_data);
 static void on_overview_update_clicked(GtkButton *button, gpointer user_data);
 static void on_overview_settings_clicked(GtkButton *button, gpointer user_data);
+static void on_servers_back(GtkButton *button, PumpkinWindow *self);
+static gboolean server_has_installation(PumpkinWindow *self, PumpkinServer *server);
+static void on_overview_network_start_all_clicked(GtkButton *button, gpointer user_data);
+static void on_overview_network_stop_all_clicked(GtkButton *button, gpointer user_data);
+static void on_overview_network_update_all_clicked(GtkButton *button, gpointer user_data);
+static void on_overview_network_install_all_clicked(GtkButton *button, gpointer user_data);
+static void on_overview_network_details_clicked(GtkButton *button, gpointer user_data);
+static void on_overview_network_add_current_clicked(GtkButton *button, gpointer user_data);
+static void on_overview_network_add_server_clicked(GtkButton *button, gpointer user_data);
+static void on_overview_network_remove_member_clicked(GtkButton *button, gpointer user_data);
+static void on_overview_network_set_proxy_confirmed(GObject *dialog, GAsyncResult *res, gpointer user_data);
+static void on_overview_network_clear_proxy_clicked(GtkButton *button, gpointer user_data);
+static void on_overview_network_set_proxy_clicked(GtkButton *button, gpointer user_data);
+static void on_overview_network_delete_clicked(GtkButton *button, gpointer user_data);
+static void on_add_network_overview(GtkButton *button, PumpkinWindow *self);
+static void on_add_network_confirmed(GObject *dialog, GAsyncResult *res, gpointer user_data);
+static void refresh_network_details_dialog(PumpkinWindow *self);
+static void update_network_details_progress_for_active(PumpkinWindow *self);
+static void clear_network_details_dialog_tracking(PumpkinWindow *self);
+static void queue_network_details_refresh(PumpkinWindow *self);
+static gboolean refresh_network_details_idle(gpointer user_data);
 static void on_overview_remove_clicked(GtkButton *button, PumpkinWindow *self);
 static void on_overview_remove_confirmed(GObject *dialog, GAsyncResult *res, gpointer user_data);
+static void on_sponsor_pumpkin_clicked(GtkButton *button, PumpkinWindow *self);
+static void open_uri_external(PumpkinWindow *self, const char *uri);
 static void on_add_server_confirmed(GObject *dialog, GAsyncResult *res, gpointer user_data);
 static void on_add_server_entry_activate(GtkEntry *entry, PumpkinWindow *self);
 static void on_import_server(GtkButton *button, PumpkinWindow *self);
@@ -397,6 +541,8 @@ static void append_log(PumpkinWindow *self, const char *line);
 static void set_details_status(PumpkinWindow *self, const char *message, guint timeout_seconds);
 static void on_clear_cache(GtkButton *button, PumpkinWindow *self);
 static char *cache_dir_for_config(PumpkinWindow *self);
+static char *cache_path_for_download(PumpkinWindow *self, const char *url, const char *build_identity);
+static gboolean copy_binary(const char *src, const char *dest, GError **error);
 static void on_details_stack_changed(GObject *object, GParamSpec *pspec, PumpkinWindow *self);
 static void update_save_button(PumpkinWindow *self);
 static void get_system_limits(int *max_cores, int *max_ram_mb);
@@ -416,6 +562,7 @@ static int current_stats_sample_msec(PumpkinWindow *self);
 static gint64 query_stale_usec(PumpkinWindow *self);
 static gint64 tps_query_interval_usec(PumpkinWindow *self);
 static gint64 player_list_query_interval_usec(PumpkinWindow *self);
+static gboolean list_snapshot_is_fresh(PumpkinWindow *self);
 static void restart_stats_refresh_timer(PumpkinWindow *self);
 static void restart_players_refresh_timer(PumpkinWindow *self);
 static void apply_stats_sample_msec(PumpkinWindow *self, int msec, gboolean reset_history);
@@ -435,7 +582,14 @@ static void on_plugin_delete_clicked(GtkButton *button, PumpkinWindow *self);
 static void on_plugin_overwrite_confirmed(GObject *dialog, GAsyncResult *res, gpointer user_data);
 static void select_server(PumpkinWindow *self, PumpkinServer *server);
 static void refresh_overview_list(PumpkinWindow *self);
-static GtkWidget *create_server_row(PumpkinServer *server);
+static void queue_overview_refresh(PumpkinWindow *self, gboolean include_details);
+static void refresh_overview_network_list(PumpkinWindow *self);
+static GtkWidget *create_overview_server_card(PumpkinWindow *self,
+                                              PumpkinServer *server,
+                                              const char *network_id,
+                                              AdwDialog *network_dialog);
+static GListModel *get_server_model(PumpkinWindow *self);
+static GtkWidget *create_server_row(PumpkinWindow *self, PumpkinServer *server);
 static GtkWidget *create_server_icon_widget(PumpkinServer *server);
 static void update_details(PumpkinWindow *self);
 static void refresh_plugin_list(PumpkinWindow *self);
@@ -455,6 +609,31 @@ static void on_player_action_confirmed(GObject *dialog, GAsyncResult *res, gpoin
 static void on_player_ban_reason_confirmed(GObject *dialog, GAsyncResult *res, gpointer user_data);
 static void on_player_pardon_ip_manual_confirmed(GObject *dialog, GAsyncResult *res, gpointer user_data);
 static void update_live_player_names(PumpkinWindow *self, const char *line);
+static void update_domains_form(PumpkinWindow *self);
+static void on_save_domains(GtkButton *button, PumpkinWindow *self);
+static void on_ddns_sync_now(GtkButton *button, PumpkinWindow *self);
+static void on_domains_ddns_toggle_changed(GObject *object, GParamSpec *pspec, PumpkinWindow *self);
+static gboolean ddns_tick(gpointer data);
+static void ddns_sync_start(PumpkinWindow *self, gboolean manual_current_only);
+static void ddns_sync_worker(GTask *task, gpointer source_object, gpointer task_data, GCancellable *cancellable);
+static void on_ddns_sync_done(GObject *source, GAsyncResult *res, gpointer user_data);
+static int sanitize_ddns_interval_seconds(int value);
+static gboolean parse_ipv4_text(const char *text, char **out_ip);
+static void ddns_server_config_free(DdnsServerConfig *cfg);
+static void ddns_server_result_free(DdnsServerResult *result);
+static void ddns_sync_request_free(DdnsSyncRequest *request);
+static void ddns_sync_result_free(DdnsSyncResult *result);
+static void on_player_list_pointer_enter(GtkEventControllerMotion *controller,
+                                         double x,
+                                         double y,
+                                         PumpkinWindow *self);
+static void on_player_list_pointer_leave(GtkEventControllerMotion *controller,
+                                         PumpkinWindow *self);
+static void on_player_list_pressed(GtkGestureClick *gesture,
+                                   int n_press,
+                                   double x,
+                                   double y,
+                                   PumpkinWindow *self);
 static void on_player_search_changed(GtkEditable *editable, PumpkinWindow *self);
 static void on_player_sort_button_clicked(GtkButton *button, PumpkinWindow *self);
 static void update_player_sort_buttons(PumpkinWindow *self);
@@ -472,6 +651,16 @@ static gboolean restart_after_delay(gpointer data);
 static gboolean start_after_delay(gpointer data);
 static gboolean on_plugins_drop(GtkDropTarget *target, const GValue *value, double x, double y, PumpkinWindow *self);
 static gboolean on_worlds_drop(GtkDropTarget *target, const GValue *value, double x, double y, PumpkinWindow *self);
+static gboolean install_server_from_binary_path(PumpkinWindow *self,
+                                                PumpkinServer *server,
+                                                const char *src_binary_path,
+                                                const char *installed_url,
+                                                const char *build_id,
+                                                const char *build_label,
+                                                const char *success_log,
+                                                const char *success_status);
+static void cache_wait_context_free(CacheWaitContext *ctx);
+static gboolean on_wait_for_shared_cache_tick(gpointer data);
 static GdkDragAction on_plugins_drop_enter(GtkDropTarget *target, double x, double y, PumpkinWindow *self);
 static void on_plugins_drop_leave(GtkDropTarget *target, PumpkinWindow *self);
 static GdkDragAction on_worlds_drop_enter(GtkDropTarget *target, double x, double y, PumpkinWindow *self);
@@ -512,6 +701,8 @@ static char *normalize_build_label(PumpkinWindow *self, const char *label);
 static const char *platform_label(PlayerPlatform platform);
 static PlayerPlatform platform_from_line(const char *line);
 static PlayerPlatform platform_guess_from_uuid(const char *uuid);
+static void add_name_uuid_pairs(GHashTable *map, const char *contents);
+static char *resolve_data_file(PumpkinServer *server, const char *filename);
 static char *extract_ip_from_socket_text(const char *text);
 static GPtrArray *build_ip_unban_candidates(const char *raw_ip);
 static gboolean refresh_player_list_deferred(gpointer data);
@@ -525,7 +716,29 @@ static char *command_history_file(PumpkinServer *server);
 static void command_history_load(PumpkinWindow *self, PumpkinServer *server);
 static gboolean server_download_active(PumpkinWindow *self, PumpkinServer *server);
 static gboolean any_download_active(PumpkinWindow *self);
+static gboolean server_is_running_ui(PumpkinWindow *self, PumpkinServer *server);
+static void set_server_running_hint(PumpkinWindow *self, PumpkinServer *server, gboolean running);
 static char *pick_latest_banned_ip(PumpkinWindow *self);
+static void ensure_server_log_handler(PumpkinWindow *self, PumpkinServer *server);
+static ServerNetwork *server_network_new(const char *id, const char *name);
+static void server_network_free(ServerNetwork *network);
+static char *network_config_path(PumpkinWindow *self);
+static void networks_load(PumpkinWindow *self);
+static gboolean networks_save(PumpkinWindow *self);
+static ServerNetwork *find_network_by_id(PumpkinWindow *self, const char *id);
+static gboolean network_has_member(ServerNetwork *network, const char *server_id);
+static gboolean network_member_token_matches_server(const char *token, PumpkinServer *server);
+static gboolean network_includes_server(ServerNetwork *network, PumpkinServer *server);
+static void network_add_member(ServerNetwork *network, const char *server_id);
+static void network_remove_member(ServerNetwork *network, const char *server_id);
+static gboolean server_in_any_network(PumpkinWindow *self, const char *server_id);
+static void networks_prune_server(PumpkinWindow *self, const char *server_id);
+static PumpkinServer *find_server_by_id(PumpkinWindow *self, const char *server_id);
+static guint network_update_actionable_count(PumpkinWindow *self, ServerNetwork *network);
+static char *sanitize_network_id(const char *name);
+static gboolean apply_network_auto_ports(PumpkinWindow *self, ServerNetwork *network);
+static void auto_start_context_free(AutoStartContext *ctx);
+static gboolean auto_start_server_timeout_cb(gpointer user_data);
 
 static void
 apply_compact_button(GtkWidget *button)
@@ -770,7 +983,10 @@ populate_autostart_server_list(PumpkinWindow *self)
     gtk_list_box_remove(self->autostart_server_list, child);
   }
 
-  GListModel *model = pumpkin_server_store_get_model(self->store);
+  GListModel *model = get_server_model(self);
+  if (model == NULL) {
+    return;
+  }
   guint n = g_list_model_get_n_items(model);
   for (guint i = 0; i < n; i++) {
     PumpkinServer *server = g_list_model_get_item(model, i);
@@ -836,7 +1052,10 @@ on_add_autostart_server(GtkButton *button, PumpkinWindow *self)
   GtkWidget *box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
   gtk_popover_set_child(GTK_POPOVER(popover), box);
 
-  GListModel *model = pumpkin_server_store_get_model(self->store);
+  GListModel *model = get_server_model(self);
+  if (model == NULL) {
+    return;
+  }
   guint n = g_list_model_get_n_items(model);
   gboolean has_items = FALSE;
   for (guint i = 0; i < n; i++) {
@@ -950,12 +1169,14 @@ on_save_general_settings(GtkButton *button, PumpkinWindow *self)
   }
   /* Save per-server auto-start settings */
   if (self->store != NULL) {
-    GListModel *model = pumpkin_server_store_get_model(self->store);
-    guint n = g_list_model_get_n_items(model);
-    for (guint i = 0; i < n; i++) {
-      PumpkinServer *server = g_list_model_get_item(model, i);
-      pumpkin_server_save(server, NULL);
-      g_object_unref(server);
+    GListModel *model = get_server_model(self);
+    if (model != NULL) {
+      guint n = g_list_model_get_n_items(model);
+      for (guint i = 0; i < n; i++) {
+        PumpkinServer *server = g_list_model_get_item(model, i);
+        pumpkin_server_save(server, NULL);
+        g_object_unref(server);
+      }
     }
   }
   pumpkin_config_save(self->config, NULL);
@@ -1012,12 +1233,14 @@ on_reset_general_response(AdwAlertDialog *dialog, const char *response, PumpkinW
   }
   /* Clear all server auto-start flags */
   if (self->store != NULL) {
-    GListModel *model = pumpkin_server_store_get_model(self->store);
-    guint n = g_list_model_get_n_items(model);
-    for (guint i = 0; i < n; i++) {
-      PumpkinServer *server = g_list_model_get_item(model, i);
-      pumpkin_server_set_auto_start_on_launch(server, FALSE);
-      g_object_unref(server);
+    GListModel *model = get_server_model(self);
+    if (model != NULL) {
+      guint n = g_list_model_get_n_items(model);
+      for (guint i = 0; i < n; i++) {
+        PumpkinServer *server = g_list_model_get_item(model, i);
+        pumpkin_server_set_auto_start_on_launch(server, FALSE);
+        g_object_unref(server);
+      }
     }
   }
   self->settings_loading = FALSE;
@@ -1073,8 +1296,18 @@ on_reset_server_response(AdwAlertDialog *dialog, const char *response, PumpkinWi
   pumpkin_server_set_rcon_host(self->current, "127.0.0.1");
   pumpkin_server_set_rcon_port(self->current, 25575);
   pumpkin_server_set_rcon_password(self->current, "");
+  pumpkin_server_set_domain(self->current, NULL);
+  pumpkin_server_set_ddns_enabled(self->current, FALSE);
+  pumpkin_server_set_ddns_provider(self->current, "cloudflare");
+  pumpkin_server_set_ddns_cf_zone_id(self->current, NULL);
+  pumpkin_server_set_ddns_cf_api_token(self->current, NULL);
+  pumpkin_server_set_ddns_cf_record_id(self->current, NULL);
+  pumpkin_server_set_ddns_cf_proxied(self->current, FALSE);
+  pumpkin_server_set_ddns_update_ipv6(self->current, FALSE);
+  pumpkin_server_set_ddns_interval_seconds(self->current, DDNS_INTERVAL_SECONDS_DEFAULT);
 
   update_settings_form(self);
+  update_domains_form(self);
   mark_settings_dirty(self);
 }
 
@@ -1104,7 +1337,8 @@ static void
 on_window_click(GtkGestureClick *gesture, int n_press, double x, double y, PumpkinWindow *self)
 {
   (void)n_press;
-  (void)gesture;
+
+  gtk_gesture_set_state(GTK_GESTURE(gesture), GTK_EVENT_SEQUENCE_DENIED);
 
   GtkWidget *focus = gtk_window_get_focus(GTK_WINDOW(self));
   if (focus == NULL) {
@@ -1123,7 +1357,7 @@ on_window_click(GtkGestureClick *gesture, int n_press, double x, double y, Pumpk
     }
     picked = gtk_widget_get_parent(picked);
   }
-  gtk_widget_grab_focus(GTK_WIDGET(self));
+  gtk_window_set_focus(GTK_WINDOW(self), NULL);
 }
 
 /* ---- Clear Cache ---- */
@@ -1501,6 +1735,19 @@ parse_clock_time_entry(GtkEntry *entry, int *out_hour, int *out_minute)
   return parse_clock_time_text(text, out_hour, out_minute);
 }
 
+static GListModel *
+get_server_model(PumpkinWindow *self)
+{
+  if (self == NULL || self->store == NULL) {
+    return NULL;
+  }
+  GListModel *model = pumpkin_server_store_get_model(self->store);
+  if (!G_IS_LIST_MODEL(model)) {
+    return NULL;
+  }
+  return model;
+}
+
 static int
 sanitize_stats_sample_msec(int value)
 {
@@ -1523,8 +1770,8 @@ static gint64
 query_stale_usec(PumpkinWindow *self)
 {
   gint64 by_sample = (gint64)current_stats_sample_msec(self) * 10 * 1000;
-  if (by_sample < 3000000) {
-    by_sample = 3000000;
+  if (by_sample < 15000000) {
+    by_sample = 15000000;
   }
   return by_sample;
 }
@@ -1539,6 +1786,20 @@ static gint64
 player_list_query_interval_usec(PumpkinWindow *self)
 {
   return (gint64)current_stats_sample_msec(self) * 1000;
+}
+
+static gboolean
+list_snapshot_is_fresh(PumpkinWindow *self)
+{
+  if (self == NULL || self->list_snapshot_updated_at <= 0) {
+    return FALSE;
+  }
+  gint64 age = g_get_monotonic_time() - self->list_snapshot_updated_at;
+  gint64 freshness = (gint64)current_stats_sample_msec(self) * 12 * 1000;
+  if (freshness < 1000000) {
+    freshness = 1000000;
+  }
+  return age >= 0 && age <= freshness;
 }
 
 static void
@@ -1564,7 +1825,7 @@ restart_players_refresh_timer(PumpkinWindow *self)
     g_source_remove(self->players_refresh_id);
     self->players_refresh_id = 0;
   }
-  if (self->current != NULL && pumpkin_server_get_running(self->current)) {
+  if (self->current != NULL && server_is_running_ui(self, self->current)) {
     self->players_refresh_id = g_timeout_add((guint)current_stats_sample_msec(self), refresh_players_tick, self);
   }
 }
@@ -2266,6 +2527,53 @@ any_download_active(PumpkinWindow *self)
 }
 
 static void
+set_server_running_hint(PumpkinWindow *self, PumpkinServer *server, gboolean running)
+{
+  if (self == NULL || server == NULL || self->server_running_hints == NULL) {
+    return;
+  }
+  g_hash_table_replace(self->server_running_hints,
+                       g_object_ref(server),
+                       GINT_TO_POINTER(running ? 1 : 0));
+}
+
+static gboolean
+server_running_hint(PumpkinWindow *self, PumpkinServer *server)
+{
+  if (self == NULL || server == NULL || self->server_running_hints == NULL) {
+    return FALSE;
+  }
+  return GPOINTER_TO_INT(g_hash_table_lookup(self->server_running_hints, server)) != 0;
+}
+
+static gboolean
+server_is_running_ui(PumpkinWindow *self, PumpkinServer *server)
+{
+  if (server == NULL) {
+    return FALSE;
+  }
+  return pumpkin_server_get_running(server) || server_running_hint(self, server);
+}
+
+static void
+clear_download_overview_bars(PumpkinWindow *self)
+{
+  if (self == NULL || self->download_progress_state == NULL) {
+    return;
+  }
+  GHashTableIter iter;
+  gpointer key = NULL;
+  gpointer value = NULL;
+  g_hash_table_iter_init(&iter, self->download_progress_state);
+  while (g_hash_table_iter_next(&iter, &key, &value)) {
+    DownloadProgressState *state = value;
+    if (state != NULL) {
+      state->overview_bar = NULL;
+    }
+  }
+}
+
+static void
 update_progress_bar(GtkWidget *bar, goffset current, goffset total)
 {
   if (bar == NULL) {
@@ -2452,6 +2760,7 @@ on_download_progress(goffset current, goffset total, gpointer user_data)
     }
   }
   set_download_progress_for_server(ctx->self, ctx->server, current, total);
+  update_network_details_progress_for_active(ctx->self);
 }
 
 static void
@@ -2488,6 +2797,17 @@ append_console_line(PumpkinWindow *self, PumpkinServer *server, const char *line
     gtk_text_buffer_insert(buffer, &end, with_newline, -1);
   }
   apply_console_inline_tags(buffer, line_start_offset, display, level);
+
+  int line_count = gtk_text_buffer_get_line_count(buffer);
+  if (line_count > CONSOLE_MAX_LINES) {
+    int cut_line = line_count - CONSOLE_MAX_LINES;
+    GtkTextIter trim_start;
+    GtkTextIter trim_end;
+    gtk_text_buffer_get_start_iter(buffer, &trim_start);
+    gtk_text_buffer_get_iter_at_line(buffer, &trim_end, cut_line);
+    gtk_text_buffer_delete(buffer, &trim_start, &trim_end);
+  }
+
   gtk_text_buffer_get_end_iter(buffer, &end);
 
   GtkTextMark *mark = gtk_text_buffer_get_mark(buffer, "log-end");
@@ -2496,21 +2816,45 @@ append_console_line(PumpkinWindow *self, PumpkinServer *server, const char *line
   } else {
     gtk_text_buffer_move_mark(buffer, mark, &end);
   }
-  gtk_text_view_scroll_to_mark(self->log_view, mark, 0.0, TRUE, 0.0, 1.0);
+  if (gtk_text_view_get_buffer(self->log_view) == buffer) {
+    gtk_text_view_scroll_to_mark(self->log_view, mark, 0.0, TRUE, 0.0, 1.0);
+  }
 }
 
 static void
 on_log_line(PumpkinServer *server, const char *line, PumpkinWindow *self)
 {
+  gboolean is_current = (self->current == server);
   gboolean internal_line =
     line != NULL &&
     (g_strcmp0(line, "Server process exited") == 0 ||
      g_strcmp0(line, "Auto-restart scheduled") == 0);
   g_autofree char *clean = line != NULL ? strip_ansi(line) : NULL;
   const char *check = clean != NULL ? clean : line;
+  if (check != NULL &&
+      *check != '\0' &&
+      g_strcmp0(line, "Server process exited") != 0 &&
+      g_strcmp0(line, "Auto-restart scheduled") != 0) {
+    set_server_running_hint(self, server, TRUE);
+  }
+  if (check != NULL &&
+      (strstr(check, "Server is now running") != NULL ||
+       strstr(check, "Started server") != NULL ||
+       strstr(check, "Server query running on port") != NULL ||
+       strstr(check, "Server is running") != NULL ||
+       strstr(check, "Done") != NULL ||
+       strstr(check, "Listening") != NULL)) {
+    set_server_running_hint(self, server, TRUE);
+  }
+  if (line != NULL && g_strcmp0(line, "Server process exited") == 0) {
+    set_server_running_hint(self, server, FALSE);
+  }
   gboolean tps_line = FALSE;
-  gboolean list_line = is_player_list_snapshot_line(check);
-  if (check != NULL) {
+  gboolean list_line = FALSE;
+  if (is_current) {
+    list_line = is_player_list_snapshot_line(check);
+  }
+  if (is_current && check != NULL) {
     double tps = 0.0;
     if (parse_tps_from_line(check, &tps)) {
       self->last_tps = tps;
@@ -2520,7 +2864,7 @@ on_log_line(PumpkinServer *server, const char *line, PumpkinWindow *self)
     }
   }
   gboolean suppress_auto_line = FALSE;
-  if (self->current == server) {
+  if (is_current) {
     if (tps_line && self->pending_auto_tps_lines > 0) {
       self->pending_auto_tps_lines--;
       suppress_auto_line = TRUE;
@@ -2533,8 +2877,18 @@ on_log_line(PumpkinServer *server, const char *line, PumpkinWindow *self)
   if (!internal_line && !suppress_auto_line) {
     append_console_line(self, server, line);
   }
+  if (!is_current) {
+    if (line != NULL && g_strcmp0(line, "Server process exited") == 0) {
+      if (self->auto_update_server == server) {
+        clear_auto_update_countdown(self);
+      }
+      queue_overview_refresh(self, FALSE);
+    }
+    return;
+  }
+
   update_live_player_names(self, line);
-  if (check != NULL && self->current == server && self->ui_state == UI_STATE_STARTING) {
+  if (check != NULL && self->ui_state == UI_STATE_STARTING) {
     if (strstr(check, "Server is now running") != NULL ||
         strstr(check, "Started server") != NULL ||
         strstr(check, "Server query running on port") != NULL ||
@@ -2553,17 +2907,19 @@ on_log_line(PumpkinServer *server, const char *line, PumpkinWindow *self)
     if (self->auto_update_server == server) {
       clear_auto_update_countdown(self);
     }
-    if (self->current == server) {
-      player_states_mark_all_offline(self);
-      player_states_save(self, server);
-      self->tps_enabled = FALSE;
-      self->last_tps_valid = FALSE;
-      self->pending_auto_tps_lines = 0;
-      self->pending_auto_list_lines = 0;
-      self->pending_java_platform_hints = 0;
-      self->pending_bedrock_platform_hints = 0;
-    }
-    if (self->current == server && !self->restart_requested) {
+    player_states_mark_all_offline(self);
+    player_states_save(self, server);
+    self->tps_enabled = FALSE;
+    self->last_tps_valid = FALSE;
+    self->pending_auto_tps_lines = 0;
+    self->pending_auto_list_lines = 0;
+    self->list_snapshot_players = 0;
+    self->list_snapshot_max_players = 0;
+    self->list_snapshot_updated_at = 0;
+    self->pending_java_platform_hints = 0;
+    self->pending_bedrock_platform_hints = 0;
+
+    if (!self->restart_requested) {
       if (!self->user_stop_requested) {
         set_console_warning(self, "Server stopped unexpectedly.", TRUE);
       } else {
@@ -2572,10 +2928,10 @@ on_log_line(PumpkinServer *server, const char *line, PumpkinWindow *self)
       self->user_stop_requested = FALSE;
       self->ui_state = UI_STATE_IDLE;
       update_details(self);
-      refresh_overview_list(self);
+      queue_overview_refresh(self, TRUE);
       refresh_world_list(self);
     }
-    if (self->current == server && self->restart_requested && self->restart_pending) {
+    if (self->restart_requested && self->restart_pending) {
       self->restart_pending = FALSE;
       RestartContext *ctx = g_new0(RestartContext, 1);
       ctx->self = g_object_ref(self);
@@ -2586,6 +2942,16 @@ on_log_line(PumpkinServer *server, const char *line, PumpkinWindow *self)
       self->restart_delay_id = g_timeout_add(0, restart_after_delay, ctx);
     }
   }
+}
+
+static void
+ensure_server_log_handler(PumpkinWindow *self, PumpkinServer *server)
+{
+  if (self == NULL || server == NULL) {
+    return;
+  }
+  g_signal_handlers_disconnect_by_func(server, G_CALLBACK(on_log_line), self);
+  g_signal_connect(server, "log-line", G_CALLBACK(on_log_line), self);
 }
 
 static void
@@ -3769,10 +4135,14 @@ relative_time_label(gint64 unix_ts)
 static char *
 get_server_version(PumpkinWindow *self, PumpkinServer *server)
 {
-  g_autofree char *bin = pumpkin_server_get_bin_path(server);
-  if (!g_file_test(bin, G_FILE_TEST_EXISTS)) {
+  if (!server_has_installation(self, server)) {
+    DownloadProgressState *state = get_download_progress_state(self, server, FALSE);
+    if (state != NULL && state->active) {
+      return g_strdup("Installing...");
+    }
     return g_strdup("Not installed");
   }
+  g_autofree char *bin = pumpkin_server_get_bin_path(server);
 
   const char *stored_label = pumpkin_server_get_installed_build_label(server);
   if (stored_label != NULL && *stored_label != '\0') {
@@ -3815,7 +4185,7 @@ build_label_from_binary_path(PumpkinWindow *self, const char *bin_path)
 }
 
 static gboolean
-is_update_available_for_server(PumpkinWindow *self, PumpkinServer *server, gboolean installed)
+is_update_available_by_metadata(PumpkinWindow *self, PumpkinServer *server, gboolean installed)
 {
   if (!installed || self->latest_url == NULL || server == NULL) {
     return FALSE;
@@ -3826,8 +4196,92 @@ is_update_available_for_server(PumpkinWindow *self, PumpkinServer *server, gbool
     return (installed_build_id == NULL || g_strcmp0(self->latest_build_id, installed_build_id) != 0);
   }
 
+  if (self->latest_build_label != NULL && *self->latest_build_label != '\0') {
+    const char *installed_label = pumpkin_server_get_installed_build_label(server);
+    g_autofree char *latest_norm = normalize_build_label(self, self->latest_build_label);
+    g_autofree char *installed_norm = normalize_build_label(self, installed_label);
+    if (latest_norm != NULL && *latest_norm != '\0') {
+      return (installed_norm == NULL || g_strcmp0(latest_norm, installed_norm) != 0);
+    }
+  }
+
   const char *installed_url = pumpkin_server_get_installed_url(server);
   return (installed_url == NULL || g_strcmp0(self->latest_url, installed_url) != 0);
+}
+
+static gboolean
+read_binary_signature(const char *bin_path, goffset *out_size, time_t *out_mtime)
+{
+  if (bin_path == NULL || *bin_path == '\0' || out_size == NULL || out_mtime == NULL) {
+    return FALSE;
+  }
+
+  GStatBuf st;
+  if (g_stat(bin_path, &st) != 0) {
+    return FALSE;
+  }
+  *out_size = (goffset)st.st_size;
+  *out_mtime = st.st_mtime;
+  return TRUE;
+}
+
+static gboolean
+is_update_available_for_server(PumpkinWindow *self, PumpkinServer *server, gboolean installed)
+{
+  if (!installed || self == NULL || server == NULL) {
+    return FALSE;
+  }
+
+  if (is_update_available_by_metadata(self, server, installed)) {
+    return TRUE;
+  }
+
+  g_autofree char *bin = pumpkin_server_get_bin_path(server);
+  goffset size = 0;
+  time_t mtime = 0;
+  if (!read_binary_signature(bin, &size, &mtime)) {
+    return FALSE;
+  }
+
+  GListModel *model = get_server_model(self);
+  if (model == NULL) {
+    return FALSE;
+  }
+
+  guint n = g_list_model_get_n_items(model);
+  for (guint i = 0; i < n; i++) {
+    PumpkinServer *peer = g_list_model_get_item(model, i);
+    if (peer == NULL) {
+      continue;
+    }
+    if (peer == server) {
+      g_object_unref(peer);
+      continue;
+    }
+
+    g_autofree char *peer_bin = pumpkin_server_get_bin_path(peer);
+    gboolean peer_installed = (peer_bin != NULL && g_file_test(peer_bin, G_FILE_TEST_EXISTS));
+    if (!peer_installed) {
+      g_object_unref(peer);
+      continue;
+    }
+
+    goffset peer_size = 0;
+    time_t peer_mtime = 0;
+    if (!read_binary_signature(peer_bin, &peer_size, &peer_mtime)) {
+      g_object_unref(peer);
+      continue;
+    }
+
+    if (size == peer_size && mtime == peer_mtime &&
+        is_update_available_by_metadata(self, peer, TRUE)) {
+      g_object_unref(peer);
+      return TRUE;
+    }
+    g_object_unref(peer);
+  }
+
+  return FALSE;
 }
 
 static void
@@ -3877,6 +4331,9 @@ latest_build_identity(PumpkinWindow *self)
   }
   if (self->latest_build_id != NULL && *self->latest_build_id != '\0') {
     return self->latest_build_id;
+  }
+  if (self->latest_build_label != NULL && *self->latest_build_label != '\0') {
+    return self->latest_build_label;
   }
   return self->latest_url;
 }
@@ -3979,7 +4436,10 @@ maybe_trigger_auto_update(PumpkinWindow *self)
     return;
   }
 
-  GListModel *model = pumpkin_server_store_get_model(self->store);
+  GListModel *model = get_server_model(self);
+  if (model == NULL) {
+    return;
+  }
   guint n = g_list_model_get_n_items(model);
   for (guint i = 0; i < n; i++) {
     PumpkinServer *server = g_list_model_get_item(model, i);
@@ -4082,6 +4542,51 @@ dir_size_bytes(const char *path)
   return total;
 }
 
+static gboolean
+has_known_binary_magic(const guint8 *buf, gsize len)
+{
+  if (buf == NULL || len < 4) {
+    return FALSE;
+  }
+
+  /* ELF */
+  if (buf[0] == 0x7F && buf[1] == 'E' && buf[2] == 'L' && buf[3] == 'F') {
+    return TRUE;
+  }
+  /* PE/COFF */
+  if (buf[0] == 'M' && buf[1] == 'Z') {
+    return TRUE;
+  }
+  /* Mach-O */
+  guint32 be = ((guint32)buf[0] << 24) | ((guint32)buf[1] << 16) | ((guint32)buf[2] << 8) | (guint32)buf[3];
+  if (be == 0xFEEDFACE || be == 0xFEEDFACF || be == 0xCEFAEDFE || be == 0xCFFAEDFE) {
+    return TRUE;
+  }
+  return FALSE;
+}
+
+static gboolean
+binary_file_is_valid(const char *path)
+{
+  if (path == NULL || *path == '\0') {
+    return FALSE;
+  }
+
+  GStatBuf st;
+  if (g_stat(path, &st) != 0 || st.st_size < MIN_VALID_PUMPKIN_BINARY_BYTES) {
+    return FALSE;
+  }
+
+  guint8 magic[4] = { 0, 0, 0, 0 };
+  FILE *fp = fopen(path, "rb");
+  if (fp == NULL) {
+    return FALSE;
+  }
+  gsize read = fread(magic, 1, sizeof(magic), fp);
+  fclose(fp);
+  return has_known_binary_magic(magic, read);
+}
+
 static char *
 get_server_size(PumpkinServer *server)
 {
@@ -4096,15 +4601,17 @@ get_server_size(PumpkinServer *server)
 static int
 get_overview_player_count(PumpkinWindow *self, PumpkinServer *server)
 {
-  if (self == NULL || server == NULL || !pumpkin_server_get_running(server)) {
+  if (self == NULL || server == NULL || !server_is_running_ui(self, server)) {
     return 0;
   }
 
-  if (server == self->current && query_is_fresh(self)) {
-    return self->query_players;
-  }
-
   if (server == self->current) {
+    if (list_snapshot_is_fresh(self)) {
+      return self->list_snapshot_players;
+    }
+    if (query_is_fresh(self)) {
+      return self->query_players;
+    }
     return player_online_count(self);
   }
 
@@ -4418,13 +4925,17 @@ extract_name_before_suffix(const char *line, const char *suffix)
 static gboolean
 server_name_exists(PumpkinWindow *self, const char *name)
 {
-  if (name == NULL || *name == '\0') {
+  if (self == NULL || self->store == NULL || name == NULL || *name == '\0') {
     return TRUE;
   }
 
-  guint n = g_list_model_get_n_items(pumpkin_server_store_get_model(self->store));
+  GListModel *model = get_server_model(self);
+  if (model == NULL) {
+    return TRUE;
+  }
+  guint n = g_list_model_get_n_items(model);
   for (guint i = 0; i < n; i++) {
-    PumpkinServer *server = g_list_model_get_item(pumpkin_server_store_get_model(self->store), i);
+    PumpkinServer *server = g_list_model_get_item(model, i);
     const char *existing = pumpkin_server_get_name(server);
     gboolean match = (g_ascii_strcasecmp(existing, name) == 0);
     g_object_unref(server);
@@ -4825,7 +5336,8 @@ try_create_server(PumpkinWindow *self, const char *name)
     }
   }
 
-  GtkWidget *row = create_server_row(server);
+  ensure_server_log_handler(self, server);
+  GtkWidget *row = create_server_row(self, server);
   gtk_list_box_append(self->server_list, row);
   gtk_list_box_select_row(self->server_list, GTK_LIST_BOX_ROW(row));
   refresh_overview_list(self);
@@ -4858,8 +5370,118 @@ on_overview_settings_clicked(GtkButton *button, gpointer user_data)
     return;
   }
 
+  AdwDialog *dialog = g_object_get_data(G_OBJECT(button), "network-dialog");
+  if (dialog != NULL) {
+    adw_dialog_close(dialog);
+  }
+
   select_server(self, server);
   adw_view_stack_set_visible_child_name(self->view_stack, "details");
+}
+
+static void
+on_servers_back(GtkButton *button, PumpkinWindow *self)
+{
+  (void)button;
+  if (self == NULL || self->view_stack == NULL) {
+    return;
+  }
+  adw_view_stack_set_visible_child_name(self->view_stack, "overview");
+}
+
+static gboolean
+recover_server_binary_from_cache(PumpkinWindow *self, PumpkinServer *server, const char *bin_path)
+{
+  if (self == NULL || server == NULL || bin_path == NULL || *bin_path == '\0') {
+    return FALSE;
+  }
+
+  const char *installed_url = pumpkin_server_get_installed_url(server);
+  const char *download_url = pumpkin_server_get_download_url(server);
+  const char *fallback_latest = self->latest_url;
+  const char *installed_build_id = pumpkin_server_get_installed_build_id(server);
+  const char *installed_build_label = pumpkin_server_get_installed_build_label(server);
+
+  const char *url_candidates[] = {
+    installed_url,
+    download_url,
+    fallback_latest,
+    NULL
+  };
+  const char *identity_candidates[] = {
+    installed_build_id,
+    installed_build_label,
+    self->latest_build_id,
+    self->latest_build_label,
+    NULL
+  };
+
+  for (guint u = 0; url_candidates[u] != NULL; u++) {
+    const char *url = url_candidates[u];
+    if (url == NULL || *url == '\0') {
+      continue;
+    }
+
+    /* Try identity-specific cache first, then URL-only fallback. */
+    for (guint i = 0; i <= G_N_ELEMENTS(identity_candidates); i++) {
+      const char *identity = (i < G_N_ELEMENTS(identity_candidates)) ? identity_candidates[i] : NULL;
+      if (identity != NULL && *identity == '\0') {
+        continue;
+      }
+      g_autofree char *cache_path = cache_path_for_download(self, url, identity);
+      if (!g_file_test(cache_path, G_FILE_TEST_EXISTS)) {
+        continue;
+      }
+      if (!binary_file_is_valid(cache_path)) {
+        g_remove(cache_path);
+        continue;
+      }
+      g_autoptr(GError) copy_error = NULL;
+      if (!copy_binary(cache_path, bin_path, &copy_error)) {
+        continue;
+      }
+      if (binary_file_is_valid(bin_path)) {
+        append_log_for_server(self, server, "Recovered server binary from cache");
+        return TRUE;
+      }
+      g_remove(bin_path);
+    }
+  }
+
+  return FALSE;
+}
+
+static gboolean
+server_has_installation(PumpkinWindow *self, PumpkinServer *server)
+{
+  if (server == NULL) {
+    return FALSE;
+  }
+  g_autofree char *bin = pumpkin_server_get_bin_path(server);
+  if (bin == NULL || *bin == '\0') {
+    return FALSE;
+  }
+  g_autofree char *tmp = g_strconcat(bin, ".tmp", NULL);
+  if (binary_file_is_valid(bin)) {
+    if (g_file_test(tmp, G_FILE_TEST_EXISTS)) {
+      g_remove(tmp);
+    }
+    return TRUE;
+  }
+  if (g_file_test(bin, G_FILE_TEST_EXISTS) && !binary_file_is_valid(bin)) {
+    g_remove(bin);
+  }
+  if (!g_file_test(tmp, G_FILE_TEST_EXISTS)) {
+    return recover_server_binary_from_cache(self, server, bin);
+  }
+  if (g_rename(tmp, bin) == 0) {
+    g_chmod(bin, 0755);
+    if (binary_file_is_valid(bin)) {
+      return TRUE;
+    }
+    g_remove(bin);
+  }
+  return recover_server_binary_from_cache(self, server, bin);
 }
 
 static void
@@ -4884,103 +5506,1501 @@ on_overview_install_confirmed(GObject *dialog, GAsyncResult *res, gpointer user_
 }
 
 static void
-refresh_overview_list(PumpkinWindow *self)
+open_uri_external(PumpkinWindow *self, const char *uri)
 {
-  if (self->overview_list == NULL) {
+  if (self == NULL || uri == NULL || *uri == '\0') {
+    return;
+  }
+  GtkUriLauncher *launcher = gtk_uri_launcher_new(uri);
+  gtk_uri_launcher_launch(launcher, GTK_WINDOW(self), NULL, NULL, NULL);
+  g_object_unref(launcher);
+}
+
+static void
+on_sponsor_pumpkin_clicked(GtkButton *button, PumpkinWindow *self)
+{
+  (void)button;
+  open_uri_external(self, "https://github.com/sponsors/Snowiiii");
+}
+
+static void
+network_server_choice_free(NetworkServerChoice *choice)
+{
+  if (choice == NULL) {
+    return;
+  }
+  g_clear_pointer(&choice->server_id, g_free);
+  g_free(choice);
+}
+
+static void
+network_proxy_dialog_context_free(NetworkProxyDialogContext *ctx)
+{
+  if (ctx == NULL) {
+    return;
+  }
+  g_clear_pointer(&ctx->network_id, g_free);
+  if (ctx->choices != NULL) {
+    g_ptr_array_unref(ctx->choices);
+    ctx->choices = NULL;
+  }
+  g_free(ctx);
+}
+
+static void
+close_network_dialog_for_button(GtkButton *button)
+{
+  if (button == NULL) {
+    return;
+  }
+  AdwDialog *dialog = g_object_get_data(G_OBJECT(button), "network-dialog");
+  if (dialog != NULL) {
+    adw_dialog_close(dialog);
+  }
+}
+
+static ServerNetwork *
+network_for_button(PumpkinWindow *self, GtkButton *button)
+{
+  const char *network_id = g_object_get_data(G_OBJECT(button), "network-id");
+  return find_network_by_id(self, network_id);
+}
+
+static guint
+network_running_count(PumpkinWindow *self, ServerNetwork *network)
+{
+  if (self == NULL || network == NULL) {
+    return 0;
+  }
+  GListModel *model = get_server_model(self);
+  if (model == NULL) {
+    return 0;
+  }
+  guint running = 0;
+  guint n = g_list_model_get_n_items(model);
+  for (guint i = 0; i < n; i++) {
+    g_autoptr(PumpkinServer) server = g_list_model_get_item(model, i);
+    if (server == NULL || !network_includes_server(network, server)) {
+      continue;
+    }
+    if (server_is_running_ui(self, server)) {
+      running++;
+    }
+  }
+  return running;
+}
+
+static guint
+network_missing_install_count(PumpkinWindow *self, ServerNetwork *network)
+{
+  if (self == NULL || network == NULL) {
+    return 0;
+  }
+  GListModel *model = get_server_model(self);
+  if (model == NULL) {
+    return 0;
+  }
+  guint missing = 0;
+  guint n = g_list_model_get_n_items(model);
+  for (guint i = 0; i < n; i++) {
+    g_autoptr(PumpkinServer) server = g_list_model_get_item(model, i);
+    if (server == NULL || !network_includes_server(network, server)) {
+      continue;
+    }
+    if (!server_has_installation(self, server) && !server_download_active(self, server)) {
+      missing++;
+    }
+  }
+  return missing;
+}
+
+static guint
+network_total_players(PumpkinWindow *self, ServerNetwork *network)
+{
+  if (self == NULL || network == NULL) {
+    return 0;
+  }
+  GListModel *model = get_server_model(self);
+  if (model == NULL) {
+    return 0;
+  }
+  guint total = 0;
+  guint n = g_list_model_get_n_items(model);
+  for (guint i = 0; i < n; i++) {
+    g_autoptr(PumpkinServer) server = g_list_model_get_item(model, i);
+    if (server == NULL || !network_includes_server(network, server)) {
+      continue;
+    }
+    int players = get_overview_player_count(self, server);
+    if (players > 0) {
+      total += (guint)players;
+    }
+  }
+  return total;
+}
+
+static guint
+network_update_actionable_count(PumpkinWindow *self, ServerNetwork *network)
+{
+  if (self == NULL || network == NULL ||
+      self->latest_url == NULL || *self->latest_url == '\0') {
+    return 0;
+  }
+  GListModel *model = get_server_model(self);
+  if (model == NULL) {
+    return 0;
+  }
+
+  guint actionable = 0;
+  guint n = g_list_model_get_n_items(model);
+  for (guint i = 0; i < n; i++) {
+    g_autoptr(PumpkinServer) server = g_list_model_get_item(model, i);
+    if (server == NULL || !network_includes_server(network, server)) {
+      continue;
+    }
+    if (server_is_running_ui(self, server)) {
+      continue;
+    }
+    if (!server_has_installation(self, server)) {
+      continue;
+    }
+    if (is_update_available_for_server(self, server, TRUE)) {
+      actionable++;
+    }
+  }
+  return actionable;
+}
+
+static guint
+network_startable_count(PumpkinWindow *self, ServerNetwork *network)
+{
+  if (self == NULL || network == NULL) {
+    return 0;
+  }
+  GListModel *model = get_server_model(self);
+  if (model == NULL) {
+    return 0;
+  }
+
+  guint startable = 0;
+  guint n = g_list_model_get_n_items(model);
+  for (guint i = 0; i < n; i++) {
+    g_autoptr(PumpkinServer) server = g_list_model_get_item(model, i);
+    if (server == NULL || !network_includes_server(network, server)) {
+      continue;
+    }
+    if (server_is_running_ui(self, server)) {
+      continue;
+    }
+    if (!server_has_installation(self, server)) {
+      continue;
+    }
+    startable++;
+  }
+
+  return startable;
+}
+
+static gboolean
+refresh_overview_list_idle(gpointer user_data)
+{
+  PumpkinWindow *self = PUMPKIN_WINDOW(user_data);
+  if (self == NULL) {
+    return G_SOURCE_REMOVE;
+  }
+  self->overview_refresh_idle_id = 0;
+  refresh_overview_list(self);
+  if (self->overview_refresh_needs_details) {
+    self->overview_refresh_needs_details = FALSE;
+    update_details(self);
+  }
+  return G_SOURCE_REMOVE;
+}
+
+static void
+queue_overview_refresh(PumpkinWindow *self, gboolean include_details)
+{
+  if (self == NULL) {
+    return;
+  }
+  if (include_details) {
+    self->overview_refresh_needs_details = TRUE;
+  }
+  if (self->overview_refresh_idle_id != 0) {
+    return;
+  }
+  self->overview_refresh_idle_id =
+    g_idle_add_full(G_PRIORITY_DEFAULT_IDLE, refresh_overview_list_idle, g_object_ref(self), g_object_unref);
+}
+
+static gboolean
+refresh_network_details_idle(gpointer user_data)
+{
+  PumpkinWindow *self = PUMPKIN_WINDOW(user_data);
+  if (self == NULL) {
+    return G_SOURCE_REMOVE;
+  }
+  self->network_details_refresh_idle_id = 0;
+  refresh_network_details_dialog(self);
+  return G_SOURCE_REMOVE;
+}
+
+static void
+queue_network_details_refresh(PumpkinWindow *self)
+{
+  if (self == NULL) {
+    return;
+  }
+  if (self->network_details_refresh_idle_id != 0) {
+    return;
+  }
+  self->network_details_refresh_idle_id =
+    g_idle_add_full(G_PRIORITY_DEFAULT_IDLE, refresh_network_details_idle, g_object_ref(self), g_object_unref);
+}
+
+static void
+clear_box_children(GtkBox *box)
+{
+  if (box == NULL) {
+    return;
+  }
+  GtkWidget *child = gtk_widget_get_first_child(GTK_WIDGET(box));
+  while (child != NULL) {
+    GtkWidget *next = gtk_widget_get_next_sibling(child);
+    gtk_box_remove(box, child);
+    child = next;
+  }
+}
+
+static void
+update_network_details_progress(PumpkinWindow *self, ServerNetwork *network)
+{
+  if (self == NULL || self->network_details_progress == NULL || network == NULL ||
+      network->member_server_ids == NULL) {
     return;
   }
 
-  clear_list_box(self->overview_list);
+  gboolean any_active = FALSE;
+  goffset combined_current = 0;
+  goffset combined_total = 0;
 
-  guint n = g_list_model_get_n_items(pumpkin_server_store_get_model(self->store));
+  for (guint i = 0; i < network->member_server_ids->len; i++) {
+    const char *id = g_ptr_array_index(network->member_server_ids, i);
+    if (id == NULL || *id == '\0') {
+      continue;
+    }
+    g_autoptr(PumpkinServer) member = find_server_by_id(self, id);
+    if (member == NULL) {
+      continue;
+    }
+    DownloadProgressState *state = get_download_progress_state(self, member, FALSE);
+    if (state == NULL || !state->active) {
+      continue;
+    }
+    any_active = TRUE;
+    if (state->total > 0) {
+      combined_current += MAX((goffset)0, state->current);
+      combined_total += state->total;
+    }
+  }
+
+  gtk_widget_set_visible(GTK_WIDGET(self->network_details_progress), any_active);
+  if (!any_active) {
+    return;
+  }
+
+  if (combined_total > 0) {
+    update_progress_bar(GTK_WIDGET(self->network_details_progress), combined_current, combined_total);
+  } else {
+    gtk_progress_bar_set_fraction(self->network_details_progress, 0.0);
+    gtk_progress_bar_set_show_text(self->network_details_progress, TRUE);
+    gtk_progress_bar_set_text(self->network_details_progress, "Waiting for shared download...");
+  }
+}
+
+static void
+update_network_details_progress_for_active(PumpkinWindow *self)
+{
+  if (self == NULL) {
+    return;
+  }
+  if (self->network_details_dialog == NULL) {
+    clear_network_details_dialog_tracking(self);
+    return;
+  }
+  if (self->network_details_network_id == NULL ||
+      *self->network_details_network_id == '\0') {
+    return;
+  }
+  ServerNetwork *network = find_network_by_id(self, self->network_details_network_id);
+  if (network == NULL) {
+    clear_network_details_dialog_tracking(self);
+    return;
+  }
+  update_network_details_progress(self, network);
+}
+
+static void
+clear_network_details_dialog_tracking(PumpkinWindow *self)
+{
+  if (self == NULL) {
+    return;
+  }
+  if (self->network_details_dialog != NULL) {
+    g_object_remove_weak_pointer(G_OBJECT(self->network_details_dialog),
+                                 (gpointer *)&self->network_details_dialog);
+  }
+  if (self->network_details_members_box != NULL) {
+    g_object_remove_weak_pointer(G_OBJECT(self->network_details_members_box),
+                                 (gpointer *)&self->network_details_members_box);
+  }
+  if (self->network_details_progress != NULL) {
+    g_object_remove_weak_pointer(G_OBJECT(self->network_details_progress),
+                                 (gpointer *)&self->network_details_progress);
+  }
+  self->network_details_dialog = NULL;
+  self->network_details_members_box = NULL;
+  self->network_details_progress = NULL;
+  g_clear_pointer(&self->network_details_network_id, g_free);
+}
+
+static void
+refresh_network_details_dialog(PumpkinWindow *self)
+{
+  if (self == NULL) {
+    return;
+  }
+  if (self->network_details_dialog == NULL) {
+    clear_network_details_dialog_tracking(self);
+    return;
+  }
+  if (self->network_details_members_box == NULL ||
+      self->network_details_network_id == NULL || *self->network_details_network_id == '\0') {
+    return;
+  }
+
+  ServerNetwork *network = find_network_by_id(self, self->network_details_network_id);
+  if (network == NULL) {
+    clear_network_details_dialog_tracking(self);
+    return;
+  }
+
+  GtkWidget *btn_update = g_object_get_data(G_OBJECT(self->network_details_dialog), "network-btn-update");
+  if (btn_update != NULL) {
+    gtk_widget_set_sensitive(btn_update, network_update_actionable_count(self, network) > 0);
+  }
+
+  clear_box_children(self->network_details_members_box);
+  if (network->member_server_ids == NULL || network->member_server_ids->len == 0) {
+    GtkWidget *empty = gtk_label_new("No servers assigned yet.");
+    gtk_widget_add_css_class(empty, "dim-label");
+    gtk_label_set_xalign(GTK_LABEL(empty), 0.0);
+    gtk_box_append(self->network_details_members_box, empty);
+    update_network_details_progress(self, network);
+    return;
+  }
+
+  for (guint m = 0; m < network->member_server_ids->len; m++) {
+    const char *member_id = g_ptr_array_index(network->member_server_ids, m);
+    if (member_id == NULL || *member_id == '\0') {
+      continue;
+    }
+    g_autoptr(PumpkinServer) member = find_server_by_id(self, member_id);
+    if (member == NULL) {
+      GtkWidget *missing = gtk_label_new(member_id);
+      gtk_widget_add_css_class(missing, "dim-label");
+      gtk_label_set_xalign(GTK_LABEL(missing), 0.0);
+      gtk_box_append(self->network_details_members_box, missing);
+      continue;
+    }
+    GtkWidget *member_card = create_overview_server_card(self, member, network->id, self->network_details_dialog);
+    if (member_card != NULL) {
+      if (g_strcmp0(member_id, network->proxy_server_id) == 0) {
+        gtk_widget_set_tooltip_text(member_card, "Proxy server");
+      }
+      gtk_box_append(self->network_details_members_box, member_card);
+    }
+  }
+
+  update_network_details_progress(self, network);
+}
+
+static gboolean
+start_server_from_network(PumpkinWindow *self, PumpkinServer *server)
+{
+  if (self == NULL || server == NULL) {
+    return FALSE;
+  }
+  ensure_server_log_handler(self, server);
+  if (server_is_running_ui(self, server)) {
+    return FALSE;
+  }
+  if (!server_has_installation(self, server)) {
+    append_log_for_server(self, server, "[SMPK] Cannot start: Pumpkin is not installed.");
+    return FALSE;
+  }
+  DownloadProgressState *state = get_download_progress_state(self, server, FALSE);
+  if (state != NULL && state->active) {
+    /* Treat stale "updating" flags as non-blocking for manual network starts. */
+    state->active = FALSE;
+  }
+
+  g_autoptr(GError) error = NULL;
+  if (!pumpkin_server_start(server, &error)) {
+    if (error != NULL) {
+      append_log_for_server(self, server, error->message);
+    }
+    return FALSE;
+  }
+
+  append_log_for_server(self, server, "[SMPK] Started by network action.");
+  set_server_running_hint(self, server, TRUE);
+  if (self->current == server) {
+    self->ui_state = UI_STATE_RUNNING;
+  }
+  return TRUE;
+}
+
+static void
+on_overview_network_start_all_clicked(GtkButton *button, gpointer user_data)
+{
+  PumpkinWindow *self = PUMPKIN_WINDOW(user_data);
+  ServerNetwork *network = network_for_button(self, button);
+  if (network == NULL || network->member_server_ids->len == 0) {
+    return;
+  }
+  GListModel *model = get_server_model(self);
+  if (model == NULL) {
+    return;
+  }
+  self->suppress_warning_beep_until = g_get_monotonic_time() + (15 * G_USEC_PER_SEC);
+  apply_network_auto_ports(self, network);
+
+  guint started = 0;
+  PumpkinServer *proxy_server = NULL;
+  if (network->proxy_server_id != NULL && *network->proxy_server_id != '\0') {
+    proxy_server = find_server_by_id(self, network->proxy_server_id);
+    if (proxy_server != NULL && start_server_from_network(self, proxy_server)) {
+      started++;
+    }
+  }
+
+  guint n = g_list_model_get_n_items(model);
   for (guint i = 0; i < n; i++) {
-    PumpkinServer *server = g_list_model_get_item(pumpkin_server_store_get_model(self->store), i);
+    g_autoptr(PumpkinServer) server = g_list_model_get_item(model, i);
+    if (server == NULL || !network_includes_server(network, server)) {
+      continue;
+    }
+    if (proxy_server != NULL && server == proxy_server) {
+      continue;
+    }
+    if (start_server_from_network(self, server)) {
+      started++;
+    }
+  }
+  if (proxy_server != NULL) {
+    g_object_unref(proxy_server);
+  }
 
-    g_autofree char *version = get_server_version(self, server);
-    g_autofree char *size = get_server_size(server);
-    int players = get_overview_player_count(self, server);
-    gboolean installed = g_strcmp0(version, "Not installed") != 0;
-    gboolean update_available = is_update_available_for_server(self, server, installed);
+  if (started == 0) {
+    set_details_status(self, "No additional servers could be started.", 3);
+  } else {
+    g_autofree char *msg = g_strdup_printf("Started %u network server(s).", started);
+    set_details_status(self, msg, 3);
+  }
+  queue_overview_refresh(self, TRUE);
+}
+
+static void
+on_overview_network_stop_all_clicked(GtkButton *button, gpointer user_data)
+{
+  PumpkinWindow *self = PUMPKIN_WINDOW(user_data);
+  ServerNetwork *network = network_for_button(self, button);
+  if (network == NULL || network->member_server_ids->len == 0) {
+    return;
+  }
+  GListModel *model = get_server_model(self);
+  if (model == NULL) {
+    return;
+  }
+
+  guint stopped = 0;
+  PumpkinServer *proxy_server = NULL;
+  if (network->proxy_server_id != NULL && *network->proxy_server_id != '\0') {
+    proxy_server = find_server_by_id(self, network->proxy_server_id);
+  }
+
+  guint n = g_list_model_get_n_items(model);
+  for (guint i = 0; i < n; i++) {
+    g_autoptr(PumpkinServer) server = g_list_model_get_item(model, i);
+    if (server == NULL || !network_includes_server(network, server)) {
+      continue;
+    }
+    if (proxy_server != NULL && server == proxy_server) {
+      continue;
+    }
+    if (server_is_running_ui(self, server)) {
+      if (server == self->current) {
+        self->user_stop_requested = TRUE;
+      }
+      if (pumpkin_server_get_running(server)) {
+        pumpkin_server_stop(server);
+      }
+      set_server_running_hint(self, server, FALSE);
+      stopped++;
+    }
+  }
+
+  if (proxy_server != NULL) {
+    if (server_is_running_ui(self, proxy_server)) {
+      if (proxy_server == self->current) {
+        self->user_stop_requested = TRUE;
+      }
+      if (pumpkin_server_get_running(proxy_server)) {
+        pumpkin_server_stop(proxy_server);
+      }
+      set_server_running_hint(self, proxy_server, FALSE);
+      stopped++;
+    }
+    g_object_unref(proxy_server);
+  }
+
+  if (stopped == 0) {
+    set_details_status(self, "No running network servers to stop.", 3);
+  } else {
+    g_autofree char *msg = g_strdup_printf("Stopping %u network server(s)...", stopped);
+    set_details_status(self, msg, 3);
+  }
+  queue_overview_refresh(self, TRUE);
+}
+
+static void
+on_overview_network_update_all_clicked(GtkButton *button, gpointer user_data)
+{
+  PumpkinWindow *self = PUMPKIN_WINDOW(user_data);
+  ServerNetwork *network = network_for_button(self, button);
+  if (network == NULL || network->member_server_ids->len == 0) {
+    return;
+  }
+  GListModel *model = get_server_model(self);
+  if (model == NULL) {
+    return;
+  }
+  if (self->latest_url == NULL || *self->latest_url == '\0') {
+    set_details_status(self, "Latest build not resolved yet. Try again in a moment.", 4);
+    trigger_latest_resolve(self);
+    return;
+  }
+
+  guint queued = 0;
+  guint n = g_list_model_get_n_items(model);
+  for (guint i = 0; i < n; i++) {
+    g_autoptr(PumpkinServer) server = g_list_model_get_item(model, i);
+    if (server == NULL || !network_includes_server(network, server)) {
+      continue;
+    }
+    if (pumpkin_server_get_running(server) || server_download_active(self, server)) {
+      continue;
+    }
+    if (!server_has_installation(self, server)) {
+      continue;
+    }
+    if (!is_update_available_for_server(self, server, TRUE)) {
+      continue;
+    }
+    start_download_for_server(self, server, self->latest_url, FALSE, FALSE);
+    queued++;
+  }
+
+  if (queued == 0) {
+    set_details_status(self, "No updates started for this network.", 3);
+  } else {
+    g_autofree char *msg = g_strdup_printf("Updating %u network server(s)...", queued);
+    set_details_status(self, msg, 3);
+  }
+  refresh_overview_list(self);
+  update_details(self);
+}
+
+static void
+on_overview_network_install_all_clicked(GtkButton *button, gpointer user_data)
+{
+  PumpkinWindow *self = PUMPKIN_WINDOW(user_data);
+  ServerNetwork *network = network_for_button(self, button);
+  if (network == NULL || network->member_server_ids == NULL || network->member_server_ids->len == 0) {
+    return;
+  }
+  GListModel *model = get_server_model(self);
+  if (model == NULL) {
+    return;
+  }
+
+  guint queued = 0;
+  guint missing = 0;
+  guint missing_url = 0;
+  guint n = g_list_model_get_n_items(model);
+  for (guint i = 0; i < n; i++) {
+    g_autoptr(PumpkinServer) server = g_list_model_get_item(model, i);
+    if (server == NULL || !network_includes_server(network, server) ||
+        server_has_installation(self, server) || server_download_active(self, server)) {
+      continue;
+    }
+
+    missing++;
+    const char *url = self->latest_url;
+    if (url == NULL || *url == '\0') {
+      url = pumpkin_server_get_download_url(server);
+    }
+    if (url == NULL || *url == '\0') {
+      missing_url++;
+      continue;
+    }
+    start_download_for_server(self, server, url, FALSE, FALSE);
+    queued++;
+  }
+
+  if (queued > 0) {
+    g_autofree char *msg = g_strdup_printf("Installing Pumpkin on %u network server(s)...", queued);
+    set_details_status(self, msg, 4);
+  } else if (missing == 0) {
+    set_details_status(self, "All network servers already have Pumpkin installed.", 4);
+  } else if (missing_url > 0) {
+    set_details_status(self, "Install-all needs a download URL for some servers.", 4);
+  } else {
+    set_details_status(self, "No installs started.", 3);
+  }
+  refresh_overview_list(self);
+  update_details(self);
+}
+
+static void
+on_overview_network_details_clicked(GtkButton *button, gpointer user_data)
+{
+  PumpkinWindow *self = PUMPKIN_WINDOW(user_data);
+  ServerNetwork *network = network_for_button(self, button);
+  if (self == NULL || network == NULL) {
+    return;
+  }
+
+  g_autofree char *proxy_name = NULL;
+  if (network->proxy_server_id != NULL && *network->proxy_server_id != '\0') {
+    g_autoptr(PumpkinServer) proxy = find_server_by_id(self, network->proxy_server_id);
+    proxy_name = g_strdup(proxy != NULL ? pumpkin_server_get_name(proxy) : network->proxy_server_id);
+  } else {
+    proxy_name = g_strdup("Not set");
+  }
+
+  guint running = network_running_count(self, network);
+  guint players_total = network_total_players(self, network);
+  g_autofree char *body = g_strdup_printf("Servers: %u · Running: %u · Players: %u · Proxy: %s",
+                                          network->member_server_ids != NULL ? network->member_server_ids->len : 0,
+                                          running,
+                                          players_total,
+                                          proxy_name);
+
+  AdwDialog *dialog = adw_alert_dialog_new(network->name != NULL ? network->name : "Network", body);
+  AdwAlertDialog *alert = ADW_ALERT_DIALOG(dialog);
+  adw_alert_dialog_add_response(alert, "close", "Close");
+  adw_alert_dialog_set_default_response(alert, "close");
+  adw_alert_dialog_set_close_response(alert, "close");
+
+  GtkWidget *content = gtk_box_new(GTK_ORIENTATION_VERTICAL, 8);
+  gtk_widget_set_margin_top(content, 8);
+  gtk_widget_set_margin_bottom(content, 8);
+  gtk_widget_set_margin_start(content, 8);
+  gtk_widget_set_margin_end(content, 8);
+
+  GtkWidget *actions = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
+  GtkWidget *btn_update = gtk_button_new_with_label("Update all");
+  GtkWidget *btn_set_proxy = gtk_button_new_with_label("Set proxy");
+  GtkWidget *btn_clear_proxy = gtk_button_new_with_label("Clear proxy");
+  gtk_widget_add_css_class(btn_update, "card-button");
+  gtk_widget_add_css_class(btn_set_proxy, "card-button");
+  gtk_widget_add_css_class(btn_clear_proxy, "card-button");
+  g_object_set_data_full(G_OBJECT(btn_update), "network-id", g_strdup(network->id), g_free);
+  g_object_set_data_full(G_OBJECT(btn_set_proxy), "network-id", g_strdup(network->id), g_free);
+  g_object_set_data_full(G_OBJECT(btn_clear_proxy), "network-id", g_strdup(network->id), g_free);
+  g_object_set_data(G_OBJECT(btn_update), "network-dialog", dialog);
+  g_object_set_data(G_OBJECT(btn_set_proxy), "network-dialog", dialog);
+  g_object_set_data(G_OBJECT(btn_clear_proxy), "network-dialog", dialog);
+  g_object_set_data(G_OBJECT(dialog), "network-btn-update", btn_update);
+  g_signal_connect(btn_update, "clicked", G_CALLBACK(on_overview_network_update_all_clicked), self);
+  g_signal_connect(btn_set_proxy, "clicked", G_CALLBACK(on_overview_network_set_proxy_clicked), self);
+  g_signal_connect(btn_clear_proxy, "clicked", G_CALLBACK(on_overview_network_clear_proxy_clicked), self);
+  gtk_widget_set_sensitive(btn_update, network_update_actionable_count(self, network) > 0);
+  gtk_widget_set_sensitive(btn_set_proxy, network->member_server_ids->len > 0);
+  gtk_widget_set_sensitive(btn_clear_proxy, network->proxy_server_id != NULL && *network->proxy_server_id != '\0');
+  gtk_box_append(GTK_BOX(actions), btn_update);
+  gtk_box_append(GTK_BOX(actions), btn_set_proxy);
+  gtk_box_append(GTK_BOX(actions), btn_clear_proxy);
+  gtk_box_append(GTK_BOX(content), actions);
+
+  GtkWidget *shared_progress = gtk_progress_bar_new();
+  gtk_widget_set_visible(shared_progress, FALSE);
+  gtk_progress_bar_set_show_text(GTK_PROGRESS_BAR(shared_progress), TRUE);
+  gtk_box_append(GTK_BOX(content), shared_progress);
+
+  GtkWidget *members_scroller = gtk_scrolled_window_new();
+  gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(members_scroller), GTK_POLICY_NEVER, GTK_POLICY_AUTOMATIC);
+  gtk_widget_set_size_request(members_scroller, -1, 360);
+
+  GtkWidget *members_box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 8);
+  gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(members_scroller), members_box);
+  gtk_box_append(GTK_BOX(content), members_scroller);
+
+  clear_network_details_dialog_tracking(self);
+  self->network_details_dialog = dialog;
+  self->network_details_members_box = GTK_BOX(members_box);
+  self->network_details_progress = GTK_PROGRESS_BAR(shared_progress);
+  self->network_details_network_id = g_strdup(network->id);
+  g_object_add_weak_pointer(G_OBJECT(dialog), (gpointer *)&self->network_details_dialog);
+  g_object_add_weak_pointer(G_OBJECT(members_box), (gpointer *)&self->network_details_members_box);
+  g_object_add_weak_pointer(G_OBJECT(shared_progress), (gpointer *)&self->network_details_progress);
+  refresh_network_details_dialog(self);
+
+  adw_alert_dialog_set_extra_child(alert, content);
+  adw_dialog_present(dialog, GTK_WIDGET(self));
+}
+
+static void
+on_overview_network_add_current_clicked(GtkButton *button, gpointer user_data)
+{
+  PumpkinWindow *self = PUMPKIN_WINDOW(user_data);
+  ServerNetwork *network = network_for_button(self, button);
+  if (self == NULL || network == NULL || self->store == NULL) {
+    return;
+  }
+
+  GListModel *model = get_server_model(self);
+  if (model == NULL) {
+    return;
+  }
+
+  GtkWidget *list = gtk_list_box_new();
+  gtk_list_box_set_selection_mode(GTK_LIST_BOX(list), GTK_SELECTION_NONE);
+  gtk_widget_add_css_class(list, "boxed-list");
+
+  guint available = 0;
+  guint n = g_list_model_get_n_items(model);
+  for (guint i = 0; i < n; i++) {
+    PumpkinServer *server = g_list_model_get_item(model, i);
+    if (server == NULL) {
+      continue;
+    }
+    const char *server_id = pumpkin_server_get_id(server);
+    const char *server_name = pumpkin_server_get_name(server);
+    if (server_id == NULL || *server_id == '\0' ||
+        network_has_member(network, server_id) ||
+        server_in_any_network(self, server_id)) {
+      g_object_unref(server);
+      continue;
+    }
 
     GtkWidget *row = gtk_list_box_row_new();
-    GtkWidget *card = gtk_frame_new(NULL);
-    gtk_widget_add_css_class(card, "card");
-    gtk_widget_add_css_class(card, "overview-card");
+    GtkWidget *row_box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
+    GtkWidget *name_label = gtk_label_new(server_name != NULL ? server_name : server_id);
+    GtkWidget *btn_add = gtk_button_new_with_label("Add");
+    gtk_label_set_xalign(GTK_LABEL(name_label), 0.0);
+    gtk_widget_set_hexpand(name_label, TRUE);
+    gtk_widget_add_css_class(btn_add, "card-button");
+    g_object_set_data_full(G_OBJECT(btn_add), "network-id", g_strdup(network->id), g_free);
+    g_object_set_data_full(G_OBJECT(btn_add), "server-id", g_strdup(server_id), g_free);
+    g_object_set_data(G_OBJECT(btn_add), "network-add-row", row);
+    g_signal_connect(btn_add, "clicked", G_CALLBACK(on_overview_network_add_server_clicked), self);
+    gtk_box_append(GTK_BOX(row_box), name_label);
+    gtk_box_append(GTK_BOX(row_box), btn_add);
+    gtk_widget_set_margin_top(row_box, 8);
+    gtk_widget_set_margin_bottom(row_box, 8);
+    gtk_widget_set_margin_start(row_box, 8);
+    gtk_widget_set_margin_end(row_box, 8);
+    gtk_list_box_row_set_child(GTK_LIST_BOX_ROW(row), row_box);
+    gtk_list_box_append(GTK_LIST_BOX(list), row);
+    available++;
+    g_object_unref(server);
+  }
 
-    GtkWidget *box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 16);
-    gtk_widget_set_margin_top(box, 10);
-    gtk_widget_set_margin_bottom(box, 10);
-    gtk_widget_set_margin_start(box, 10);
-    gtk_widget_set_margin_end(box, 10);
+  if (available == 0) {
+    set_details_status(self, "No available servers to add.", 3);
+    return;
+  }
 
-    GtkWidget *icon = create_server_icon_widget(server);
-    GtkWidget *vbox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 4);
-    GtkWidget *title = gtk_label_new(pumpkin_server_get_name(server));
-    gtk_label_set_xalign(GTK_LABEL(title), 0.0);
-    gtk_widget_add_css_class(title, "title-4");
+  GtkWidget *scroller = gtk_scrolled_window_new();
+  gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scroller), GTK_POLICY_NEVER, GTK_POLICY_AUTOMATIC);
+  gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(scroller), list);
+  gtk_widget_set_size_request(scroller, 560, 420);
 
-    g_autofree char *subtitle = g_strdup_printf("Version: %s · Players: %d · Size: %s",
-                                                 version,
-                                                 players,
-                                                 size);
-    GtkWidget *sub = gtk_label_new(subtitle);
-    gtk_label_set_xalign(GTK_LABEL(sub), 0.0);
+  AdwDialog *dialog = adw_alert_dialog_new("Add Servers", "Add servers with one click.");
+  AdwAlertDialog *alert = ADW_ALERT_DIALOG(dialog);
+  adw_alert_dialog_add_response(alert, "close", "Close");
+  adw_alert_dialog_set_default_response(alert, "close");
+  adw_alert_dialog_set_close_response(alert, "close");
+  adw_alert_dialog_set_extra_child(alert, scroller);
+  adw_dialog_present(dialog, GTK_WIDGET(self));
+}
 
-    gtk_box_append(GTK_BOX(vbox), title);
-    gtk_box_append(GTK_BOX(vbox), sub);
-    gtk_widget_set_hexpand(vbox, TRUE);
+static void
+on_overview_network_add_server_clicked(GtkButton *button, gpointer user_data)
+{
+  PumpkinWindow *self = PUMPKIN_WINDOW(user_data);
+  if (self == NULL || button == NULL) {
+    return;
+  }
 
-    DownloadProgressState *state = get_download_progress_state(self, server, FALSE);
-    gboolean download_active = (state != NULL && state->active);
-    if (state != NULL && state->active) {
-      GtkWidget *bar = gtk_progress_bar_new();
-      gtk_progress_bar_set_show_text(GTK_PROGRESS_BAR(bar), TRUE);
-      update_progress_bar(bar, state->current, state->total);
-      gtk_widget_set_hexpand(bar, TRUE);
-      gtk_box_append(GTK_BOX(vbox), bar);
-      state->overview_bar = bar;
-      g_object_add_weak_pointer(G_OBJECT(bar), (gpointer *)&state->overview_bar);
+  const char *network_id = g_object_get_data(G_OBJECT(button), "network-id");
+  const char *server_id = g_object_get_data(G_OBJECT(button), "server-id");
+  if (network_id == NULL || *network_id == '\0' || server_id == NULL || *server_id == '\0') {
+    return;
+  }
+
+  ServerNetwork *network = find_network_by_id(self, network_id);
+  if (network == NULL) {
+    return;
+  }
+
+  if (!network_has_member(network, server_id) && server_in_any_network(self, server_id)) {
+    set_details_status(self, "Server is already assigned to a different network.", 3);
+    gtk_widget_set_sensitive(GTK_WIDGET(button), FALSE);
+    gtk_button_set_label(button, "Assigned");
+    return;
+  }
+
+  if (network_has_member(network, server_id)) {
+    gtk_widget_set_sensitive(GTK_WIDGET(button), FALSE);
+    gtk_button_set_label(button, "Added");
+    return;
+  }
+
+  network_add_member(network, server_id);
+  apply_network_auto_ports(self, network);
+  networks_save(self);
+  refresh_overview_list(self);
+  update_details(self);
+  GtkWidget *row = g_object_get_data(G_OBJECT(button), "network-add-row");
+  if (row != NULL) {
+    gtk_widget_set_visible(row, FALSE);
+  }
+  g_autofree char *msg = g_strdup_printf("%s added to network.", server_id);
+  set_details_status(self, msg, 3);
+}
+
+static void
+on_overview_network_remove_member_clicked(GtkButton *button, gpointer user_data)
+{
+  PumpkinWindow *self = PUMPKIN_WINDOW(user_data);
+  if (self == NULL) {
+    return;
+  }
+  const char *network_id = g_object_get_data(G_OBJECT(button), "network-id");
+  const char *server_id = g_object_get_data(G_OBJECT(button), "server-id");
+  if (network_id == NULL || *network_id == '\0' || server_id == NULL || *server_id == '\0') {
+    return;
+  }
+
+  ServerNetwork *network = find_network_by_id(self, network_id);
+  if (network == NULL || !network_has_member(network, server_id)) {
+    return;
+  }
+
+  network_remove_member(network, server_id);
+  if (g_strcmp0(network->proxy_server_id, server_id) == 0) {
+    g_clear_pointer(&network->proxy_server_id, g_free);
+  }
+  apply_network_auto_ports(self, network);
+  networks_save(self);
+  refresh_overview_list(self);
+  update_details(self);
+  GtkWidget *member_card = g_object_get_data(G_OBJECT(button), "network-member-card");
+  if (member_card != NULL) {
+    gtk_widget_set_visible(member_card, FALSE);
+  }
+  set_details_status(self, "Server removed from network.", 2);
+}
+
+static void
+on_overview_network_set_proxy_confirmed(GObject *dialog, GAsyncResult *res, gpointer user_data)
+{
+  PumpkinWindow *self = PUMPKIN_WINDOW(user_data);
+  const char *response = adw_alert_dialog_choose_finish(ADW_ALERT_DIALOG(dialog), res);
+  if (g_strcmp0(response, "set") != 0) {
+    return;
+  }
+
+  NetworkProxyDialogContext *ctx = g_object_get_data(G_OBJECT(dialog), "network-proxy-dialog-context");
+  if (self == NULL || ctx == NULL || ctx->network_id == NULL || *ctx->network_id == '\0' ||
+      ctx->choices == NULL) {
+    return;
+  }
+
+  const char *server_id = NULL;
+  for (guint i = 0; i < ctx->choices->len; i++) {
+    NetworkServerChoice *choice = g_ptr_array_index(ctx->choices, i);
+    if (choice != NULL && choice->check != NULL && gtk_check_button_get_active(choice->check)) {
+      server_id = choice->server_id;
+      break;
     }
+  }
+  if (server_id == NULL || *server_id == '\0') {
+    return;
+  }
 
-    GtkWidget *btn_box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
+  ServerNetwork *network = find_network_by_id(self, ctx->network_id);
+  if (network == NULL) {
+    return;
+  }
 
-    if (update_available) {
-      GtkWidget *btn_update = gtk_button_new_with_label("Update");
-      gtk_widget_add_css_class(btn_update, "card-button");
-      gtk_widget_add_css_class(btn_update, "update-button");
-      g_object_set_data_full(G_OBJECT(btn_update), "server", g_object_ref(server), g_object_unref);
-      g_signal_connect(btn_update, "clicked", G_CALLBACK(on_overview_update_clicked), self);
-      gtk_widget_set_sensitive(btn_update, !download_active);
-      if (download_active) {
-        gtk_button_set_label(GTK_BUTTON(btn_update), "Updating...");
+  g_free(network->proxy_server_id);
+  network->proxy_server_id = g_strdup(server_id);
+  network_add_member(network, server_id);
+  apply_network_auto_ports(self, network);
+  networks_save(self);
+  refresh_overview_list(self);
+  update_details(self);
+  if (ctx->owner_dialog != NULL) {
+    adw_dialog_close(ctx->owner_dialog);
+  }
+  set_details_status(self, "Proxy server updated.", 2);
+}
+
+static void
+on_overview_network_clear_proxy_clicked(GtkButton *button, gpointer user_data)
+{
+  PumpkinWindow *self = PUMPKIN_WINDOW(user_data);
+  ServerNetwork *network = network_for_button(self, button);
+  if (self == NULL || network == NULL || network->proxy_server_id == NULL || *network->proxy_server_id == '\0') {
+    return;
+  }
+  g_clear_pointer(&network->proxy_server_id, g_free);
+  apply_network_auto_ports(self, network);
+  networks_save(self);
+  refresh_overview_list(self);
+  update_details(self);
+  close_network_dialog_for_button(button);
+  set_details_status(self, "Proxy cleared.", 2);
+}
+
+static void
+on_overview_network_set_proxy_clicked(GtkButton *button, gpointer user_data)
+{
+  PumpkinWindow *self = PUMPKIN_WINDOW(user_data);
+  ServerNetwork *network = network_for_button(self, button);
+  if (self == NULL || network == NULL || network->member_server_ids == NULL || network->member_server_ids->len == 0) {
+    return;
+  }
+
+  NetworkProxyDialogContext *ctx = g_new0(NetworkProxyDialogContext, 1);
+  ctx->network_id = g_strdup(network->id);
+  ctx->choices = g_ptr_array_new_with_free_func((GDestroyNotify)network_server_choice_free);
+  ctx->owner_dialog = g_object_get_data(G_OBJECT(button), "network-dialog");
+  GtkCheckButton *group_head = NULL;
+  GtkCheckButton *first_check = NULL;
+  gboolean has_selected = FALSE;
+
+  GtkWidget *list = gtk_list_box_new();
+  gtk_list_box_set_selection_mode(GTK_LIST_BOX(list), GTK_SELECTION_NONE);
+  gtk_widget_add_css_class(list, "boxed-list");
+
+  for (guint i = 0; i < network->member_server_ids->len; i++) {
+    const char *member_id = g_ptr_array_index(network->member_server_ids, i);
+    if (member_id == NULL || *member_id == '\0') {
+      continue;
+    }
+    g_autoptr(PumpkinServer) member = find_server_by_id(self, member_id);
+    const char *member_name = (member != NULL) ? pumpkin_server_get_name(member) : member_id;
+
+    GtkWidget *row = gtk_list_box_row_new();
+    GtkWidget *check = gtk_check_button_new_with_label(member_name);
+    if (group_head == NULL) {
+      group_head = GTK_CHECK_BUTTON(check);
+    } else {
+      gtk_check_button_set_group(GTK_CHECK_BUTTON(check), group_head);
+    }
+    if (first_check == NULL) {
+      first_check = GTK_CHECK_BUTTON(check);
+    }
+    if (g_strcmp0(network->proxy_server_id, member_id) == 0) {
+      gtk_check_button_set_active(GTK_CHECK_BUTTON(check), TRUE);
+      has_selected = TRUE;
+    }
+    gtk_widget_set_margin_top(check, 8);
+    gtk_widget_set_margin_bottom(check, 8);
+    gtk_widget_set_margin_start(check, 8);
+    gtk_widget_set_margin_end(check, 8);
+    gtk_list_box_row_set_child(GTK_LIST_BOX_ROW(row), check);
+    gtk_list_box_append(GTK_LIST_BOX(list), row);
+
+    NetworkServerChoice *choice = g_new0(NetworkServerChoice, 1);
+    choice->server_id = g_strdup(member_id);
+    choice->check = GTK_CHECK_BUTTON(check);
+    g_ptr_array_add(ctx->choices, choice);
+  }
+
+  if (ctx->choices->len == 0) {
+    network_proxy_dialog_context_free(ctx);
+    return;
+  }
+  if (!has_selected && first_check != NULL) {
+    gtk_check_button_set_active(first_check, TRUE);
+  }
+
+  GtkWidget *scroller = gtk_scrolled_window_new();
+  gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scroller), GTK_POLICY_NEVER, GTK_POLICY_AUTOMATIC);
+  gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(scroller), list);
+  gtk_widget_set_size_request(scroller, -1, 220);
+
+  AdwDialog *dialog = adw_alert_dialog_new("Set Proxy", "Choose the proxy server for this network.");
+  AdwAlertDialog *alert = ADW_ALERT_DIALOG(dialog);
+  adw_alert_dialog_add_response(alert, "cancel", "Cancel");
+  adw_alert_dialog_add_response(alert, "set", "Set");
+  adw_alert_dialog_set_default_response(alert, "set");
+  adw_alert_dialog_set_close_response(alert, "cancel");
+  adw_alert_dialog_set_extra_child(alert, scroller);
+  g_object_set_data_full(G_OBJECT(dialog),
+                         "network-proxy-dialog-context",
+                         ctx,
+                         (GDestroyNotify)network_proxy_dialog_context_free);
+  adw_alert_dialog_choose(alert, GTK_WIDGET(self), NULL, on_overview_network_set_proxy_confirmed, self);
+}
+
+static void
+on_overview_network_delete_clicked(GtkButton *button, gpointer user_data)
+{
+  PumpkinWindow *self = PUMPKIN_WINDOW(user_data);
+  if (self == NULL || self->networks == NULL) {
+    return;
+  }
+  const char *network_id = g_object_get_data(G_OBJECT(button), "network-id");
+  if (network_id == NULL || *network_id == '\0') {
+    return;
+  }
+  for (guint i = 0; i < self->networks->len; i++) {
+    ServerNetwork *network = g_ptr_array_index(self->networks, i);
+    if (network != NULL && g_strcmp0(network->id, network_id) == 0) {
+      g_ptr_array_remove_index(self->networks, i);
+      networks_save(self);
+      refresh_overview_list(self);
+      update_details(self);
+      return;
+    }
+  }
+}
+
+static void
+on_add_network_overview(GtkButton *button, PumpkinWindow *self)
+{
+  (void)button;
+  AdwDialog *dialog = adw_alert_dialog_new("Add Network", "Create a folder-like group for multiple servers.");
+  AdwAlertDialog *alert = ADW_ALERT_DIALOG(dialog);
+  adw_alert_dialog_add_response(alert, "cancel", "Cancel");
+  adw_alert_dialog_add_response(alert, "create", "Create");
+  adw_alert_dialog_set_default_response(alert, "create");
+  adw_alert_dialog_set_close_response(alert, "cancel");
+
+  GtkWidget *entry = gtk_entry_new();
+  gtk_entry_set_placeholder_text(GTK_ENTRY(entry), "Network name");
+  adw_alert_dialog_set_extra_child(alert, entry);
+  adw_dialog_set_focus(ADW_DIALOG(dialog), entry);
+  g_object_set_data(G_OBJECT(dialog), "name-entry", entry);
+  adw_alert_dialog_choose(alert, GTK_WIDGET(self), NULL, on_add_network_confirmed, self);
+}
+
+static void
+on_add_network_confirmed(GObject *dialog, GAsyncResult *res, gpointer user_data)
+{
+  PumpkinWindow *self = PUMPKIN_WINDOW(user_data);
+  const char *response = adw_alert_dialog_choose_finish(ADW_ALERT_DIALOG(dialog), res);
+  if (response == NULL || g_strcmp0(response, "create") != 0) {
+    return;
+  }
+
+  GtkWidget *entry = g_object_get_data(G_OBJECT(dialog), "name-entry");
+  const char *raw_name = entry != NULL ? gtk_editable_get_text(GTK_EDITABLE(entry)) : NULL;
+  g_autofree char *name = g_strdup(raw_name != NULL ? raw_name : "");
+  g_strstrip(name);
+  if (name[0] == '\0') {
+    set_details_status(self, "Network name cannot be empty", 3);
+    return;
+  }
+
+  g_autofree char *base_id = sanitize_network_id(name);
+  g_autofree char *network_id = g_strdup(base_id);
+  for (int suffix = 2; find_network_by_id(self, network_id) != NULL; suffix++) {
+    g_free(network_id);
+    network_id = g_strdup_printf("%s-%d", base_id, suffix);
+  }
+
+  if (self->networks == NULL) {
+    self->networks = g_ptr_array_new_with_free_func((GDestroyNotify)server_network_free);
+  }
+  ServerNetwork *network = server_network_new(network_id, name);
+  if (self->current != NULL) {
+    const char *server_id = pumpkin_server_get_id(self->current);
+    if (server_id != NULL && *server_id != '\0') {
+      if (self->networks != NULL) {
+        for (guint i = 0; i < self->networks->len; i++) {
+          ServerNetwork *other = g_ptr_array_index(self->networks, i);
+          if (other == NULL || !network_has_member(other, server_id)) {
+            continue;
+          }
+          network_remove_member(other, server_id);
+          if (g_strcmp0(other->proxy_server_id, server_id) == 0) {
+            g_clear_pointer(&other->proxy_server_id, g_free);
+          }
+        }
       }
-      gtk_box_append(GTK_BOX(btn_box), btn_update);
+      network_add_member(network, server_id);
     }
+  }
+  g_ptr_array_add(self->networks, network);
+  apply_network_auto_ports(self, network);
+  networks_save(self);
+  refresh_overview_list(self);
+}
 
-    GtkWidget *btn_settings = gtk_button_new_with_label("Details");
-    gtk_widget_add_css_class(btn_settings, "card-button");
-    g_object_set_data_full(G_OBJECT(btn_settings), "server", g_object_ref(server), g_object_unref);
-    g_signal_connect(btn_settings, "clicked", G_CALLBACK(on_overview_settings_clicked), self);
-    gtk_box_append(GTK_BOX(btn_box), btn_settings);
+static GtkWidget *
+create_overview_server_card(PumpkinWindow *self,
+                            PumpkinServer *server,
+                            const char *network_id,
+                            AdwDialog *network_dialog)
+{
+  if (self == NULL || server == NULL) {
+    return NULL;
+  }
 
+  g_autofree char *version = get_server_version(self, server);
+  g_autofree char *size = get_server_size(server);
+  int players = get_overview_player_count(self, server);
+  int java_port = pumpkin_server_get_port(server);
+  int bedrock_port = pumpkin_server_get_bedrock_port(server);
+  DownloadProgressState *state = get_download_progress_state(self, server, FALSE);
+  gboolean download_active = (state != NULL && state->active);
+  if (state != NULL) {
+    state->overview_bar = NULL;
+  }
+  gboolean running = server_is_running_ui(self, server);
+  gboolean installed = download_active || g_strcmp0(version, "Not installed") != 0;
+  const char *version_text =
+    (download_active && g_strcmp0(version, "Not installed") == 0) ? "Installing..." : version;
+  gboolean update_available = is_update_available_for_server(self, server, installed);
+  const char *status_text = "Stopped";
+  const char *status_css = "server-state-stopped";
+  if (download_active) {
+    status_text = "Updating";
+    status_css = "server-state-updating";
+  } else if (running) {
+    status_text = "Running";
+    status_css = "server-state-running";
+  }
+
+  GtkWidget *card = gtk_frame_new(NULL);
+  gtk_widget_add_css_class(card, "card");
+  gtk_widget_add_css_class(card, "overview-card");
+
+  GtkWidget *box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 16);
+  gtk_widget_set_margin_top(box, 10);
+  gtk_widget_set_margin_bottom(box, 10);
+  gtk_widget_set_margin_start(box, 10);
+  gtk_widget_set_margin_end(box, 10);
+
+  GtkWidget *icon = create_server_icon_widget(server);
+  GtkWidget *vbox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 4);
+  GtkWidget *title = gtk_label_new(pumpkin_server_get_name(server));
+  gtk_label_set_xalign(GTK_LABEL(title), 0.0);
+  gtk_widget_add_css_class(title, "title-4");
+
+  g_autofree char *subtitle = g_strdup_printf("Build: %s · Players: %d · Size: %s",
+                                               version_text,
+                                               players,
+                                               size);
+  GtkWidget *sub = gtk_label_new(subtitle);
+  gtk_label_set_xalign(GTK_LABEL(sub), 0.0);
+  gtk_widget_add_css_class(sub, "dim-label");
+
+  GtkWidget *meta_row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
+  GtkWidget *status_dot = gtk_label_new("●");
+  gtk_widget_add_css_class(status_dot, "server-state-dot");
+  gtk_widget_add_css_class(status_dot, status_css);
+  gtk_widget_set_valign(status_dot, GTK_ALIGN_CENTER);
+  GtkWidget *status_label = gtk_label_new(status_text);
+  gtk_label_set_xalign(GTK_LABEL(status_label), 0.0);
+  gtk_widget_add_css_class(status_label, "dim-label");
+  g_autofree char *ports = g_strdup_printf("Java:%d · Bedrock:%d",
+                                           java_port > 0 ? java_port : 25565,
+                                           bedrock_port > 0 ? bedrock_port : 19132);
+  GtkWidget *ports_label = gtk_label_new(ports);
+  gtk_label_set_xalign(GTK_LABEL(ports_label), 0.0);
+  gtk_widget_add_css_class(ports_label, "dim-label");
+  gtk_widget_set_hexpand(ports_label, TRUE);
+  gtk_box_append(GTK_BOX(meta_row), status_dot);
+  gtk_box_append(GTK_BOX(meta_row), status_label);
+  gtk_box_append(GTK_BOX(meta_row), ports_label);
+
+  gtk_box_append(GTK_BOX(vbox), title);
+  gtk_box_append(GTK_BOX(vbox), sub);
+  gtk_box_append(GTK_BOX(vbox), meta_row);
+  gtk_widget_set_hexpand(vbox, TRUE);
+
+  GtkWidget *btn_box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
+
+  if (update_available) {
+    GtkWidget *btn_update = gtk_button_new_with_label("Update");
+    gtk_widget_add_css_class(btn_update, "card-button");
+    gtk_widget_add_css_class(btn_update, "update-button");
+    g_object_set_data_full(G_OBJECT(btn_update), "server", g_object_ref(server), g_object_unref);
+    g_signal_connect(btn_update, "clicked", G_CALLBACK(on_overview_update_clicked), self);
+    gtk_widget_set_sensitive(btn_update, !download_active);
+    if (download_active) {
+      gtk_button_set_label(GTK_BUTTON(btn_update), "Updating...");
+    }
+    gtk_box_append(GTK_BOX(btn_box), btn_update);
+  }
+
+  GtkWidget *btn_settings = gtk_button_new_with_label("Details");
+  gtk_widget_add_css_class(btn_settings, "card-button");
+  g_object_set_data_full(G_OBJECT(btn_settings), "server", g_object_ref(server), g_object_unref);
+  if (network_dialog != NULL) {
+    g_object_set_data(G_OBJECT(btn_settings), "network-dialog", network_dialog);
+  }
+  g_signal_connect(btn_settings, "clicked", G_CALLBACK(on_overview_settings_clicked), self);
+  gtk_box_append(GTK_BOX(btn_box), btn_settings);
+
+  if (network_id == NULL || *network_id == '\0') {
     GtkWidget *btn_remove = gtk_button_new_with_label("Delete");
     gtk_widget_add_css_class(btn_remove, "card-button");
     gtk_widget_add_css_class(btn_remove, "destructive-action");
     g_object_set_data_full(G_OBJECT(btn_remove), "server", g_object_ref(server), g_object_unref);
     g_signal_connect(btn_remove, "clicked", G_CALLBACK(on_overview_remove_clicked), self);
     gtk_box_append(GTK_BOX(btn_box), btn_remove);
+  } else {
+    GtkWidget *btn_remove_member = gtk_button_new_with_label("Remove from network");
+    gtk_widget_add_css_class(btn_remove_member, "card-button");
+    gtk_widget_add_css_class(btn_remove_member, "destructive-action");
+    g_object_set_data_full(G_OBJECT(btn_remove_member), "network-id", g_strdup(network_id), g_free);
+    g_object_set_data_full(G_OBJECT(btn_remove_member),
+                           "server-id",
+                           g_strdup(pumpkin_server_get_id(server)),
+                           g_free);
+    g_object_set_data(G_OBJECT(btn_remove_member), "network-member-card", card);
+    if (network_dialog != NULL) {
+      g_object_set_data(G_OBJECT(btn_remove_member), "network-dialog", network_dialog);
+    }
+    g_signal_connect(btn_remove_member, "clicked", G_CALLBACK(on_overview_network_remove_member_clicked), self);
+    gtk_box_append(GTK_BOX(btn_box), btn_remove_member);
+  }
 
-    gtk_box_append(GTK_BOX(box), icon);
-    gtk_box_append(GTK_BOX(box), vbox);
-    gtk_box_append(GTK_BOX(box), btn_box);
+  gtk_box_append(GTK_BOX(box), icon);
+  gtk_box_append(GTK_BOX(box), vbox);
+  gtk_box_append(GTK_BOX(box), btn_box);
+  gtk_frame_set_child(GTK_FRAME(card), box);
 
-    gtk_frame_set_child(GTK_FRAME(card), box);
+  return card;
+}
+
+static void
+refresh_overview_network_list(PumpkinWindow *self)
+{
+  if (self == NULL || self->overview_network_list == NULL) {
+    return;
+  }
+
+  clear_list_box(self->overview_network_list);
+  if (self->networks == NULL || self->networks->len == 0) {
+    GtkWidget *row = gtk_list_box_row_new();
+    GtkWidget *label = gtk_label_new("No server networks yet. Create one to manage multi-server setups.");
+    gtk_widget_add_css_class(label, "dim-label");
+    gtk_label_set_xalign(GTK_LABEL(label), 0.0);
+    gtk_widget_set_margin_top(label, 6);
+    gtk_widget_set_margin_bottom(label, 6);
+    gtk_widget_set_margin_start(label, 6);
+    gtk_widget_set_margin_end(label, 6);
+    gtk_list_box_row_set_child(GTK_LIST_BOX_ROW(row), label);
+    gtk_list_box_append(self->overview_network_list, row);
+    return;
+  }
+
+  for (guint i = 0; i < self->networks->len; i++) {
+    ServerNetwork *network = g_ptr_array_index(self->networks, i);
+    if (network == NULL) {
+      continue;
+    }
+
+    g_autofree char *proxy_name = NULL;
+    if (network->proxy_server_id != NULL && *network->proxy_server_id != '\0') {
+      g_autoptr(PumpkinServer) proxy = find_server_by_id(self, network->proxy_server_id);
+      proxy_name = g_strdup(proxy != NULL ? pumpkin_server_get_name(proxy) : network->proxy_server_id);
+    } else {
+      proxy_name = g_strdup("Not set");
+    }
+
+    guint members_count = network->member_server_ids != NULL ? network->member_server_ids->len : 0;
+    guint running_count = network_running_count(self, network);
+    guint players_total = network_total_players(self, network);
+    guint missing_install = network_missing_install_count(self, network);
+    g_autofree char *subtitle = g_strdup_printf("Servers: %u · Running: %u · Players: %u · Proxy: %s",
+                                                members_count,
+                                                running_count,
+                                                players_total,
+                                                proxy_name);
+
+    GtkWidget *row = gtk_list_box_row_new();
+    GtkWidget *card = gtk_frame_new(NULL);
+    gtk_widget_add_css_class(card, "card");
+    gtk_widget_add_css_class(card, "overview-card");
+
+    GtkWidget *content = gtk_box_new(GTK_ORIENTATION_VERTICAL, 10);
+    gtk_widget_set_margin_top(content, 10);
+    gtk_widget_set_margin_bottom(content, 10);
+    gtk_widget_set_margin_start(content, 10);
+    gtk_widget_set_margin_end(content, 10);
+
+    GtkWidget *header = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 12);
+    GtkWidget *vbox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 4);
+    GtkWidget *title = gtk_label_new(network->name != NULL ? network->name : network->id);
+    GtkWidget *sub = gtk_label_new(subtitle);
+    gtk_label_set_xalign(GTK_LABEL(title), 0.0);
+    gtk_label_set_xalign(GTK_LABEL(sub), 0.0);
+    gtk_widget_add_css_class(title, "title-4");
+    gtk_widget_set_hexpand(vbox, TRUE);
+    gtk_box_append(GTK_BOX(vbox), title);
+    gtk_box_append(GTK_BOX(vbox), sub);
+
+    GtkWidget *btn_box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
+    GtkWidget *btn_start_all = gtk_button_new_with_label("Start all");
+    GtkWidget *btn_stop_all = gtk_button_new_with_label("Stop all");
+    GtkWidget *btn_add_current = gtk_button_new_with_label("Add server");
+    GtkWidget *btn_details = gtk_button_new_with_label("Details");
+    GtkWidget *btn_delete = gtk_button_new_with_label("Delete");
+    GtkWidget *btn_install = NULL;
+
+    gtk_widget_add_css_class(btn_start_all, "card-button");
+    gtk_widget_add_css_class(btn_stop_all, "card-button");
+    gtk_widget_add_css_class(btn_add_current, "card-button");
+    gtk_widget_add_css_class(btn_details, "card-button");
+    gtk_widget_add_css_class(btn_delete, "card-button");
+    gtk_widget_add_css_class(btn_delete, "destructive-action");
+    if (missing_install > 0) {
+      btn_install = gtk_button_new_with_label("Install all");
+      gtk_widget_add_css_class(btn_install, "card-button");
+    }
+
+    g_object_set_data_full(G_OBJECT(btn_start_all), "network-id", g_strdup(network->id), g_free);
+    g_object_set_data_full(G_OBJECT(btn_stop_all), "network-id", g_strdup(network->id), g_free);
+    g_object_set_data_full(G_OBJECT(btn_add_current), "network-id", g_strdup(network->id), g_free);
+    g_object_set_data_full(G_OBJECT(btn_details), "network-id", g_strdup(network->id), g_free);
+    g_object_set_data_full(G_OBJECT(btn_delete), "network-id", g_strdup(network->id), g_free);
+    if (btn_install != NULL) {
+      g_object_set_data_full(G_OBJECT(btn_install), "network-id", g_strdup(network->id), g_free);
+    }
+
+    g_signal_connect(btn_start_all, "clicked", G_CALLBACK(on_overview_network_start_all_clicked), self);
+    g_signal_connect(btn_stop_all, "clicked", G_CALLBACK(on_overview_network_stop_all_clicked), self);
+    g_signal_connect(btn_add_current, "clicked", G_CALLBACK(on_overview_network_add_current_clicked), self);
+    g_signal_connect(btn_details, "clicked", G_CALLBACK(on_overview_network_details_clicked), self);
+    g_signal_connect(btn_delete, "clicked", G_CALLBACK(on_overview_network_delete_clicked), self);
+    if (btn_install != NULL) {
+      g_signal_connect(btn_install, "clicked", G_CALLBACK(on_overview_network_install_all_clicked), self);
+    }
+
+    gboolean has_available_server = FALSE;
+    if (self->store != NULL) {
+      GListModel *model = get_server_model(self);
+      if (model != NULL) {
+        guint available_n = g_list_model_get_n_items(model);
+        for (guint s = 0; s < available_n; s++) {
+          PumpkinServer *candidate = g_list_model_get_item(model, s);
+          if (candidate == NULL) {
+            continue;
+          }
+          const char *candidate_id = pumpkin_server_get_id(candidate);
+          if (candidate_id != NULL && *candidate_id != '\0' && !server_in_any_network(self, candidate_id)) {
+            has_available_server = TRUE;
+            g_object_unref(candidate);
+            break;
+          }
+          g_object_unref(candidate);
+        }
+      }
+    }
+
+    gtk_widget_set_sensitive(btn_start_all, network_startable_count(self, network) > 0);
+    gtk_widget_set_sensitive(btn_stop_all, running_count > 0);
+    gtk_widget_set_sensitive(btn_add_current, has_available_server);
+    if (btn_install != NULL) {
+      gtk_widget_set_sensitive(btn_install, network->member_server_ids->len > 0);
+    }
+
+    gtk_box_append(GTK_BOX(btn_box), btn_start_all);
+    gtk_box_append(GTK_BOX(btn_box), btn_stop_all);
+    if (btn_install != NULL) {
+      gtk_box_append(GTK_BOX(btn_box), btn_install);
+    }
+    gtk_box_append(GTK_BOX(btn_box), btn_add_current);
+    gtk_box_append(GTK_BOX(btn_box), btn_details);
+    gtk_box_append(GTK_BOX(btn_box), btn_delete);
+
+    gtk_box_append(GTK_BOX(header), vbox);
+    gtk_box_append(GTK_BOX(header), btn_box);
+    gtk_box_append(GTK_BOX(content), header);
+
+    GtkWidget *hint = gtk_label_new("Use Details for server list, proxy, updates and per-server actions.");
+    gtk_widget_add_css_class(hint, "dim-label");
+    gtk_label_set_xalign(GTK_LABEL(hint), 0.0);
+    gtk_box_append(GTK_BOX(content), hint);
+
+    gtk_frame_set_child(GTK_FRAME(card), content);
+    gtk_list_box_row_set_child(GTK_LIST_BOX_ROW(row), card);
+    gtk_list_box_append(self->overview_network_list, row);
+  }
+}
+
+static void
+refresh_overview_list(PumpkinWindow *self)
+{
+  if (self->overview_list == NULL) {
+    return;
+  }
+
+  clear_download_overview_bars(self);
+  refresh_overview_network_list(self);
+
+  clear_list_box(self->overview_list);
+
+  GListModel *model = get_server_model(self);
+  if (model == NULL) {
+    return;
+  }
+  guint n = g_list_model_get_n_items(model);
+  guint shown = 0;
+  for (guint i = 0; i < n; i++) {
+    PumpkinServer *server = g_list_model_get_item(model, i);
+    const char *server_id = pumpkin_server_get_id(server);
+    if (server_in_any_network(self, server_id)) {
+      g_object_unref(server);
+      continue;
+    }
+
+    GtkWidget *row = gtk_list_box_row_new();
+    GtkWidget *card = create_overview_server_card(self, server, NULL, NULL);
     gtk_list_box_row_set_child(GTK_LIST_BOX_ROW(row), card);
     g_object_set_data_full(G_OBJECT(row), "server", g_object_ref(server), g_object_unref);
     gtk_list_box_append(self->overview_list, row);
-
+    shown++;
     g_object_unref(server);
   }
+
+  if (shown == 0) {
+    GtkWidget *row = gtk_list_box_row_new();
+    GtkWidget *label = gtk_label_new("No standalone servers. Add a server or remove one from a network.");
+    gtk_widget_add_css_class(label, "dim-label");
+    gtk_label_set_xalign(GTK_LABEL(label), 0.0);
+    gtk_widget_set_margin_top(label, 6);
+    gtk_widget_set_margin_bottom(label, 6);
+    gtk_widget_set_margin_start(label, 6);
+    gtk_widget_set_margin_end(label, 6);
+    gtk_list_box_row_set_child(GTK_LIST_BOX_ROW(row), label);
+    gtk_list_box_append(self->overview_list, row);
+  }
+
+  queue_network_details_refresh(self);
 }
 
 static gboolean
@@ -5201,6 +7221,487 @@ update_overview(PumpkinWindow *self)
   refresh_overview_list(self);
 }
 
+static ServerNetwork *
+server_network_new(const char *id, const char *name)
+{
+  ServerNetwork *network = g_new0(ServerNetwork, 1);
+  network->id = g_strdup(id != NULL ? id : "");
+  network->name = g_strdup((name != NULL && *name != '\0') ? name : network->id);
+  network->member_server_ids = g_ptr_array_new_with_free_func(g_free);
+  return network;
+}
+
+static void
+server_network_free(ServerNetwork *network)
+{
+  if (network == NULL) {
+    return;
+  }
+  g_clear_pointer(&network->id, g_free);
+  g_clear_pointer(&network->name, g_free);
+  g_clear_pointer(&network->proxy_server_id, g_free);
+  if (network->member_server_ids != NULL) {
+    g_ptr_array_unref(network->member_server_ids);
+    network->member_server_ids = NULL;
+  }
+  g_free(network);
+}
+
+static char *
+sanitize_network_id(const char *name)
+{
+  GString *out = g_string_new(NULL);
+  gboolean last_dash = FALSE;
+
+  for (const char *p = name; p != NULL && *p != '\0'; p++) {
+    gunichar ch = g_utf8_get_char(p);
+    if (g_unichar_isalnum(ch)) {
+      g_string_append_unichar(out, g_unichar_tolower(ch));
+      last_dash = FALSE;
+    } else if (!last_dash) {
+      g_string_append_c(out, '-');
+      last_dash = TRUE;
+    }
+    if ((guchar)*p >= 0x80) {
+      p = g_utf8_next_char(p) - 1;
+    }
+  }
+
+  while (out->len > 0 && out->str[out->len - 1] == '-') {
+    g_string_truncate(out, out->len - 1);
+  }
+  if (out->len == 0) {
+    g_string_assign(out, "network");
+  }
+  return g_string_free(out, FALSE);
+}
+
+static char *
+network_config_path(PumpkinWindow *self)
+{
+  if (self == NULL || self->store == NULL) {
+    return NULL;
+  }
+  const char *base = pumpkin_server_store_get_base_dir(self->store);
+  if (base == NULL || *base == '\0') {
+    return NULL;
+  }
+  return g_build_filename(base, "networks.ini", NULL);
+}
+
+static ServerNetwork *
+find_network_by_id(PumpkinWindow *self, const char *id)
+{
+  if (self == NULL || self->networks == NULL || id == NULL || *id == '\0') {
+    return NULL;
+  }
+  for (guint i = 0; i < self->networks->len; i++) {
+    ServerNetwork *network = g_ptr_array_index(self->networks, i);
+    if (network != NULL && g_strcmp0(network->id, id) == 0) {
+      return network;
+    }
+  }
+  return NULL;
+}
+
+static gboolean
+network_has_member(ServerNetwork *network, const char *server_id)
+{
+  if (network == NULL || network->member_server_ids == NULL || server_id == NULL || *server_id == '\0') {
+    return FALSE;
+  }
+  for (guint i = 0; i < network->member_server_ids->len; i++) {
+    const char *member = g_ptr_array_index(network->member_server_ids, i);
+    if (g_strcmp0(member, server_id) == 0) {
+      return TRUE;
+    }
+  }
+  return FALSE;
+}
+
+static gboolean
+network_member_token_matches_server(const char *token, PumpkinServer *server)
+{
+  if (token == NULL || *token == '\0' || server == NULL) {
+    return FALSE;
+  }
+  const char *server_id = pumpkin_server_get_id(server);
+  const char *server_name = pumpkin_server_get_name(server);
+  if ((server_id != NULL && g_strcmp0(token, server_id) == 0) ||
+      (server_name != NULL && g_strcmp0(token, server_name) == 0)) {
+    return TRUE;
+  }
+
+  g_autofree char *token_key = normalized_key(token);
+  if (token_key == NULL || *token_key == '\0') {
+    return FALSE;
+  }
+  g_autofree char *id_key = normalized_key(server_id);
+  g_autofree char *name_key = normalized_key(server_name);
+  return (id_key != NULL && g_strcmp0(token_key, id_key) == 0) ||
+         (name_key != NULL && g_strcmp0(token_key, name_key) == 0);
+}
+
+static gboolean
+network_includes_server(ServerNetwork *network, PumpkinServer *server)
+{
+  if (network == NULL || network->member_server_ids == NULL || server == NULL) {
+    return FALSE;
+  }
+  for (guint i = 0; i < network->member_server_ids->len; i++) {
+    const char *member = g_ptr_array_index(network->member_server_ids, i);
+    if (network_member_token_matches_server(member, server)) {
+      return TRUE;
+    }
+  }
+  return FALSE;
+}
+
+static gboolean
+server_in_any_network(PumpkinWindow *self, const char *server_id)
+{
+  if (self == NULL || self->networks == NULL || server_id == NULL || *server_id == '\0') {
+    return FALSE;
+  }
+  for (guint i = 0; i < self->networks->len; i++) {
+    ServerNetwork *network = g_ptr_array_index(self->networks, i);
+    if (network != NULL && network_has_member(network, server_id)) {
+      return TRUE;
+    }
+  }
+  return FALSE;
+}
+
+static void
+network_add_member(ServerNetwork *network, const char *server_id)
+{
+  if (network == NULL || network->member_server_ids == NULL || server_id == NULL || *server_id == '\0') {
+    return;
+  }
+  if (!network_has_member(network, server_id)) {
+    g_ptr_array_add(network->member_server_ids, g_strdup(server_id));
+  }
+}
+
+static void
+network_remove_member(ServerNetwork *network, const char *server_id)
+{
+  if (network == NULL || network->member_server_ids == NULL || server_id == NULL || *server_id == '\0') {
+    return;
+  }
+  for (guint i = 0; i < network->member_server_ids->len; i++) {
+    const char *member = g_ptr_array_index(network->member_server_ids, i);
+    if (g_strcmp0(member, server_id) == 0) {
+      g_ptr_array_remove_index(network->member_server_ids, i);
+      return;
+    }
+  }
+}
+
+static PumpkinServer *
+find_server_by_id(PumpkinWindow *self, const char *server_id)
+{
+  if (self == NULL || self->store == NULL || server_id == NULL || *server_id == '\0') {
+    return NULL;
+  }
+  g_autofree char *target_key = normalized_key(server_id);
+  GListModel *model = get_server_model(self);
+  if (model == NULL) {
+    return NULL;
+  }
+  guint n = g_list_model_get_n_items(model);
+  for (guint i = 0; i < n; i++) {
+    PumpkinServer *server = g_list_model_get_item(model, i);
+    if (server == NULL) {
+      continue;
+    }
+    const char *candidate_id = pumpkin_server_get_id(server);
+    const char *candidate_name = pumpkin_server_get_name(server);
+    gboolean match =
+      (candidate_id != NULL && g_strcmp0(candidate_id, server_id) == 0) ||
+      (candidate_name != NULL && g_strcmp0(candidate_name, server_id) == 0);
+    if (!match && target_key != NULL) {
+      g_autofree char *id_key = normalized_key(candidate_id);
+      g_autofree char *name_key = normalized_key(candidate_name);
+      if ((id_key != NULL && g_strcmp0(id_key, target_key) == 0) ||
+          (name_key != NULL && g_strcmp0(name_key, target_key) == 0)) {
+        match = TRUE;
+      }
+    }
+    if (match) {
+      return server;
+    }
+    g_object_unref(server);
+  }
+  return NULL;
+}
+
+static void
+reserve_port_if_valid(GHashTable *set, int port)
+{
+  if (set == NULL || port <= 0 || port > 65535) {
+    return;
+  }
+  g_hash_table_add(set, GINT_TO_POINTER(port));
+}
+
+static int
+reserve_next_port(GHashTable *used, int start)
+{
+  int port = start < 1 ? 1 : start;
+  for (; port <= 65535; port++) {
+    gpointer key = GINT_TO_POINTER(port);
+    if (!g_hash_table_contains(used, key)) {
+      g_hash_table_add(used, key);
+      return port;
+    }
+  }
+  return CLAMP(start, 1, 65535);
+}
+
+static gboolean
+apply_network_auto_ports(PumpkinWindow *self, ServerNetwork *network)
+{
+  if (self == NULL || network == NULL || network->member_server_ids == NULL || network->member_server_ids->len == 0) {
+    return FALSE;
+  }
+
+  GListModel *model = get_server_model(self);
+  if (model == NULL) {
+    return FALSE;
+  }
+
+  g_autoptr(GHashTable) used_java = g_hash_table_new(g_direct_hash, g_direct_equal);
+  g_autoptr(GHashTable) used_bedrock = g_hash_table_new(g_direct_hash, g_direct_equal);
+  g_autoptr(GHashTable) used_rcon = g_hash_table_new(g_direct_hash, g_direct_equal);
+
+  guint n = g_list_model_get_n_items(model);
+  for (guint i = 0; i < n; i++) {
+    g_autoptr(PumpkinServer) server = g_list_model_get_item(model, i);
+    if (server == NULL) {
+      continue;
+    }
+    const char *server_id = pumpkin_server_get_id(server);
+    if (server_id == NULL || *server_id == '\0' || network_has_member(network, server_id)) {
+      continue;
+    }
+    reserve_port_if_valid(used_java, pumpkin_server_get_port(server));
+    reserve_port_if_valid(used_bedrock, pumpkin_server_get_bedrock_port(server));
+    reserve_port_if_valid(used_rcon, pumpkin_server_get_rcon_port(server));
+  }
+
+  gboolean changed_any = FALSE;
+  gboolean current_changed = FALSE;
+  gboolean has_explicit_proxy = network->proxy_server_id != NULL && *network->proxy_server_id != '\0';
+  gboolean implicit_primary_assigned = FALSE;
+  int next_java = NETWORK_PROXY_JAVA_PORT + 1;
+  int next_bedrock = NETWORK_PROXY_BEDROCK_PORT + 1;
+  int next_rcon = NETWORK_PROXY_RCON_PORT + 1;
+
+  for (guint i = 0; i < network->member_server_ids->len; i++) {
+    const char *member_id = g_ptr_array_index(network->member_server_ids, i);
+    if (member_id == NULL || *member_id == '\0') {
+      continue;
+    }
+
+    g_autoptr(PumpkinServer) server = find_server_by_id(self, member_id);
+    if (server == NULL) {
+      continue;
+    }
+
+    gboolean is_primary = FALSE;
+    if (has_explicit_proxy) {
+      is_primary = g_strcmp0(member_id, network->proxy_server_id) == 0;
+    } else if (!implicit_primary_assigned) {
+      is_primary = TRUE;
+      implicit_primary_assigned = TRUE;
+    }
+
+    int desired_java;
+    int desired_bedrock;
+    int desired_rcon;
+    if (is_primary) {
+      desired_java = NETWORK_PROXY_JAVA_PORT;
+      desired_bedrock = NETWORK_PROXY_BEDROCK_PORT;
+      desired_rcon = NETWORK_PROXY_RCON_PORT;
+      reserve_port_if_valid(used_java, desired_java);
+      reserve_port_if_valid(used_bedrock, desired_bedrock);
+      reserve_port_if_valid(used_rcon, desired_rcon);
+    } else {
+      desired_java = reserve_next_port(used_java, next_java);
+      desired_bedrock = reserve_next_port(used_bedrock, next_bedrock);
+      desired_rcon = reserve_next_port(used_rcon, next_rcon);
+    }
+    next_java = desired_java + 1;
+    next_bedrock = desired_bedrock + 1;
+    next_rcon = desired_rcon + 1;
+
+    gboolean server_changed = FALSE;
+    if (pumpkin_server_get_port(server) != desired_java) {
+      pumpkin_server_set_port(server, desired_java);
+      server_changed = TRUE;
+    }
+    if (pumpkin_server_get_bedrock_port(server) != desired_bedrock) {
+      pumpkin_server_set_bedrock_port(server, desired_bedrock);
+      server_changed = TRUE;
+    }
+    if (pumpkin_server_get_rcon_port(server) != desired_rcon) {
+      pumpkin_server_set_rcon_port(server, desired_rcon);
+      server_changed = TRUE;
+    }
+
+    if (server_changed) {
+      pumpkin_server_save(server, NULL);
+      changed_any = TRUE;
+      if (self->current == server) {
+        current_changed = TRUE;
+      }
+    }
+  }
+
+  if (current_changed) {
+    update_settings_form(self);
+  }
+
+  return changed_any;
+}
+
+static void
+networks_load(PumpkinWindow *self)
+{
+  if (self == NULL) {
+    return;
+  }
+  if (self->networks == NULL) {
+    self->networks = g_ptr_array_new_with_free_func((GDestroyNotify)server_network_free);
+  } else {
+    g_ptr_array_set_size(self->networks, 0);
+  }
+
+  g_autofree char *path = network_config_path(self);
+  if (path == NULL || !g_file_test(path, G_FILE_TEST_EXISTS)) {
+    return;
+  }
+
+  g_autoptr(GKeyFile) key = g_key_file_new();
+  if (!g_key_file_load_from_file(key, path, G_KEY_FILE_NONE, NULL)) {
+    return;
+  }
+
+  gsize groups_len = 0;
+  g_auto(GStrv) groups = g_key_file_get_groups(key, &groups_len);
+  for (gsize i = 0; i < groups_len; i++) {
+    const char *group = groups[i];
+    if (group == NULL || !g_str_has_prefix(group, "network:")) {
+      continue;
+    }
+
+    const char *id = group + strlen("network:");
+    if (id == NULL || *id == '\0') {
+      continue;
+    }
+    g_autofree char *name = g_key_file_get_string(key, group, "name", NULL);
+    ServerNetwork *network = server_network_new(id, name);
+
+    g_autofree char *proxy = g_key_file_get_string(key, group, "proxy_server_id", NULL);
+    if (proxy != NULL && *proxy != '\0') {
+      network->proxy_server_id = g_strdup(proxy);
+    }
+
+    g_autofree char *members = g_key_file_get_string(key, group, "members", NULL);
+    if (members != NULL && *members != '\0') {
+      g_auto(GStrv) split = g_strsplit(members, ",", -1);
+      for (guint j = 0; split[j] != NULL; j++) {
+        g_autofree char *id_txt = g_strdup(split[j]);
+        g_strstrip(id_txt);
+        if (id_txt[0] != '\0') {
+          network_add_member(network, id_txt);
+        }
+      }
+    }
+    if (network->proxy_server_id != NULL && *network->proxy_server_id != '\0') {
+      network_add_member(network, network->proxy_server_id);
+    }
+    g_ptr_array_add(self->networks, network);
+  }
+}
+
+static gboolean
+networks_save(PumpkinWindow *self)
+{
+  if (self == NULL) {
+    return FALSE;
+  }
+
+  g_autofree char *path = network_config_path(self);
+  if (path == NULL) {
+    return FALSE;
+  }
+
+  g_autoptr(GKeyFile) key = g_key_file_new();
+  if (self->networks != NULL) {
+    for (guint i = 0; i < self->networks->len; i++) {
+      ServerNetwork *network = g_ptr_array_index(self->networks, i);
+      if (network == NULL || network->id == NULL || *network->id == '\0') {
+        continue;
+      }
+      g_autofree char *group = g_strdup_printf("network:%s", network->id);
+      g_key_file_set_string(key, group, "name", network->name != NULL ? network->name : network->id);
+      g_key_file_set_string(key, group, "proxy_server_id",
+                            network->proxy_server_id != NULL ? network->proxy_server_id : "");
+
+      g_autoptr(GString) members = g_string_new(NULL);
+      for (guint j = 0; j < network->member_server_ids->len; j++) {
+        const char *member = g_ptr_array_index(network->member_server_ids, j);
+        if (member == NULL || *member == '\0') {
+          continue;
+        }
+        if (members->len > 0) {
+          g_string_append_c(members, ',');
+        }
+        g_string_append(members, member);
+      }
+      g_key_file_set_string(key, group, "members", members->str);
+    }
+  }
+
+  gsize len = 0;
+  g_autofree char *data = g_key_file_to_data(key, &len, NULL);
+  return g_file_set_contents(path, data, (gssize)len, NULL);
+}
+
+static void
+networks_prune_server(PumpkinWindow *self, const char *server_id)
+{
+  if (self == NULL || self->networks == NULL || server_id == NULL || *server_id == '\0') {
+    return;
+  }
+  gboolean changed = FALSE;
+  for (gint i = (gint)self->networks->len - 1; i >= 0; i--) {
+    ServerNetwork *network = g_ptr_array_index(self->networks, (guint)i);
+    if (network == NULL) {
+      continue;
+    }
+    guint before = network->member_server_ids->len;
+    network_remove_member(network, server_id);
+    if (before != network->member_server_ids->len) {
+      changed = TRUE;
+    }
+    if (g_strcmp0(network->proxy_server_id, server_id) == 0) {
+      g_clear_pointer(&network->proxy_server_id, g_free);
+      changed = TRUE;
+    }
+    if (network->member_server_ids->len == 0) {
+      g_ptr_array_remove_index(self->networks, (guint)i);
+      changed = TRUE;
+    }
+  }
+  if (changed) {
+    networks_save(self);
+    refresh_overview_network_list(self);
+  }
+}
+
 static gboolean
 use_download_cache(PumpkinWindow *self)
 {
@@ -5224,13 +7725,19 @@ cache_dir_for_config(PumpkinWindow *self)
 }
 
 static char *
-cache_path_for_url(PumpkinWindow *self, const char *url)
+cache_path_for_download(PumpkinWindow *self, const char *url, const char *build_identity)
 {
   if (url == NULL || *url == '\0') {
     return NULL;
   }
   g_autofree char *cache_dir = cache_dir_for_config(self);
-  g_autofree char *hash = g_compute_checksum_for_string(G_CHECKSUM_SHA256, url, -1);
+  g_autofree char *cache_key = NULL;
+  if (build_identity != NULL && *build_identity != '\0') {
+    cache_key = g_strdup_printf("%s|%s", url, build_identity);
+  } else {
+    cache_key = g_strdup(url);
+  }
+  g_autofree char *hash = g_compute_checksum_for_string(G_CHECKSUM_SHA256, cache_key, -1);
   g_autofree char *version_dir = g_build_filename(cache_dir, hash, NULL);
   g_mkdir_with_parents(version_dir, 0755);
   return g_build_filename(version_dir, "pumpkin", NULL);
@@ -5278,10 +7785,12 @@ update_details(PumpkinWindow *self)
     gtk_widget_set_visible(GTK_WIDGET(self->btn_details_update), TRUE);
     gtk_widget_set_sensitive(GTK_WIDGET(self->btn_details_check_updates), FALSE);
     update_check_updates_badge(self);
+    update_domains_form(self);
     return;
   }
 
-  gboolean running = pumpkin_server_get_running(self->current);
+  gboolean managed_running = pumpkin_server_get_running(self->current);
+  gboolean running = server_is_running_ui(self, self->current);
   g_autofree char *bin = pumpkin_server_get_bin_path(self->current);
   gboolean installed = g_file_test(bin, G_FILE_TEST_EXISTS);
   gboolean update_available = is_update_available_for_server(self, self->current, installed);
@@ -5321,17 +7830,16 @@ update_details(PumpkinWindow *self)
                    self->ui_state == UI_STATE_RESTARTING);
   gboolean download_busy = server_download_active(self, self->current);
   busy = busy || download_busy;
-  gboolean can_start = installed && !running && !busy &&
-                       (self->ui_state == UI_STATE_IDLE || self->ui_state == UI_STATE_ERROR);
-  gboolean can_stop = running && self->ui_state == UI_STATE_RUNNING;
-  gboolean can_restart = running && self->ui_state == UI_STATE_RUNNING &&
+  gboolean can_start = installed && !managed_running && !busy;
+  gboolean can_stop = managed_running && !busy;
+  gboolean can_restart = managed_running && !busy &&
                          self->restart_delay_id == 0;
 
   gtk_widget_set_sensitive(GTK_WIDGET(self->btn_details_start), can_start);
   gtk_widget_set_sensitive(GTK_WIDGET(self->btn_details_stop), can_stop);
   gtk_widget_set_sensitive(GTK_WIDGET(self->btn_details_restart), can_restart);
-  gtk_widget_set_sensitive(GTK_WIDGET(self->btn_details_install), !running && !busy);
-  gtk_widget_set_sensitive(GTK_WIDGET(self->btn_details_update), update_available && !running && !busy);
+  gtk_widget_set_sensitive(GTK_WIDGET(self->btn_details_install), !managed_running && !busy);
+  gtk_widget_set_sensitive(GTK_WIDGET(self->btn_details_update), update_available && !managed_running && !busy);
   gtk_widget_set_visible(GTK_WIDGET(self->btn_details_update), TRUE);
   gtk_widget_set_sensitive(GTK_WIDGET(self->btn_details_check_updates), self->current != NULL && !download_busy);
   update_check_updates_badge(self);
@@ -5355,6 +7863,7 @@ update_details(PumpkinWindow *self)
     g_source_remove(self->players_refresh_id);
     self->players_refresh_id = 0;
   }
+  update_domains_form(self);
 }
 
 static gboolean
@@ -5372,10 +7881,13 @@ restart_after_delay(gpointer data)
       set_details_error(self, error->message);
       self->ui_state = UI_STATE_ERROR;
     }
-  } else if (self->current == server) {
-    self->ui_state = UI_STATE_RUNNING;
-    self->user_stop_requested = FALSE;
-    set_console_warning(self, NULL, FALSE);
+  } else {
+    set_server_running_hint(self, server, TRUE);
+    if (self->current == server) {
+      self->ui_state = UI_STATE_RUNNING;
+      self->user_stop_requested = FALSE;
+      set_console_warning(self, NULL, FALSE);
+    }
   }
 
   if (self->current == server) {
@@ -5400,7 +7912,7 @@ start_after_delay(gpointer data)
 {
   PumpkinWindow *self = PUMPKIN_WINDOW(data);
   self->start_delay_id = 0;
-  if (self->current != NULL && pumpkin_server_get_running(self->current) &&
+  if (self->current != NULL && server_is_running_ui(self, self->current) &&
       self->ui_state == UI_STATE_STARTING) {
     self->ui_state = UI_STATE_RUNNING;
   }
@@ -6065,7 +8577,7 @@ update_stats_tick(gpointer data)
       self->label_srv_cpu == NULL || self->label_srv_ram == NULL) {
     return G_SOURCE_CONTINUE;
   }
-  gboolean server_running = self->current != NULL && pumpkin_server_get_running(self->current);
+  gboolean server_running = self->current != NULL && server_is_running_ui(self, self->current);
   gint64 now_mono = g_get_monotonic_time();
   gtk_widget_set_visible(GTK_WIDGET(self->label_srv_cpu), server_running);
   gtk_widget_set_visible(GTK_WIDGET(self->label_srv_ram), server_running);
@@ -6124,7 +8636,10 @@ update_stats_tick(gpointer data)
     int tracked_online = player_online_count(self);
     if (pumpkin_server_get_running(self->current)) {
       self->tps_enabled = TRUE;
-      if (!self->query_in_flight && !query_is_fresh(self)) {
+      if (tracked_online == 0 &&
+          !list_snapshot_is_fresh(self) &&
+          !self->query_in_flight &&
+          !query_is_fresh(self)) {
         start_query_players(self, self->current);
       }
       if (now_mono - self->last_tps_request_at >= tps_query_interval_usec(self)) {
@@ -6143,19 +8658,25 @@ update_stats_tick(gpointer data)
         }
         self->last_player_list_request_at = now_mono;
       }
-    } else {
+    } else if (!server_running) {
       self->query_valid = FALSE;
       self->tps_enabled = FALSE;
       self->last_tps_valid = FALSE;
       self->pending_auto_tps_lines = 0;
       self->pending_auto_list_lines = 0;
+      self->list_snapshot_players = 0;
+      self->list_snapshot_max_players = 0;
+      self->list_snapshot_updated_at = 0;
       self->pending_java_platform_hints = 0;
       self->pending_bedrock_platform_hints = 0;
     }
-    if (query_is_fresh(self)) {
-      players_count = self->query_players;
+    if (list_snapshot_is_fresh(self)) {
+      players_count = self->list_snapshot_players;
     } else {
       players_count = tracked_online;
+    }
+    if (query_is_fresh(self) && self->query_players > players_count) {
+      players_count = self->query_players;
     }
     if (tracked_online > players_count) {
       players_count = tracked_online;
@@ -6188,8 +8709,15 @@ update_stats_tick(gpointer data)
         proc_cpu = (double)delta_proc / (double)delta_total * 100.0;
       }
     }
+    if (self->last_proc_cpu_smoothed <= 0.01) {
+      self->last_proc_cpu_smoothed = proc_cpu;
+    } else {
+      self->last_proc_cpu_smoothed = (self->last_proc_cpu_smoothed * 0.72) + (proc_cpu * 0.28);
+    }
+    proc_cpu = self->last_proc_cpu_smoothed;
     self->last_proc_jiffies = proc_ticks;
   } else {
+    self->last_proc_cpu_smoothed = 0.0;
     self->last_proc_jiffies = 0;
     if (pid == 0) {
       self->last_proc_pid = 0;
@@ -6318,12 +8846,12 @@ update_stats_tick(gpointer data)
 }
 
 static GtkWidget *
-create_server_row(PumpkinServer *server)
+create_server_row(PumpkinWindow *self, PumpkinServer *server)
 {
   GtkWidget *row = gtk_list_box_row_new();
   GtkWidget *box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
   GtkWidget *label = gtk_label_new(pumpkin_server_get_name(server));
-  GtkWidget *status = gtk_label_new(pumpkin_server_get_running(server) ? "Running" : "Stopped");
+  GtkWidget *status = gtk_label_new(server_is_running_ui(self, server) ? "Running" : "Stopped");
 
   gtk_widget_set_hexpand(label, TRUE);
   gtk_label_set_xalign(GTK_LABEL(label), 0.0);
@@ -6340,10 +8868,15 @@ create_server_row(PumpkinServer *server)
 static void
 load_server_list(PumpkinWindow *self)
 {
-  guint n = g_list_model_get_n_items(pumpkin_server_store_get_model(self->store));
+  GListModel *model = get_server_model(self);
+  if (model == NULL) {
+    return;
+  }
+  guint n = g_list_model_get_n_items(model);
   for (guint i = 0; i < n; i++) {
-    PumpkinServer *server = g_list_model_get_item(pumpkin_server_store_get_model(self->store), i);
-    GtkWidget *row = create_server_row(server);
+    PumpkinServer *server = g_list_model_get_item(model, i);
+    ensure_server_log_handler(self, server);
+    GtkWidget *row = create_server_row(self, server);
     gtk_list_box_append(self->server_list, row);
     g_object_unref(server);
   }
@@ -6452,7 +8985,7 @@ refresh_world_list(PumpkinWindow *self)
     return;
   }
 
-  gboolean running = pumpkin_server_get_running(self->current);
+  gboolean running = server_is_running_ui(self, self->current);
   gboolean busy = (self->ui_state == UI_STATE_STARTING || self->ui_state == UI_STATE_RESTARTING);
   g_autofree char *worlds_dir = pumpkin_server_get_worlds_dir(self->current);
   GDir *dir = g_dir_open(worlds_dir, 0, NULL);
@@ -6818,7 +9351,9 @@ append_player_state_row(PumpkinWindow *self,
   gtk_list_box_append(list, row);
 
   if (interactive) {
-    g_object_set_data_full(G_OBJECT(row), "player-name", g_strdup(display_name), g_free);
+    if (state->name != NULL && *state->name != '\0') {
+      g_object_set_data_full(G_OBJECT(row), "player-name", g_strdup(state->name), g_free);
+    }
     if (state->uuid != NULL) {
       g_object_set_data_full(G_OBJECT(row), "player-uuid", g_strdup(state->uuid), g_free);
     }
@@ -6865,8 +9400,11 @@ player_state_sort_cmp(gconstpointer a, gconstpointer b, gpointer user_data)
     cmp = g_ascii_strcasecmp(left->name != NULL ? left->name : "",
                              right->name != NULL ? right->name : "");
   } else {
-    gint64 ll = left->online ? (gint64)time(NULL) : left->last_online_unix;
-    gint64 rl = right->online ? (gint64)time(NULL) : right->last_online_unix;
+    gint64 now_unix = (settings != NULL && settings->now_unix > 0)
+                      ? settings->now_unix
+                      : (gint64)time(NULL);
+    gint64 ll = left->online ? now_unix : left->last_online_unix;
+    gint64 rl = right->online ? now_unix : right->last_online_unix;
     cmp = ll < rl ? -1 : (ll > rl ? 1 : 0);
   }
 
@@ -6889,6 +9427,18 @@ invalidate_player_list_signature(PumpkinWindow *self)
   self->player_list_signature_valid = FALSE;
   self->player_list_signature = 0;
   self->player_list_signature_count = 0;
+}
+
+static void
+extend_player_list_interaction_freeze(PumpkinWindow *self, gint64 usec)
+{
+  if (self == NULL || usec <= 0) {
+    return;
+  }
+  gint64 until = g_get_monotonic_time() + usec;
+  if (until > self->player_list_interaction_until) {
+    self->player_list_interaction_until = until;
+  }
 }
 
 static guint64
@@ -6918,6 +9468,11 @@ refresh_player_list(PumpkinWindow *self)
   if (self->current == NULL) {
     clear_list_box(self->player_list);
     invalidate_player_list_signature(self);
+    return;
+  }
+
+  gint64 now_mono = g_get_monotonic_time();
+  if (self->player_list_pointer_inside || now_mono < self->player_list_interaction_until) {
     return;
   }
 
@@ -6984,6 +9539,7 @@ refresh_player_list(PumpkinWindow *self)
   sort.field = self->player_sort_field;
   sort.ascending = self->player_sort_ascending;
   sort.op_level_map = op_level_map;
+  sort.now_unix = (gint64)time(NULL);
 
   g_autoptr(GPtrArray) states = g_ptr_array_new();
   GHashTableIter iter;
@@ -7113,11 +9669,11 @@ on_player_head_download_done(GObject *source, GAsyncResult *res, gpointer user_d
     return;
   }
 
-  pumpkin_download_file_finish(res, NULL);
+  gboolean ok = pumpkin_download_file_finish(res, NULL);
   if (ctx->self->player_head_downloads != NULL && ctx->uuid_key != NULL) {
     g_hash_table_remove(ctx->self->player_head_downloads, ctx->uuid_key);
   }
-  if (ctx->self->current != NULL && ctx->self->current == ctx->server) {
+  if (ok && ctx->self->current != NULL && ctx->self->current == ctx->server) {
     invalidate_player_list_signature(ctx->self);
     refresh_player_list(ctx->self);
   }
@@ -7401,7 +9957,7 @@ static gboolean
 refresh_players_tick(gpointer user_data)
 {
   PumpkinWindow *self = PUMPKIN_WINDOW(user_data);
-  if (self->current == NULL || !pumpkin_server_get_running(self->current)) {
+  if (self->current == NULL || !server_is_running_ui(self, self->current)) {
     self->players_refresh_id = 0;
     return G_SOURCE_REMOVE;
   }
@@ -7411,9 +9967,53 @@ refresh_players_tick(gpointer user_data)
 }
 
 static void
+on_player_list_pointer_enter(GtkEventControllerMotion *controller,
+                             double x,
+                             double y,
+                             PumpkinWindow *self)
+{
+  (void)controller;
+  (void)x;
+  (void)y;
+  if (self == NULL) {
+    return;
+  }
+  self->player_list_pointer_inside = TRUE;
+  extend_player_list_interaction_freeze(self, 1000000);
+}
+
+static void
+on_player_list_pointer_leave(GtkEventControllerMotion *controller,
+                             PumpkinWindow *self)
+{
+  (void)controller;
+  if (self == NULL) {
+    return;
+  }
+  self->player_list_pointer_inside = FALSE;
+  extend_player_list_interaction_freeze(self, 250000);
+  refresh_player_list(self);
+}
+
+static void
+on_player_list_pressed(GtkGestureClick *gesture,
+                       int n_press,
+                       double x,
+                       double y,
+                       PumpkinWindow *self)
+{
+  (void)gesture;
+  (void)n_press;
+  (void)x;
+  (void)y;
+  extend_player_list_interaction_freeze(self, 1200000);
+}
+
+static void
 on_player_search_changed(GtkEditable *editable, PumpkinWindow *self)
 {
   (void)editable;
+  self->player_list_interaction_until = 0;
   refresh_player_list(self);
 }
 
@@ -7475,6 +10075,7 @@ on_player_sort_button_clicked(GtkButton *button, PumpkinWindow *self)
     self->player_sort_field = field;
     self->player_sort_ascending = (field == 3);
   }
+  self->player_list_interaction_until = 0;
   update_player_sort_buttons(self);
   refresh_player_list(self);
 }
@@ -7497,6 +10098,7 @@ on_player_action_confirmed(GObject *dialog, GAsyncResult *res, gpointer user_dat
   gboolean is_ip_banned = GPOINTER_TO_INT(g_object_get_data(G_OBJECT(dialog), "player-ip-banned")) != 0;
   int op_level = GPOINTER_TO_INT(g_object_get_data(G_OBJECT(dialog), "player-op-level")) - 1;
   gboolean is_op = op_level >= 0;
+  gboolean has_name = (name != NULL && *name != '\0');
   PlayerState *selected_state = NULL;
   if (state_key != NULL && self->player_states != NULL) {
     selected_state = g_hash_table_lookup(self->player_states, state_key);
@@ -7618,7 +10220,7 @@ on_player_action_confirmed(GObject *dialog, GAsyncResult *res, gpointer user_dat
       append_log(self, "Player IP is already banned.");
       return;
     }
-    if (name == NULL || *name == '\0') {
+    if (!has_name) {
       append_log(self, "Player name unknown; cannot run command.");
       return;
     }
@@ -7636,12 +10238,44 @@ on_player_action_confirmed(GObject *dialog, GAsyncResult *res, gpointer user_dat
     adw_dialog_set_focus(ADW_DIALOG(reason_dialog), entry);
     g_object_set_data_full(G_OBJECT(reason_dialog), "ban-command", g_strdup("ban"), g_free);
     g_object_set_data_full(G_OBJECT(reason_dialog), "ban-target", g_strdup(name), g_free);
+    if (uuid != NULL && *uuid != '\0') {
+      g_object_set_data_full(G_OBJECT(reason_dialog), "player-uuid", g_strdup(uuid), g_free);
+    }
+    g_object_set_data(G_OBJECT(reason_dialog), "player-online", GINT_TO_POINTER(is_online ? 1 : 0));
     g_object_set_data(G_OBJECT(reason_dialog), "reason-entry", entry);
     adw_alert_dialog_choose(alert, GTK_WIDGET(self), NULL, on_player_ban_reason_confirmed, self);
     return;
   }
 
-  if (name == NULL || *name == '\0') {
+  if (g_strcmp0(response, "unban") == 0) {
+    if (!is_banned) {
+      append_log(self, "Player is not banned.");
+      return;
+    }
+    if (!has_name) {
+      append_log(self, "Player name unknown; cannot run command.");
+      return;
+    }
+
+    g_autofree char *command = g_strdup_printf("pardon %s", name);
+    g_autoptr(GError) error = NULL;
+    if (!pumpkin_server_send_command(self->current, command, &error)) {
+      if (error != NULL) {
+        append_log(self, error->message);
+      }
+      return;
+    }
+
+    invalidate_player_list_signature(self);
+    refresh_player_list(self);
+    g_timeout_add(350, refresh_player_list_deferred, g_object_ref(self));
+    g_autofree char *status = g_strdup_printf("Unbanned %s", has_name ? name : "player");
+    set_details_status(self, status, 3);
+    append_log(self, status);
+    return;
+  }
+
+  if (!has_name) {
     append_log(self, "Player name unknown; cannot run command.");
     return;
   }
@@ -7649,8 +10283,6 @@ on_player_action_confirmed(GObject *dialog, GAsyncResult *res, gpointer user_dat
   const char *cmd = NULL;
   if (g_strcmp0(response, "kick") == 0) {
     cmd = "kick";
-  } else if (g_strcmp0(response, "unban") == 0) {
-    cmd = "pardon";
   } else if (g_strcmp0(response, "op") == 0) {
     cmd = "op";
   } else if (g_strcmp0(response, "deop") == 0) {
@@ -7672,10 +10304,6 @@ on_player_action_confirmed(GObject *dialog, GAsyncResult *res, gpointer user_dat
     return;
   }
 
-  if (g_strcmp0(response, "unban") == 0 && !is_banned) {
-    append_log(self, "Player is not banned.");
-    return;
-  }
   if (g_strcmp0(response, "op") == 0 && is_op) {
     append_log(self, "Player is already op.");
     return;
@@ -7691,6 +10319,19 @@ on_player_action_confirmed(GObject *dialog, GAsyncResult *res, gpointer user_dat
     if (error != NULL) {
       append_log(self, error->message);
     }
+    return;
+  }
+
+  if (g_strcmp0(response, "op") == 0 || g_strcmp0(response, "deop") == 0) {
+    gboolean admin = g_strcmp0(response, "op") == 0;
+    invalidate_player_list_signature(self);
+    refresh_player_list(self);
+    g_timeout_add(350, refresh_player_list_deferred, g_object_ref(self));
+    g_autofree char *status = g_strdup_printf("%s %s",
+                                              admin ? "Granted ADMIN to" : "Removed ADMIN from",
+                                              name != NULL ? name : "player");
+    set_details_status(self, status, 3);
+    append_log(self, status);
   }
 }
 
@@ -7732,6 +10373,7 @@ on_player_ban_reason_confirmed(GObject *dialog, GAsyncResult *res, gpointer user
         *p = ' ';
       }
     }
+    g_strstrip(reason_clean);
   }
 
   g_autofree char *command = NULL;
@@ -7746,6 +10388,16 @@ on_player_ban_reason_confirmed(GObject *dialog, GAsyncResult *res, gpointer user
     if (error != NULL) {
       append_log(self, error->message);
     }
+    return;
+  }
+
+  if (g_strcmp0(command_name, "ban") == 0) {
+    invalidate_player_list_signature(self);
+    refresh_player_list(self);
+    g_timeout_add(350, refresh_player_list_deferred, g_object_ref(self));
+    g_autofree char *status = g_strdup_printf("Banned %s", target != NULL ? target : "player");
+    set_details_status(self, status, 3);
+    append_log(self, status);
     return;
   }
 
@@ -7812,6 +10464,7 @@ on_player_row_activated(GtkListBox *box, GtkListBoxRow *row, PumpkinWindow *self
   if (row == NULL) {
     return;
   }
+  extend_player_list_interaction_freeze(self, 1500000);
 
   const char *name = g_object_get_data(G_OBJECT(row), "player-name");
   const char *uuid = g_object_get_data(G_OBJECT(row), "player-uuid");
@@ -7824,12 +10477,13 @@ on_player_row_activated(GtkListBox *box, GtkListBoxRow *row, PumpkinWindow *self
   gboolean is_op = op_level >= 0;
   gboolean is_admin = player_is_admin_from_op_level(op_level);
   gboolean has_last_ip = (last_ip != NULL && *last_ip != '\0');
+  gboolean has_name = (name != NULL && *name != '\0');
   PlayerState *state = NULL;
   if (state_key != NULL && self->player_states != NULL) {
     state = g_hash_table_lookup(self->player_states, state_key);
   }
 
-  const char *title = (name != NULL && *name != '\0') ? name : "Player";
+  const char *title = has_name ? name : "Player";
   g_autofree char *body = NULL;
   if (state != NULL) {
     g_autofree char *playtime = format_duration(player_state_effective_playtime(state));
@@ -7881,13 +10535,15 @@ on_player_row_activated(GtkListBox *box, GtkListBoxRow *row, PumpkinWindow *self
     adw_alert_dialog_set_response_enabled(alert, "pardon_ip", FALSE);
   } else {
     gboolean running = pumpkin_server_get_running(self->current);
-    adw_alert_dialog_set_response_enabled(alert, "ban", running && !is_banned && !is_ip_banned);
-    adw_alert_dialog_set_response_enabled(alert, "unban", running && is_banned);
-    adw_alert_dialog_set_response_enabled(alert, "op", running && !is_op);
-    adw_alert_dialog_set_response_enabled(alert, "deop", running && is_op);
-    adw_alert_dialog_set_response_enabled(alert, "kick", running && is_online);
+    adw_alert_dialog_set_response_enabled(alert,
+                                          "ban",
+                                          running && has_name && !is_banned && !is_ip_banned);
+    adw_alert_dialog_set_response_enabled(alert, "unban", running && has_name && is_banned);
+    adw_alert_dialog_set_response_enabled(alert, "op", running && has_name && !is_op);
+    adw_alert_dialog_set_response_enabled(alert, "deop", running && has_name && is_op);
+    adw_alert_dialog_set_response_enabled(alert, "kick", running && has_name && is_online);
     adw_alert_dialog_set_response_enabled(alert, "ban_ip",
-                                          running && !is_ip_banned && ((name != NULL && *name != '\0' && is_online) || has_last_ip));
+                                          running && !is_ip_banned && ((has_name && is_online) || has_last_ip));
     adw_alert_dialog_set_response_enabled(alert, "pardon_ip",
                                           running && is_ip_banned);
   }
@@ -7910,6 +10566,819 @@ on_player_row_activated(GtkListBox *box, GtkListBoxRow *row, PumpkinWindow *self
   g_object_set_data(G_OBJECT(dialog), "player-op-level", GINT_TO_POINTER(op_level + 1));
 
   adw_alert_dialog_choose(alert, GTK_WIDGET(self), NULL, on_player_action_confirmed, self);
+}
+
+static int
+sanitize_ddns_interval_seconds(int value)
+{
+  if (value < DDNS_INTERVAL_SECONDS_MIN || value > DDNS_INTERVAL_SECONDS_MAX) {
+    return DDNS_INTERVAL_SECONDS_DEFAULT;
+  }
+  return value;
+}
+
+static void
+update_domains_ddns_sensitivity(PumpkinWindow *self)
+{
+  if (self == NULL) {
+    return;
+  }
+  gboolean has_server = self->current != NULL;
+  gboolean ddns_enabled = has_server &&
+                          self->switch_ddns_enabled != NULL &&
+                          gtk_switch_get_active(self->switch_ddns_enabled);
+  if (self->switch_ddns_enabled != NULL) {
+    gtk_widget_set_sensitive(GTK_WIDGET(self->switch_ddns_enabled), has_server);
+  }
+  if (self->entry_ddns_cf_zone_id != NULL) {
+    gtk_widget_set_sensitive(GTK_WIDGET(self->entry_ddns_cf_zone_id), ddns_enabled);
+  }
+  if (self->entry_ddns_cf_api_token != NULL) {
+    gtk_widget_set_sensitive(GTK_WIDGET(self->entry_ddns_cf_api_token), ddns_enabled);
+  }
+  if (self->entry_ddns_cf_record_id != NULL) {
+    gtk_widget_set_sensitive(GTK_WIDGET(self->entry_ddns_cf_record_id), ddns_enabled);
+  }
+  if (self->switch_ddns_cf_proxied != NULL) {
+    gtk_widget_set_sensitive(GTK_WIDGET(self->switch_ddns_cf_proxied), ddns_enabled);
+  }
+  if (self->entry_ddns_interval_seconds != NULL) {
+    gtk_widget_set_sensitive(GTK_WIDGET(self->entry_ddns_interval_seconds), ddns_enabled);
+  }
+  if (self->btn_ddns_sync_now != NULL) {
+    gtk_widget_set_sensitive(GTK_WIDGET(self->btn_ddns_sync_now), ddns_enabled && !self->ddns_sync_in_flight);
+  }
+}
+
+static gboolean
+parse_ipv4_text(const char *text, char **out_ip)
+{
+  if (out_ip != NULL) {
+    *out_ip = NULL;
+  }
+  if (text == NULL) {
+    return FALSE;
+  }
+  g_autofree char *trimmed = g_strdup(text);
+  g_strstrip(trimmed);
+  if (trimmed[0] == '\0') {
+    return FALSE;
+  }
+  g_autoptr(GInetAddress) addr = g_inet_address_new_from_string(trimmed);
+  if (addr == NULL || g_inet_address_get_family(addr) != G_SOCKET_FAMILY_IPV4) {
+    return FALSE;
+  }
+  if (out_ip != NULL) {
+    *out_ip = g_strdup(trimmed);
+  }
+  return TRUE;
+}
+
+static void
+ddns_server_config_free(DdnsServerConfig *cfg)
+{
+  if (cfg == NULL) {
+    return;
+  }
+  g_clear_pointer(&cfg->server_id, g_free);
+  g_clear_pointer(&cfg->server_name, g_free);
+  g_clear_pointer(&cfg->domain, g_free);
+  g_clear_pointer(&cfg->provider, g_free);
+  g_clear_pointer(&cfg->api_token, g_free);
+  g_clear_pointer(&cfg->zone_id, g_free);
+  g_clear_pointer(&cfg->record_id, g_free);
+  g_free(cfg);
+}
+
+static void
+ddns_server_result_free(DdnsServerResult *result)
+{
+  if (result == NULL) {
+    return;
+  }
+  g_clear_pointer(&result->server_id, g_free);
+  g_clear_pointer(&result->record_id, g_free);
+  g_clear_pointer(&result->message, g_free);
+  g_free(result);
+}
+
+static void
+ddns_sync_request_free(DdnsSyncRequest *request)
+{
+  if (request == NULL) {
+    return;
+  }
+  if (request->servers != NULL) {
+    g_ptr_array_unref(request->servers);
+  }
+  g_free(request);
+}
+
+static void
+ddns_sync_result_free(DdnsSyncResult *result)
+{
+  if (result == NULL) {
+    return;
+  }
+  g_clear_pointer(&result->public_ipv4, g_free);
+  if (result->results != NULL) {
+    g_ptr_array_unref(result->results);
+  }
+  g_free(result);
+}
+
+static void
+set_ddns_status_for_server(PumpkinWindow *self, const char *server_id, const char *status)
+{
+  if (self == NULL || self->ddns_status_by_server == NULL ||
+      server_id == NULL || *server_id == '\0') {
+    return;
+  }
+  g_hash_table_replace(self->ddns_status_by_server,
+                       g_strdup(server_id),
+                       g_strdup(status != NULL ? status : ""));
+}
+
+static const char *
+get_ddns_status_for_server(PumpkinWindow *self, const char *server_id)
+{
+  if (self == NULL || self->ddns_status_by_server == NULL ||
+      server_id == NULL || *server_id == '\0') {
+    return NULL;
+  }
+  return g_hash_table_lookup(self->ddns_status_by_server, server_id);
+}
+
+static void
+set_ddns_last_sync_for_server(PumpkinWindow *self, const char *server_id, gint64 mono_usec)
+{
+  if (self == NULL || self->ddns_last_sync_by_server == NULL ||
+      server_id == NULL || *server_id == '\0') {
+    return;
+  }
+  gint64 *stamp = g_new(gint64, 1);
+  *stamp = mono_usec;
+  g_hash_table_replace(self->ddns_last_sync_by_server, g_strdup(server_id), stamp);
+}
+
+static gint64
+get_ddns_last_sync_for_server(PumpkinWindow *self, const char *server_id)
+{
+  if (self == NULL || self->ddns_last_sync_by_server == NULL ||
+      server_id == NULL || *server_id == '\0') {
+    return 0;
+  }
+  gint64 *stamp = g_hash_table_lookup(self->ddns_last_sync_by_server, server_id);
+  return stamp != NULL ? *stamp : 0;
+}
+
+static gboolean
+cloudflare_response_success(const char *json)
+{
+  if (json == NULL) {
+    return FALSE;
+  }
+  g_autoptr(GRegex) regex = g_regex_new("\"success\"\\s*:\\s*true", G_REGEX_CASELESS | G_REGEX_DOTALL, 0, NULL);
+  if (regex == NULL) {
+    return FALSE;
+  }
+  return g_regex_match(regex, json, 0, NULL);
+}
+
+static char *
+extract_cloudflare_result_object(const char *json)
+{
+  if (json == NULL) {
+    return NULL;
+  }
+
+  g_autoptr(GRegex) object_re = g_regex_new("\"result\"\\s*:\\s*\\{(.*?)\\}\\s*(,|})",
+                                             G_REGEX_CASELESS | G_REGEX_DOTALL, 0, NULL);
+  g_autoptr(GMatchInfo) match = NULL;
+  if (object_re != NULL && g_regex_match(object_re, json, 0, &match) && g_match_info_matches(match)) {
+    return g_match_info_fetch(match, 1);
+  }
+
+  g_autoptr(GRegex) array_re = g_regex_new("\"result\"\\s*:\\s*\\[\\s*\\{(.*?)\\}\\s*\\]",
+                                            G_REGEX_CASELESS | G_REGEX_DOTALL, 0, NULL);
+  g_clear_pointer(&match, g_match_info_unref);
+  if (array_re != NULL && g_regex_match(array_re, json, 0, &match) && g_match_info_matches(match)) {
+    return g_match_info_fetch(match, 1);
+  }
+  return NULL;
+}
+
+static char *
+extract_cloudflare_result_string_field(const char *json, const char *field)
+{
+  g_autofree char *object_text = extract_cloudflare_result_object(json);
+  if (object_text != NULL) {
+    g_autofree char *value = extract_json_string_field(object_text, field);
+    if (value != NULL) {
+      return g_steal_pointer(&value);
+    }
+  }
+  return extract_json_string_field(json, field);
+}
+
+static gboolean
+extract_cloudflare_result_bool_field(const char *json, const char *field, gboolean fallback)
+{
+  g_autofree char *object_text = extract_cloudflare_result_object(json);
+  if (object_text != NULL) {
+    return extract_json_bool_field(object_text, field, fallback);
+  }
+  return extract_json_bool_field(json, field, fallback);
+}
+
+static char *
+ddns_http_send_text(SoupSession *session,
+                    const char *method,
+                    const char *url,
+                    const char *bearer_token,
+                    const char *json_body,
+                    guint *out_status,
+                    GError **error)
+{
+  if (out_status != NULL) {
+    *out_status = 0;
+  }
+  if (session == NULL || method == NULL || url == NULL) {
+    g_set_error(error, G_IO_ERROR, G_IO_ERROR_INVALID_ARGUMENT, "Invalid HTTP request.");
+    return NULL;
+  }
+
+  g_autoptr(SoupMessage) msg = soup_message_new(method, url);
+  if (msg == NULL) {
+    g_set_error(error, G_IO_ERROR, G_IO_ERROR_FAILED, "Failed to create HTTP request.");
+    return NULL;
+  }
+
+  SoupMessageHeaders *headers = soup_message_get_request_headers(msg);
+  if (bearer_token != NULL && *bearer_token != '\0') {
+    g_autofree char *auth = g_strdup_printf("Bearer %s", bearer_token);
+    soup_message_headers_append(headers, "Authorization", auth);
+  }
+  if (json_body != NULL) {
+    GBytes *body = g_bytes_new(json_body, strlen(json_body));
+    soup_message_set_request_body_from_bytes(msg, "application/json", body);
+    g_bytes_unref(body);
+  }
+
+  g_autoptr(GBytes) bytes = soup_session_send_and_read(session, msg, NULL, error);
+  if (bytes == NULL) {
+    return NULL;
+  }
+
+  guint status = soup_message_get_status(msg);
+  if (out_status != NULL) {
+    *out_status = status;
+  }
+
+  gsize len = 0;
+  const char *data = g_bytes_get_data(bytes, &len);
+  return g_strndup(data, len);
+}
+
+static DdnsServerResult *
+ddns_sync_cloudflare_server(SoupSession *session,
+                            const DdnsServerConfig *cfg,
+                            const char *public_ipv4)
+{
+  DdnsServerResult *result = g_new0(DdnsServerResult, 1);
+  result->server_id = g_strdup(cfg != NULL ? cfg->server_id : NULL);
+  result->success = FALSE;
+  result->changed = FALSE;
+
+  if (cfg == NULL || public_ipv4 == NULL || *public_ipv4 == '\0') {
+    result->message = g_strdup("DDNS sync failed: missing data.");
+    return result;
+  }
+  if (cfg->provider == NULL || g_ascii_strcasecmp(cfg->provider, "cloudflare") != 0) {
+    result->message = g_strdup("DDNS sync failed: unsupported provider.");
+    return result;
+  }
+  if (cfg->domain == NULL || *cfg->domain == '\0') {
+    result->message = g_strdup("DDNS sync failed: domain is empty.");
+    return result;
+  }
+  if (cfg->zone_id == NULL || *cfg->zone_id == '\0') {
+    result->message = g_strdup("DDNS sync failed: Cloudflare Zone ID is missing.");
+    return result;
+  }
+  if (cfg->api_token == NULL || *cfg->api_token == '\0') {
+    result->message = g_strdup("DDNS sync failed: Cloudflare API token is missing.");
+    return result;
+  }
+
+  g_autofree char *record_id = (cfg->record_id != NULL && *cfg->record_id != '\0')
+                                 ? g_strdup(cfg->record_id) : NULL;
+  g_autofree char *current_content = NULL;
+  gboolean current_proxied = FALSE;
+  gboolean has_existing = FALSE;
+
+  if (record_id == NULL) {
+    g_autofree char *escaped_domain = g_uri_escape_string(cfg->domain, NULL, TRUE);
+    g_autofree char *list_url = g_strdup_printf(
+      DDNS_API_CLOUDFLARE_BASE "/zones/%s/dns_records?type=A&name=%s&per_page=1",
+      cfg->zone_id, escaped_domain != NULL ? escaped_domain : cfg->domain);
+    guint status = 0;
+    g_autoptr(GError) error = NULL;
+    g_autofree char *response = ddns_http_send_text(session, "GET", list_url, cfg->api_token, NULL, &status, &error);
+    if (response == NULL) {
+      result->message = g_strdup_printf("DDNS sync failed: %s", error != NULL ? error->message : "request error");
+      return result;
+    }
+    if (status < 200 || status >= 300 || !cloudflare_response_success(response)) {
+      result->message = g_strdup_printf("DDNS sync failed: Cloudflare list returned HTTP %u.", status);
+      return result;
+    }
+    record_id = extract_cloudflare_result_string_field(response, "id");
+    current_content = extract_cloudflare_result_string_field(response, "content");
+    current_proxied = extract_cloudflare_result_bool_field(response, "proxied", FALSE);
+    has_existing = (record_id != NULL && *record_id != '\0');
+  }
+
+  if (has_existing && current_content != NULL &&
+      g_strcmp0(current_content, public_ipv4) == 0 &&
+      current_proxied == cfg->proxied) {
+    result->success = TRUE;
+    result->changed = FALSE;
+    result->record_id = g_strdup(record_id);
+    result->message = g_strdup_printf("DDNS up to date (%s)", public_ipv4);
+    return result;
+  }
+
+  g_autofree char *json = g_strdup_printf(
+    "{\"type\":\"A\",\"name\":\"%s\",\"content\":\"%s\",\"ttl\":1,\"proxied\":%s}",
+    cfg->domain,
+    public_ipv4,
+    cfg->proxied ? "true" : "false");
+
+  guint status = 0;
+  g_autoptr(GError) error = NULL;
+  g_autofree char *response = NULL;
+  if (record_id != NULL && *record_id != '\0') {
+    g_autofree char *update_url = g_strdup_printf(
+      DDNS_API_CLOUDFLARE_BASE "/zones/%s/dns_records/%s",
+      cfg->zone_id, record_id);
+    response = ddns_http_send_text(session, "PUT", update_url, cfg->api_token, json, &status, &error);
+  } else {
+    g_autofree char *create_url = g_strdup_printf(
+      DDNS_API_CLOUDFLARE_BASE "/zones/%s/dns_records",
+      cfg->zone_id);
+    response = ddns_http_send_text(session, "POST", create_url, cfg->api_token, json, &status, &error);
+  }
+
+  if (response == NULL) {
+    result->message = g_strdup_printf("DDNS sync failed: %s", error != NULL ? error->message : "request error");
+    return result;
+  }
+  if (status < 200 || status >= 300 || !cloudflare_response_success(response)) {
+    result->message = g_strdup_printf("DDNS sync failed: Cloudflare update returned HTTP %u.", status);
+    return result;
+  }
+
+  g_autofree char *new_record_id = extract_cloudflare_result_string_field(response, "id");
+  if (new_record_id != NULL && *new_record_id != '\0') {
+    result->record_id = g_strdup(new_record_id);
+  } else if (record_id != NULL && *record_id != '\0') {
+    result->record_id = g_strdup(record_id);
+  }
+  result->success = TRUE;
+  result->changed = TRUE;
+  result->message = g_strdup_printf("DDNS updated to %s", public_ipv4);
+  return result;
+}
+
+static void
+ddns_sync_worker(GTask *task, gpointer source_object, gpointer task_data, GCancellable *cancellable)
+{
+  (void)source_object;
+  (void)cancellable;
+  DdnsSyncRequest *request = task_data;
+  DdnsSyncResult *result = g_new0(DdnsSyncResult, 1);
+  result->results = g_ptr_array_new_with_free_func((GDestroyNotify)ddns_server_result_free);
+
+  g_autoptr(SoupSession) session = soup_session_new();
+  guint status = 0;
+  g_autoptr(GError) error = NULL;
+  g_autofree char *ip_text = ddns_http_send_text(session,
+                                                 "GET",
+                                                 DDNS_API_IPIFY_URL,
+                                                 NULL,
+                                                 NULL,
+                                                 &status,
+                                                 &error);
+  if (ip_text == NULL) {
+    g_task_return_new_error(task, G_IO_ERROR, G_IO_ERROR_FAILED,
+                            "DDNS failed to get public IP: %s",
+                            error != NULL ? error->message : "request error");
+    ddns_sync_result_free(result);
+    return;
+  }
+  if (status < 200 || status >= 300) {
+    g_task_return_new_error(task, G_IO_ERROR, G_IO_ERROR_FAILED,
+                            "DDNS failed to get public IP (HTTP %u).", status);
+    ddns_sync_result_free(result);
+    return;
+  }
+
+  if (!parse_ipv4_text(ip_text, &result->public_ipv4)) {
+    g_task_return_new_error(task, G_IO_ERROR, G_IO_ERROR_FAILED,
+                            "DDNS failed: invalid public IPv4 response.");
+    ddns_sync_result_free(result);
+    return;
+  }
+
+  if (request != NULL && request->servers != NULL) {
+    for (guint i = 0; i < request->servers->len; i++) {
+      DdnsServerConfig *cfg = g_ptr_array_index(request->servers, i);
+      DdnsServerResult *server_result = ddns_sync_cloudflare_server(session, cfg, result->public_ipv4);
+      g_ptr_array_add(result->results, server_result);
+    }
+  }
+
+  g_task_return_pointer(task, result, (GDestroyNotify)ddns_sync_result_free);
+}
+
+static void
+on_ddns_sync_done(GObject *source, GAsyncResult *res, gpointer user_data)
+{
+  (void)source;
+  PumpkinWindow *self = PUMPKIN_WINDOW(user_data);
+  if (self == NULL) {
+    return;
+  }
+
+  self->ddns_sync_in_flight = FALSE;
+  g_autoptr(GError) error = NULL;
+  DdnsSyncResult *sync = g_task_propagate_pointer(G_TASK(res), &error);
+  if (error != NULL || sync == NULL) {
+    const char *msg = error != NULL ? error->message : "DDNS sync failed.";
+    if (self->current != NULL) {
+      const char *sid = pumpkin_server_get_id(self->current);
+      if (sid != NULL && *sid != '\0') {
+        set_ddns_status_for_server(self, sid, msg);
+      }
+      set_details_status(self, "DDNS sync failed", 4);
+      append_log(self, msg);
+    }
+    if (self->label_ddns_status != NULL) {
+      gtk_label_set_text(self->label_ddns_status, msg);
+    }
+    update_domains_form(self);
+    return;
+  }
+
+  gint64 now = g_get_monotonic_time();
+  for (guint i = 0; i < sync->results->len; i++) {
+    DdnsServerResult *item = g_ptr_array_index(sync->results, i);
+    if (item == NULL || item->server_id == NULL || *item->server_id == '\0') {
+      continue;
+    }
+    set_ddns_status_for_server(self, item->server_id, item->message);
+    set_ddns_last_sync_for_server(self, item->server_id, now);
+    g_autoptr(PumpkinServer) server = find_server_by_id(self, item->server_id);
+    if (server != NULL && item->record_id != NULL && *item->record_id != '\0' &&
+        g_strcmp0(pumpkin_server_get_ddns_cf_record_id(server), item->record_id) != 0) {
+      pumpkin_server_set_ddns_cf_record_id(server, item->record_id);
+      pumpkin_server_save(server, NULL);
+    }
+    if (server != NULL && item->message != NULL && *item->message != '\0') {
+      if (!item->success) {
+        append_log_for_server(self, server, item->message);
+      }
+    }
+  }
+  update_domains_form(self);
+  ddns_sync_result_free(sync);
+}
+
+static void
+ddns_sync_start(PumpkinWindow *self, gboolean manual_current_only)
+{
+  if (self == NULL || self->store == NULL) {
+    return;
+  }
+  if (self->ddns_sync_in_flight) {
+    if (manual_current_only && self->label_ddns_status != NULL) {
+      gtk_label_set_text(self->label_ddns_status, "DDNS sync already running...");
+    }
+    return;
+  }
+
+  DdnsSyncRequest *request = g_new0(DdnsSyncRequest, 1);
+  request->servers = g_ptr_array_new_with_free_func((GDestroyNotify)ddns_server_config_free);
+
+  gint64 now = g_get_monotonic_time();
+  GListModel *model = get_server_model(self);
+  if (model != NULL) {
+    guint n = g_list_model_get_n_items(model);
+    for (guint i = 0; i < n; i++) {
+      g_autoptr(PumpkinServer) server = g_list_model_get_item(model, i);
+      if (server == NULL) {
+        continue;
+      }
+      if (manual_current_only && server != self->current) {
+        continue;
+      }
+      if (!pumpkin_server_get_ddns_enabled(server)) {
+        continue;
+      }
+      const char *domain = pumpkin_server_get_domain(server);
+      const char *zone_id = pumpkin_server_get_ddns_cf_zone_id(server);
+      const char *api_token = pumpkin_server_get_ddns_cf_api_token(server);
+      if (domain == NULL || *domain == '\0' ||
+          zone_id == NULL || *zone_id == '\0' ||
+          api_token == NULL || *api_token == '\0') {
+        continue;
+      }
+
+      int interval = sanitize_ddns_interval_seconds(pumpkin_server_get_ddns_interval_seconds(server));
+      if (!manual_current_only) {
+        gint64 last_sync = get_ddns_last_sync_for_server(self, pumpkin_server_get_id(server));
+        if (last_sync > 0 && now - last_sync < ((gint64)interval * G_USEC_PER_SEC)) {
+          continue;
+        }
+      }
+
+      DdnsServerConfig *cfg = g_new0(DdnsServerConfig, 1);
+      cfg->server_id = g_strdup(pumpkin_server_get_id(server));
+      cfg->server_name = g_strdup(pumpkin_server_get_name(server));
+      cfg->domain = g_strdup(domain);
+      cfg->provider = g_strdup(pumpkin_server_get_ddns_provider(server));
+      cfg->api_token = g_strdup(api_token);
+      cfg->zone_id = g_strdup(zone_id);
+      cfg->record_id = g_strdup(pumpkin_server_get_ddns_cf_record_id(server));
+      cfg->proxied = pumpkin_server_get_ddns_cf_proxied(server);
+      g_ptr_array_add(request->servers, cfg);
+    }
+  }
+
+  if (request->servers->len == 0) {
+    if (manual_current_only && self->label_ddns_status != NULL) {
+      gtk_label_set_text(self->label_ddns_status,
+                         "Nothing to sync. Enable DDNS and fill Domain, Zone ID and API token.");
+    }
+    ddns_sync_request_free(request);
+    return;
+  }
+
+  self->ddns_sync_in_flight = TRUE;
+  if (manual_current_only && self->label_ddns_status != NULL) {
+    gtk_label_set_text(self->label_ddns_status, "Syncing DDNS...");
+  }
+  if (self->btn_ddns_sync_now != NULL) {
+    gtk_widget_set_sensitive(GTK_WIDGET(self->btn_ddns_sync_now), FALSE);
+  }
+
+  GTask *task = g_task_new(self, NULL, on_ddns_sync_done, self);
+  g_task_set_task_data(task, request, (GDestroyNotify)ddns_sync_request_free);
+  g_task_run_in_thread(task, ddns_sync_worker);
+  g_object_unref(task);
+}
+
+static gboolean
+ddns_tick(gpointer data)
+{
+  PumpkinWindow *self = PUMPKIN_WINDOW(data);
+  if (self == NULL) {
+    return G_SOURCE_REMOVE;
+  }
+  ddns_sync_start(self, FALSE);
+  return G_SOURCE_CONTINUE;
+}
+
+static void
+on_domains_ddns_toggle_changed(GObject *object, GParamSpec *pspec, PumpkinWindow *self)
+{
+  (void)object;
+  (void)pspec;
+  update_domains_ddns_sensitivity(self);
+  if (self != NULL && self->label_ddns_status != NULL &&
+      self->switch_ddns_enabled != NULL &&
+      !gtk_switch_get_active(self->switch_ddns_enabled)) {
+    gtk_label_set_text(self->label_ddns_status, "DDNS disabled.");
+  }
+}
+
+static void
+on_ddns_sync_now(GtkButton *button, PumpkinWindow *self)
+{
+  (void)button;
+  ddns_sync_start(self, TRUE);
+}
+
+static void
+update_domains_form(PumpkinWindow *self)
+{
+  if (self == NULL ||
+      self->entry_domain == NULL ||
+      self->label_domains_target == NULL) {
+    return;
+  }
+
+  if (self->current == NULL) {
+    gtk_editable_set_text(GTK_EDITABLE(self->entry_domain), "");
+    gtk_label_set_text(self->label_domains_target, "Target: your-public-ip (Java:25565, Bedrock:19132)");
+    if (self->switch_ddns_enabled != NULL) {
+      gtk_switch_set_active(self->switch_ddns_enabled, FALSE);
+      gtk_widget_set_sensitive(GTK_WIDGET(self->switch_ddns_enabled), FALSE);
+    }
+    if (self->entry_ddns_cf_zone_id != NULL) {
+      gtk_editable_set_text(GTK_EDITABLE(self->entry_ddns_cf_zone_id), "");
+      gtk_widget_set_sensitive(GTK_WIDGET(self->entry_ddns_cf_zone_id), FALSE);
+    }
+    if (self->entry_ddns_cf_api_token != NULL) {
+      gtk_editable_set_text(GTK_EDITABLE(self->entry_ddns_cf_api_token), "");
+      gtk_widget_set_sensitive(GTK_WIDGET(self->entry_ddns_cf_api_token), FALSE);
+    }
+    if (self->entry_ddns_cf_record_id != NULL) {
+      gtk_editable_set_text(GTK_EDITABLE(self->entry_ddns_cf_record_id), "");
+      gtk_widget_set_sensitive(GTK_WIDGET(self->entry_ddns_cf_record_id), FALSE);
+    }
+    if (self->switch_ddns_cf_proxied != NULL) {
+      gtk_switch_set_active(self->switch_ddns_cf_proxied, FALSE);
+      gtk_widget_set_sensitive(GTK_WIDGET(self->switch_ddns_cf_proxied), FALSE);
+    }
+    if (self->entry_ddns_interval_seconds != NULL) {
+      gtk_editable_set_text(GTK_EDITABLE(self->entry_ddns_interval_seconds), "300");
+      gtk_widget_set_sensitive(GTK_WIDGET(self->entry_ddns_interval_seconds), FALSE);
+    }
+    if (self->btn_ddns_sync_now != NULL) {
+      gtk_widget_set_sensitive(GTK_WIDGET(self->btn_ddns_sync_now), FALSE);
+    }
+    if (self->label_ddns_status != NULL) {
+      gtk_label_set_text(self->label_ddns_status, "DDNS disabled.");
+    }
+    if (self->btn_save_domains != NULL) {
+      gtk_widget_set_sensitive(GTK_WIDGET(self->btn_save_domains), FALSE);
+    }
+    update_domains_ddns_sensitivity(self);
+    return;
+  }
+
+  const char *domain = pumpkin_server_get_domain(self->current);
+  gtk_editable_set_text(GTK_EDITABLE(self->entry_domain), domain != NULL ? domain : "");
+
+  int java_port = pumpkin_server_get_port(self->current);
+  if (java_port <= 0) {
+    java_port = 25565;
+  }
+  int bedrock_port = pumpkin_server_get_bedrock_port(self->current);
+  if (bedrock_port <= 0) {
+    bedrock_port = 19132;
+  }
+
+  g_autofree char *target = g_strdup_printf("Target: your-public-ip (Java:%d, Bedrock:%d)",
+                                            java_port, bedrock_port);
+  gtk_label_set_text(self->label_domains_target, target);
+
+  gboolean ddns_enabled = pumpkin_server_get_ddns_enabled(self->current);
+  if (self->switch_ddns_enabled != NULL) {
+    gtk_widget_set_sensitive(GTK_WIDGET(self->switch_ddns_enabled), TRUE);
+    gtk_switch_set_active(self->switch_ddns_enabled, ddns_enabled);
+  }
+  if (self->entry_ddns_cf_zone_id != NULL) {
+    gtk_editable_set_text(GTK_EDITABLE(self->entry_ddns_cf_zone_id),
+                          pumpkin_server_get_ddns_cf_zone_id(self->current) != NULL
+                            ? pumpkin_server_get_ddns_cf_zone_id(self->current) : "");
+    gtk_widget_set_sensitive(GTK_WIDGET(self->entry_ddns_cf_zone_id), ddns_enabled);
+  }
+  if (self->entry_ddns_cf_api_token != NULL) {
+    gtk_editable_set_text(GTK_EDITABLE(self->entry_ddns_cf_api_token),
+                          pumpkin_server_get_ddns_cf_api_token(self->current) != NULL
+                            ? pumpkin_server_get_ddns_cf_api_token(self->current) : "");
+    gtk_widget_set_sensitive(GTK_WIDGET(self->entry_ddns_cf_api_token), ddns_enabled);
+  }
+  if (self->entry_ddns_cf_record_id != NULL) {
+    gtk_editable_set_text(GTK_EDITABLE(self->entry_ddns_cf_record_id),
+                          pumpkin_server_get_ddns_cf_record_id(self->current) != NULL
+                            ? pumpkin_server_get_ddns_cf_record_id(self->current) : "");
+    gtk_widget_set_sensitive(GTK_WIDGET(self->entry_ddns_cf_record_id), ddns_enabled);
+  }
+  if (self->switch_ddns_cf_proxied != NULL) {
+    gtk_switch_set_active(self->switch_ddns_cf_proxied,
+                          pumpkin_server_get_ddns_cf_proxied(self->current));
+    gtk_widget_set_sensitive(GTK_WIDGET(self->switch_ddns_cf_proxied), ddns_enabled);
+  }
+  if (self->entry_ddns_interval_seconds != NULL) {
+    g_autofree char *interval = g_strdup_printf("%d",
+      sanitize_ddns_interval_seconds(pumpkin_server_get_ddns_interval_seconds(self->current)));
+    gtk_editable_set_text(GTK_EDITABLE(self->entry_ddns_interval_seconds), interval);
+    gtk_widget_set_sensitive(GTK_WIDGET(self->entry_ddns_interval_seconds), ddns_enabled);
+  }
+  if (self->btn_ddns_sync_now != NULL) {
+    gtk_widget_set_sensitive(GTK_WIDGET(self->btn_ddns_sync_now), ddns_enabled && !self->ddns_sync_in_flight);
+  }
+  if (self->btn_save_domains != NULL) {
+    gtk_widget_set_sensitive(GTK_WIDGET(self->btn_save_domains), TRUE);
+  }
+
+  if (self->label_ddns_status != NULL) {
+    const char *sid = pumpkin_server_get_id(self->current);
+    const char *status = get_ddns_status_for_server(self, sid);
+    if (status != NULL && *status != '\0') {
+      gtk_label_set_text(self->label_ddns_status, status);
+    } else if (ddns_enabled) {
+      gtk_label_set_text(self->label_ddns_status, "DDNS enabled. Waiting for next sync...");
+    } else {
+      gtk_label_set_text(self->label_ddns_status, "DDNS disabled.");
+    }
+  }
+  update_domains_ddns_sensitivity(self);
+}
+
+static void
+on_save_domains(GtkButton *button, PumpkinWindow *self)
+{
+  (void)button;
+  if (self == NULL || self->current == NULL ||
+      self->entry_domain == NULL) {
+    set_details_status(self, "No server selected", 3);
+    return;
+  }
+
+  g_autofree char *domain = g_strdup(gtk_editable_get_text(GTK_EDITABLE(self->entry_domain)));
+  g_strstrip(domain);
+
+  gboolean ddns_enabled = self->switch_ddns_enabled != NULL && gtk_switch_get_active(self->switch_ddns_enabled);
+  g_autofree char *zone_id = g_strdup(self->entry_ddns_cf_zone_id != NULL
+                                        ? gtk_editable_get_text(GTK_EDITABLE(self->entry_ddns_cf_zone_id))
+                                        : "");
+  g_autofree char *api_token = g_strdup(self->entry_ddns_cf_api_token != NULL
+                                          ? gtk_editable_get_text(GTK_EDITABLE(self->entry_ddns_cf_api_token))
+                                          : "");
+  g_autofree char *record_id = g_strdup(self->entry_ddns_cf_record_id != NULL
+                                          ? gtk_editable_get_text(GTK_EDITABLE(self->entry_ddns_cf_record_id))
+                                          : "");
+  g_strstrip(zone_id);
+  g_strstrip(api_token);
+  g_strstrip(record_id);
+
+  int ddns_interval = DDNS_INTERVAL_SECONDS_DEFAULT;
+  gboolean interval_has = FALSE;
+  if (self->entry_ddns_interval_seconds != NULL) {
+    if (!parse_optional_positive_int(self->entry_ddns_interval_seconds, &ddns_interval, &interval_has)) {
+      set_details_status(self, "DDNS interval must be a valid number.", 4);
+      return;
+    }
+  }
+  if (!interval_has) {
+    ddns_interval = DDNS_INTERVAL_SECONDS_DEFAULT;
+  }
+  if (ddns_interval < DDNS_INTERVAL_SECONDS_MIN || ddns_interval > DDNS_INTERVAL_SECONDS_MAX) {
+    g_autofree char *msg = g_strdup_printf("DDNS interval must be between %d and %d seconds.",
+                                           DDNS_INTERVAL_SECONDS_MIN,
+                                           DDNS_INTERVAL_SECONDS_MAX);
+    set_details_status(self, msg, 4);
+    return;
+  }
+  ddns_interval = sanitize_ddns_interval_seconds(ddns_interval);
+
+  if (ddns_enabled) {
+    if (domain == NULL || domain[0] == '\0') {
+      set_details_status(self, "Domain is required when DDNS is enabled.", 4);
+      return;
+    }
+    if (zone_id == NULL || zone_id[0] == '\0') {
+      set_details_status(self, "Cloudflare Zone ID is required when DDNS is enabled.", 4);
+      return;
+    }
+    if (api_token == NULL || api_token[0] == '\0') {
+      set_details_status(self, "Cloudflare API token is required when DDNS is enabled.", 4);
+      return;
+    }
+  }
+
+  pumpkin_server_set_domain(self->current, domain[0] != '\0' ? domain : NULL);
+  pumpkin_server_set_ddns_enabled(self->current, ddns_enabled);
+  pumpkin_server_set_ddns_provider(self->current, "cloudflare");
+  pumpkin_server_set_ddns_cf_zone_id(self->current, zone_id[0] != '\0' ? zone_id : NULL);
+  pumpkin_server_set_ddns_cf_api_token(self->current, api_token[0] != '\0' ? api_token : NULL);
+  pumpkin_server_set_ddns_cf_record_id(self->current, record_id[0] != '\0' ? record_id : NULL);
+  pumpkin_server_set_ddns_cf_proxied(self->current,
+                                     self->switch_ddns_cf_proxied != NULL &&
+                                     gtk_switch_get_active(self->switch_ddns_cf_proxied));
+  pumpkin_server_set_ddns_update_ipv6(self->current, FALSE);
+  pumpkin_server_set_ddns_interval_seconds(self->current, ddns_interval);
+
+  g_autoptr(GError) error = NULL;
+  if (!pumpkin_server_save(self->current, &error)) {
+    set_details_status(self, "Failed to save domain/DDNS settings", 4);
+    if (error != NULL) {
+      append_log(self, error->message);
+    }
+    return;
+  }
+
+  update_domains_form(self);
+  set_details_status(self, "Domain and DDNS settings saved", 3);
+  append_log(self, "Domain and DDNS settings saved.");
+  if (ddns_enabled) {
+    ddns_sync_start(self, TRUE);
+  }
 }
 
 static void
@@ -8175,7 +11644,6 @@ static void
 select_server(PumpkinWindow *self, PumpkinServer *server)
 {
   if (self->current != NULL) {
-    g_signal_handlers_disconnect_by_func(self->current, G_CALLBACK(on_log_line), self);
     player_states_mark_all_offline(self);
     player_states_save(self, self->current);
   }
@@ -8183,17 +11651,14 @@ select_server(PumpkinWindow *self, PumpkinServer *server)
   self->current = server;
   pumpkin_server_store_set_selected(self->store, server);
 
-  if (self->current != NULL) {
-    g_signal_connect(self->current, "log-line", G_CALLBACK(on_log_line), self);
-  }
-
   if (server == NULL) {
     self->ui_state = UI_STATE_IDLE;
   } else {
-    self->ui_state = pumpkin_server_get_running(server) ? UI_STATE_RUNNING : UI_STATE_IDLE;
+    self->ui_state = server_is_running_ui(self, server) ? UI_STATE_RUNNING : UI_STATE_IDLE;
   }
 
   self->last_proc_jiffies = 0;
+  self->last_proc_cpu_smoothed = 0.0;
   self->last_proc_pid = 0;
   reset_stats_history(self);
   apply_stats_sample_msec(self,
@@ -8205,6 +11670,9 @@ select_server(PumpkinWindow *self, PumpkinServer *server)
   self->query_players = 0;
   self->query_max_players = 0;
   self->query_updated_at = 0;
+  self->list_snapshot_players = 0;
+  self->list_snapshot_max_players = 0;
+  self->list_snapshot_updated_at = 0;
   self->last_tps_request_at = 0;
   self->last_player_list_request_at = 0;
   self->last_player_state_flush_at = 0;
@@ -8251,10 +11719,12 @@ select_server(PumpkinWindow *self, PumpkinServer *server)
   if (self->stats_row != NULL) {
     gtk_widget_set_visible(GTK_WIDGET(self->stats_row), TRUE);
   }
-  set_stats_graphs_disabled(self, server == NULL || !pumpkin_server_get_running(server));
+  set_stats_graphs_disabled(self, server == NULL || !server_is_running_ui(self, server));
   if (server != NULL) {
     ensure_default_server_icon(server);
   }
+  update_domains_form(self);
+  refresh_overview_network_list(self);
   maybe_trigger_auto_update(self);
 }
 
@@ -8658,6 +12128,10 @@ set_console_warning(PumpkinWindow *self, const char *message, gboolean visible)
   gtk_label_set_text(self->console_warning_label, message != NULL ? message : "");
   gtk_revealer_set_reveal_child(self->console_warning_revealer, visible);
   if (visible) {
+    gint64 now = g_get_monotonic_time();
+    if (self->suppress_warning_beep_until > now) {
+      return;
+    }
     GdkDisplay *display = gdk_display_get_default();
     if (display != NULL) {
       gdk_display_beep(display);
@@ -9338,7 +12812,11 @@ on_remove_server(GtkButton *button, PumpkinWindow *self)
     return;
   }
 
+  g_autofree char *removed_id = g_strdup(pumpkin_server_get_id(self->current));
   pumpkin_server_store_remove_selected(self->store);
+  if (removed_id != NULL && *removed_id != '\0') {
+    networks_prune_server(self, removed_id);
+  }
   clear_list_box(self->server_list);
   load_server_list(self);
   update_overview(self);
@@ -9363,6 +12841,124 @@ download_context_free(DownloadContext *ctx)
   g_free(ctx);
 }
 
+static gboolean
+install_server_from_binary_path(PumpkinWindow *self,
+                                PumpkinServer *server,
+                                const char *src_binary_path,
+                                const char *installed_url,
+                                const char *build_id,
+                                const char *build_label,
+                                const char *success_log,
+                                const char *success_status)
+{
+  if (self == NULL || server == NULL || src_binary_path == NULL || *src_binary_path == '\0') {
+    return FALSE;
+  }
+  if (!binary_file_is_valid(src_binary_path)) {
+    append_log_for_server(self, server, "Install source is invalid; skipping.");
+    set_details_status_for_server(self, server, "Install failed", 5);
+    return FALSE;
+  }
+
+  g_autofree char *bin = pumpkin_server_get_bin_path(server);
+  g_autoptr(GError) copy_error = NULL;
+  if (!copy_binary(src_binary_path, bin, &copy_error)) {
+    if (copy_error != NULL) {
+      append_log_for_server(self, server, copy_error->message);
+    }
+    set_details_status_for_server(self, server, "Install failed", 5);
+    return FALSE;
+  }
+  if (!binary_file_is_valid(bin)) {
+    append_log_for_server(self, server, "Installed binary is invalid.");
+    set_details_status_for_server(self, server, "Install failed", 5);
+    g_remove(bin);
+    return FALSE;
+  }
+
+  append_log_for_server(self, server, success_log != NULL ? success_log : "Installed from local cache");
+  set_details_status_for_server(self, server, success_status != NULL ? success_status : "Installed from cache", 3);
+  pumpkin_server_set_installed_url(server, installed_url);
+  pumpkin_server_set_installed_build_id(server, build_id);
+  if (build_label != NULL && *build_label != '\0') {
+    g_autofree char *normalized = normalize_build_label(self, build_label);
+    pumpkin_server_set_installed_build_label(server, normalized);
+  } else {
+    g_autofree char *local_label = build_label_from_binary_path(self, bin);
+    pumpkin_server_set_installed_build_label(server, local_label);
+  }
+  pumpkin_server_save(server, NULL);
+  update_overview(self);
+  refresh_overview_list(self);
+  update_details(self);
+  return TRUE;
+}
+
+static void
+cache_wait_context_free(CacheWaitContext *ctx)
+{
+  if (ctx == NULL) {
+    return;
+  }
+  g_clear_object(&ctx->self);
+  g_clear_object(&ctx->server);
+  g_clear_pointer(&ctx->url, g_free);
+  g_clear_pointer(&ctx->build_id, g_free);
+  g_clear_pointer(&ctx->build_label, g_free);
+  g_clear_pointer(&ctx->cache_path, g_free);
+  g_free(ctx);
+}
+
+static gboolean
+on_wait_for_shared_cache_tick(gpointer data)
+{
+  CacheWaitContext *ctx = data;
+  if (ctx == NULL || ctx->self == NULL || ctx->server == NULL || ctx->cache_path == NULL) {
+    cache_wait_context_free(ctx);
+    return G_SOURCE_REMOVE;
+  }
+
+  PumpkinWindow *self = ctx->self;
+  PumpkinServer *server = ctx->server;
+  ctx->attempts++;
+
+  if (g_file_test(ctx->cache_path, G_FILE_TEST_EXISTS)) {
+    if (!binary_file_is_valid(ctx->cache_path)) {
+      g_remove(ctx->cache_path);
+      return G_SOURCE_CONTINUE;
+    }
+    DownloadProgressState *state = get_download_progress_state(self, server, FALSE);
+    if (state != NULL) {
+      state->active = FALSE;
+    }
+    install_server_from_binary_path(self,
+                                    server,
+                                    ctx->cache_path,
+                                    ctx->url,
+                                    ctx->build_id,
+                                    ctx->build_label,
+                                    "Installed from shared cache",
+                                    "Installed from cache");
+    cache_wait_context_free(ctx);
+    return G_SOURCE_REMOVE;
+  }
+
+  if (ctx->attempts >= 300) {
+    DownloadProgressState *state = get_download_progress_state(self, server, FALSE);
+    if (state != NULL) {
+      state->active = FALSE;
+    }
+    refresh_overview_list(self);
+    update_details(self);
+    append_log_for_server(self, server, "Shared cache timed out, downloading directly...");
+    start_download_for_server(self, server, ctx->url, TRUE, ctx->restart_after_download);
+    cache_wait_context_free(ctx);
+    return G_SOURCE_REMOVE;
+  }
+
+  return G_SOURCE_CONTINUE;
+}
+
 static void
 start_download_for_server(PumpkinWindow *self,
                           PumpkinServer *server,
@@ -9370,7 +12966,7 @@ start_download_for_server(PumpkinWindow *self,
                           gboolean force_no_cache,
                           gboolean restart_after_download)
 {
-  if (server == NULL) {
+  if (server == NULL || url == NULL || *url == '\0') {
     return;
   }
   if (server_download_active(self, server)) {
@@ -9381,10 +12977,17 @@ start_download_for_server(PumpkinWindow *self,
   gboolean using_latest = (self->latest_url != NULL && g_strcmp0(url, self->latest_url) == 0);
   const char *resolved_build_id = using_latest ? self->latest_build_id : NULL;
   const char *resolved_build_label = using_latest ? self->latest_build_label : NULL;
+  const char *cache_identity = using_latest ? latest_build_identity(self) : resolved_build_id;
 
   g_autofree char *bin = pumpkin_server_get_bin_path(server);
   gboolean use_cache = !force_no_cache && use_download_cache(self);
-  g_autofree char *cache_path = use_cache ? cache_path_for_url(self, url) : NULL;
+  g_autofree char *cache_path = use_cache ? cache_path_for_download(self, url, cache_identity) : NULL;
+  g_autofree char *tmp = NULL;
+  if (cache_path != NULL) {
+    tmp = g_strconcat(cache_path, ".tmp", NULL);
+  } else {
+    tmp = g_strconcat(bin, ".tmp", NULL);
+  }
 
   DownloadProgressState *state = get_download_progress_state(self, server, TRUE);
   if (state != NULL) {
@@ -9401,47 +13004,58 @@ start_download_for_server(PumpkinWindow *self,
   }
 
   if (cache_path != NULL && g_file_test(cache_path, G_FILE_TEST_EXISTS)) {
-    g_autoptr(GError) copy_error = NULL;
-    if (copy_binary(cache_path, bin, &copy_error)) {
-      set_download_busy(self, FALSE);
-      append_log_for_server(self, server, "Installed from local cache");
-      set_details_status_for_server(self, server, "Installed from cache", 3);
+    if (!binary_file_is_valid(cache_path)) {
+      append_log_for_server(self, server, "Ignoring invalid cached binary");
+      g_remove(cache_path);
+    } else {
+      install_server_from_binary_path(self,
+                                      server,
+                                      cache_path,
+                                      url,
+                                      resolved_build_id,
+                                      resolved_build_label,
+                                      "Installed from local cache",
+                                      "Installed from cache");
       if (state != NULL) {
         state->active = FALSE;
       }
       refresh_overview_list(self);
       update_details(self);
-      pumpkin_server_set_installed_url(server, url);
-      pumpkin_server_set_installed_build_id(server, resolved_build_id);
-      if (resolved_build_label != NULL && *resolved_build_label != '\0') {
-        g_autofree char *normalized = normalize_build_label(self, resolved_build_label);
-        pumpkin_server_set_installed_build_label(server, normalized);
-      } else {
-        g_autofree char *local_label = build_label_from_binary_path(self, bin);
-        pumpkin_server_set_installed_build_label(server, local_label);
-      }
-      pumpkin_server_save(server, NULL);
-      update_overview(self);
+      set_download_busy(self, FALSE);
+      return;
+    }
+  }
+
+  if (cache_path != NULL && g_file_test(tmp, G_FILE_TEST_EXISTS)) {
+    GStatBuf st;
+    gboolean stale_lock = FALSE;
+    if (g_stat(tmp, &st) == 0) {
+      time_t now = time(NULL);
+      stale_lock = now > st.st_mtime && ((now - st.st_mtime) > 300);
+    }
+    if (stale_lock) {
+      g_remove(tmp);
+    } else {
+      CacheWaitContext *wait_ctx = g_new0(CacheWaitContext, 1);
+      wait_ctx->self = g_object_ref(self);
+      wait_ctx->server = g_object_ref(server);
+      wait_ctx->url = g_strdup(url);
+      wait_ctx->build_id = g_strdup(resolved_build_id);
+      wait_ctx->build_label = normalize_build_label(self, resolved_build_label);
+      wait_ctx->cache_path = g_strdup(cache_path);
+      wait_ctx->restart_after_download = restart_after_download;
+      wait_ctx->attempts = 0;
+      append_log_for_server(self, server, "Waiting for shared download...");
+      set_details_status_for_server(self, server, "Waiting for shared download...", 3);
+      g_timeout_add(250, on_wait_for_shared_cache_tick, wait_ctx);
       refresh_overview_list(self);
       update_details(self);
       return;
     }
-    if (copy_error != NULL) {
-      append_log_for_server(self, server, copy_error->message);
-      set_details_status_for_server(self, server, "Install failed", 5);
-    }
-    if (state != NULL) {
-      state->active = FALSE;
-    }
-    refresh_overview_list(self);
-    update_details(self);
   }
 
-  g_autofree char *tmp = NULL;
-  if (cache_path != NULL) {
-    tmp = g_strconcat(cache_path, ".tmp", NULL);
-  } else {
-    tmp = g_strconcat(bin, ".tmp", NULL);
+  if (cache_path != NULL && !g_file_test(cache_path, G_FILE_TEST_EXISTS)) {
+    g_file_set_contents(tmp, "", 0, NULL);
   }
 
   DownloadContext *ctx = g_new0(DownloadContext, 1);
@@ -9474,6 +13088,9 @@ on_download_done(GObject *source, GAsyncResult *res, gpointer user_data)
   if (!pumpkin_download_file_finish(res, &error)) {
     append_log_for_server(self, server, error->message);
     set_details_status_for_server(self, server, "Download failed", 5);
+    if (ctx->tmp_path != NULL) {
+      g_remove(ctx->tmp_path);
+    }
     DownloadProgressState *state = get_download_progress_state(self, server, FALSE);
     if (state != NULL) {
       state->active = FALSE;
@@ -9497,6 +13114,7 @@ on_download_done(GObject *source, GAsyncResult *res, gpointer user_data)
       g_autofree char *msg = g_strdup_printf("Failed to replace binary: %s", g_strerror(errno));
       append_log_for_server(self, server, msg);
       set_details_status_for_server(self, server, "Download failed", 5);
+      g_remove(ctx->tmp_path);
       DownloadProgressState *state = get_download_progress_state(self, server, FALSE);
       if (state != NULL) {
         state->active = FALSE;
@@ -9509,6 +13127,21 @@ on_download_done(GObject *source, GAsyncResult *res, gpointer user_data)
     }
   }
 
+  if (ctx->dest_path != NULL && !binary_file_is_valid(ctx->dest_path)) {
+    append_log_for_server(self, server, "Downloaded binary is invalid");
+    set_details_status_for_server(self, server, "Download failed", 5);
+    g_remove(ctx->dest_path);
+    DownloadProgressState *state = get_download_progress_state(self, server, FALSE);
+    if (state != NULL) {
+      state->active = FALSE;
+    }
+    refresh_overview_list(self);
+    set_download_busy(self, FALSE);
+    update_details(self);
+    download_context_free(ctx);
+    return;
+  }
+
   if (ctx->use_cache && ctx->server_bin != NULL && ctx->dest_path != NULL) {
     g_autoptr(GError) copy_error = NULL;
     if (!copy_binary(ctx->dest_path, ctx->server_bin, &copy_error)) {
@@ -9518,6 +13151,23 @@ on_download_done(GObject *source, GAsyncResult *res, gpointer user_data)
         append_log_for_server(self, server, "Failed to copy cached binary to server");
       }
       set_details_status_for_server(self, server, "Install failed", 5);
+      if (ctx->tmp_path != NULL) {
+        g_remove(ctx->tmp_path);
+      }
+      DownloadProgressState *state = get_download_progress_state(self, server, FALSE);
+      if (state != NULL) {
+        state->active = FALSE;
+      }
+      refresh_overview_list(self);
+      set_download_busy(self, FALSE);
+      update_details(self);
+      download_context_free(ctx);
+      return;
+    }
+    if (!binary_file_is_valid(ctx->server_bin)) {
+      append_log_for_server(self, server, "Installed binary from cache is invalid");
+      set_details_status_for_server(self, server, "Install failed", 5);
+      g_remove(ctx->server_bin);
       DownloadProgressState *state = get_download_progress_state(self, server, FALSE);
       if (state != NULL) {
         state->active = FALSE;
@@ -9571,6 +13221,7 @@ on_download_done(GObject *source, GAsyncResult *res, gpointer user_data)
           self->ui_state = UI_STATE_ERROR;
         }
       } else {
+        set_server_running_hint(self, server, TRUE);
         set_details_status_for_server(self, server, "Updated and restarting server...", 4);
         if (self->current == server) {
           refresh_plugin_list(self);
@@ -9693,8 +13344,12 @@ on_overview_remove_confirmed(GObject *dialog, GAsyncResult *res, gpointer user_d
     return;
   }
 
+  g_autofree char *removed_id = g_strdup(pumpkin_server_get_id(server));
   pumpkin_server_store_set_selected(self->store, server);
   pumpkin_server_store_remove_selected(self->store);
+  if (removed_id != NULL && *removed_id != '\0') {
+    networks_prune_server(self, removed_id);
+  }
   if (self->console_buffers != NULL) {
     g_hash_table_remove(self->console_buffers, server);
   }
@@ -9764,6 +13419,7 @@ on_details_start(GtkButton *button, PumpkinWindow *self)
     set_details_error(self, error->message);
     self->ui_state = UI_STATE_ERROR;
   } else {
+    set_server_running_hint(self, self->current, TRUE);
     self->user_stop_requested = FALSE;
     set_console_warning(self, NULL, FALSE);
     if (self->start_delay_id != 0) {
@@ -10473,12 +14129,14 @@ save_settings_impl(PumpkinWindow *self, gboolean restart_server)
     }
     /* Save per-server auto-start settings from list */
     if (self->autostart_server_list != NULL && self->store != NULL) {
-      GListModel *model = pumpkin_server_store_get_model(self->store);
-      guint n = g_list_model_get_n_items(model);
-      for (guint i = 0; i < n; i++) {
-        PumpkinServer *server = g_list_model_get_item(model, i);
-        pumpkin_server_save(server, NULL);
-        g_object_unref(server);
+      GListModel *model = get_server_model(self);
+      if (model != NULL) {
+        guint n = g_list_model_get_n_items(model);
+        for (guint i = 0; i < n; i++) {
+          PumpkinServer *server = g_list_model_get_item(model, i);
+          pumpkin_server_save(server, NULL);
+          g_object_unref(server);
+        }
       }
     }
     pumpkin_config_save(self->config, NULL);
@@ -10709,13 +14367,23 @@ pumpkin_window_init(PumpkinWindow *self)
   }
 
   self->store = pumpkin_server_store_new();
+  networks_load(self);
   load_server_list(self);
 
   g_signal_connect(self->server_list, "row-selected", G_CALLBACK(on_server_selected), self);
+  if (self->btn_servers_back != NULL) {
+    g_signal_connect(self->btn_servers_back, "clicked", G_CALLBACK(on_servers_back), self);
+  }
   g_signal_connect(self->btn_add_server, "clicked", G_CALLBACK(on_add_server), self);
   g_signal_connect(self->btn_add_server_overview, "clicked", G_CALLBACK(on_add_server), self);
+  if (self->btn_add_network_overview != NULL) {
+    g_signal_connect(self->btn_add_network_overview, "clicked", G_CALLBACK(on_add_network_overview), self);
+  }
   g_signal_connect(self->btn_import_server, "clicked", G_CALLBACK(on_import_server), self);
   g_signal_connect(self->btn_import_server_overview, "clicked", G_CALLBACK(on_import_server), self);
+  if (self->btn_sponsor_pumpkin != NULL) {
+    g_signal_connect(self->btn_sponsor_pumpkin, "clicked", G_CALLBACK(on_sponsor_pumpkin_clicked), self);
+  }
   g_signal_connect(self->btn_remove_server, "clicked", G_CALLBACK(on_remove_server), self);
   g_signal_connect(self->btn_details_back, "clicked", G_CALLBACK(on_details_back), self);
   g_signal_connect(self->btn_details_start, "clicked", G_CALLBACK(on_details_start), self);
@@ -10733,6 +14401,17 @@ pumpkin_window_init(PumpkinWindow *self)
   g_signal_connect(self->btn_choose_icon, "clicked", G_CALLBACK(on_choose_icon), self);
   g_signal_connect(self->btn_reset_icon, "clicked", G_CALLBACK(on_reset_icon), self);
   g_signal_connect(self->player_list, "row-activated", G_CALLBACK(on_player_row_activated), self);
+  if (self->player_list != NULL) {
+    GtkEventController *motion = gtk_event_controller_motion_new();
+    g_signal_connect(motion, "enter", G_CALLBACK(on_player_list_pointer_enter), self);
+    g_signal_connect(motion, "leave", G_CALLBACK(on_player_list_pointer_leave), self);
+    gtk_widget_add_controller(GTK_WIDGET(self->player_list), motion);
+
+    GtkGesture *list_click = gtk_gesture_click_new();
+    gtk_gesture_single_set_button(GTK_GESTURE_SINGLE(list_click), GDK_BUTTON_PRIMARY);
+    g_signal_connect(list_click, "pressed", G_CALLBACK(on_player_list_pressed), self);
+    gtk_widget_add_controller(GTK_WIDGET(self->player_list), GTK_EVENT_CONTROLLER(list_click));
+  }
   if (self->player_search != NULL) {
     g_signal_connect(self->player_search, "search-changed", G_CALLBACK(on_player_search_changed), self);
   }
@@ -10771,6 +14450,16 @@ pumpkin_window_init(PumpkinWindow *self)
   g_signal_connect(self->btn_open_players, "clicked", G_CALLBACK(on_open_players), self);
   g_signal_connect(self->btn_open_worlds, "clicked", G_CALLBACK(on_open_worlds), self);
   g_signal_connect(self->btn_save_settings, "clicked", G_CALLBACK(on_save_settings), self);
+  if (self->btn_save_domains != NULL) {
+    g_signal_connect(self->btn_save_domains, "clicked", G_CALLBACK(on_save_domains), self);
+  }
+  if (self->btn_ddns_sync_now != NULL) {
+    g_signal_connect(self->btn_ddns_sync_now, "clicked", G_CALLBACK(on_ddns_sync_now), self);
+  }
+  if (self->switch_ddns_enabled != NULL) {
+    g_signal_connect(self->switch_ddns_enabled, "notify::active",
+                     G_CALLBACK(on_domains_ddns_toggle_changed), self);
+  }
 
   /* Click-to-unfocus: clear entry focus when clicking anywhere else */
   {
@@ -10951,6 +14640,9 @@ pumpkin_window_init(PumpkinWindow *self)
   self->player_state_dirty = FALSE;
   self->last_player_state_flush_at = g_get_monotonic_time();
   self->console_buffers = g_hash_table_new_full(g_direct_hash, g_direct_equal, g_object_unref, g_object_unref);
+  self->server_running_hints = g_hash_table_new_full(g_direct_hash, g_direct_equal, g_object_unref, NULL);
+  self->ddns_last_sync_by_server = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
+  self->ddns_status_by_server = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
   self->command_history = g_ptr_array_new_with_free_func(g_free);
   self->command_history_index = -1;
   self->command_history_draft = NULL;
@@ -10960,12 +14652,15 @@ pumpkin_window_init(PumpkinWindow *self)
   if (self->config != NULL) {
     const char *url = pumpkin_config_get_default_download_url(self->config);
     if (url != NULL) {
-      guint n = g_list_model_get_n_items(pumpkin_server_store_get_model(self->store));
-      for (guint i = 0; i < n; i++) {
-        PumpkinServer *server = g_list_model_get_item(pumpkin_server_store_get_model(self->store), i);
-        pumpkin_server_set_download_url(server, url);
-        pumpkin_server_save(server, NULL);
-        g_object_unref(server);
+      GListModel *model = get_server_model(self);
+      if (model != NULL) {
+        guint n = g_list_model_get_n_items(model);
+        for (guint i = 0; i < n; i++) {
+          PumpkinServer *server = g_list_model_get_item(model, i);
+          pumpkin_server_set_download_url(server, url);
+          pumpkin_server_save(server, NULL);
+          g_object_unref(server);
+        }
       }
     }
     if (self->switch_use_cache != NULL) {
@@ -11004,6 +14699,10 @@ pumpkin_window_init(PumpkinWindow *self)
   if (self->latest_poll_id == 0) {
     self->latest_poll_id = g_timeout_add_seconds(60, poll_latest_release_tick, self);
   }
+  if (self->ddns_timer_id == 0) {
+    self->ddns_timer_id = g_timeout_add_seconds(DDNS_TICK_SECONDS, ddns_tick, self);
+  }
+  ddns_sync_start(self, FALSE);
 
   GtkCssProvider *css = gtk_css_provider_new();
   gtk_css_provider_load_from_resource(css, "/dev/rotstein/SmashedPumpkin/style.css");
@@ -11053,6 +14752,7 @@ pumpkin_window_dispose(GObject *object)
     player_states_mark_all_offline(self);
     player_states_save(self, self->current);
   }
+  clear_network_details_dialog_tracking(self);
   if (self->config != NULL) {
     pumpkin_config_free(self->config);
     self->config = NULL;
@@ -11069,9 +14769,25 @@ pumpkin_window_dispose(GObject *object)
     g_hash_table_destroy(self->console_buffers);
     self->console_buffers = NULL;
   }
+  if (self->server_running_hints != NULL) {
+    g_hash_table_destroy(self->server_running_hints);
+    self->server_running_hints = NULL;
+  }
+  if (self->ddns_last_sync_by_server != NULL) {
+    g_hash_table_destroy(self->ddns_last_sync_by_server);
+    self->ddns_last_sync_by_server = NULL;
+  }
+  if (self->ddns_status_by_server != NULL) {
+    g_hash_table_destroy(self->ddns_status_by_server);
+    self->ddns_status_by_server = NULL;
+  }
   if (self->command_history != NULL) {
     g_ptr_array_unref(self->command_history);
     self->command_history = NULL;
+  }
+  if (self->networks != NULL) {
+    g_ptr_array_unref(self->networks);
+    self->networks = NULL;
   }
   self->command_history_index = -1;
   g_clear_pointer(&self->command_history_draft, g_free);
@@ -11132,6 +14848,19 @@ pumpkin_window_dispose(GObject *object)
     g_source_remove(self->latest_poll_id);
     self->latest_poll_id = 0;
   }
+  if (self->ddns_timer_id != 0) {
+    g_source_remove(self->ddns_timer_id);
+    self->ddns_timer_id = 0;
+  }
+  if (self->overview_refresh_idle_id != 0) {
+    g_source_remove(self->overview_refresh_idle_id);
+    self->overview_refresh_idle_id = 0;
+  }
+  if (self->network_details_refresh_idle_id != 0) {
+    g_source_remove(self->network_details_refresh_idle_id);
+    self->network_details_refresh_idle_id = 0;
+  }
+  self->overview_refresh_needs_details = FALSE;
   clear_auto_update_countdown(self);
   if (self->restart_delay_id != 0) {
     g_source_remove(self->restart_delay_id);
@@ -11241,6 +14970,22 @@ update_live_player_names(PumpkinWindow *self, const char *line)
         g_autofree char *count_txt = g_match_info_fetch(count_match, 1);
         if (count_txt != NULL) {
           count_value = (int)strtol(count_txt, NULL, 10);
+        }
+      }
+    }
+
+    if (count_value >= 0) {
+      self->list_snapshot_players = count_value;
+      self->list_snapshot_updated_at = g_get_monotonic_time();
+    }
+    g_autoptr(GRegex) max_re = g_regex_new("max\\s+of\\s+([0-9]+)", G_REGEX_CASELESS, 0, NULL);
+    g_autoptr(GMatchInfo) max_match = NULL;
+    if (max_re != NULL && g_regex_match(max_re, check, 0, &max_match)) {
+      g_autofree char *max_txt = g_match_info_fetch(max_match, 1);
+      if (max_txt != NULL) {
+        int snapshot_max = (int)strtol(max_txt, NULL, 10);
+        if (snapshot_max >= 0) {
+          self->list_snapshot_max_players = snapshot_max;
         }
       }
     }
@@ -11366,13 +15111,27 @@ pumpkin_window_class_init(PumpkinWindowClass *class)
 
   gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, view_stack);
   gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, details_switcher);
+  gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, players_switcher);
+  gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, overview_page_box);
+  gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, overview_header_row);
+  gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, details_page_box);
+  gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, details_header_row);
+  gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, details_identity_row);
+  gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, console_command_row);
+  gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, servers_page_box);
+  gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, servers_header_row);
+  gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, domains_page_box);
   gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, server_list);
   gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, log_view);
   gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, overview_list);
+  gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, overview_network_list);
   gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, btn_add_server);
+  gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, btn_servers_back);
   gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, btn_add_server_overview);
+  gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, btn_add_network_overview);
   gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, btn_import_server);
   gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, btn_import_server_overview);
+  gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, btn_sponsor_pumpkin);
   gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, btn_remove_server);
   gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, btn_open_plugins);
   gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, btn_open_players);
@@ -11431,6 +15190,7 @@ pumpkin_window_class_init(PumpkinWindowClass *class)
   gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, btn_details_install);
   gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, btn_details_update);
   gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, btn_details_check_updates);
+  gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, details_action_row);
   gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, entry_command);
   gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, btn_console_send);
   gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, btn_console_copy);
@@ -11471,6 +15231,17 @@ pumpkin_window_class_init(PumpkinWindowClass *class)
   gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, entry_rcon_host);
   gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, entry_rcon_port);
   gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, entry_rcon_password);
+  gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, entry_domain);
+  gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, label_domains_target);
+  gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, btn_save_domains);
+  gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, switch_ddns_enabled);
+  gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, entry_ddns_cf_zone_id);
+  gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, entry_ddns_cf_api_token);
+  gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, entry_ddns_cf_record_id);
+  gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, switch_ddns_cf_proxied);
+  gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, entry_ddns_interval_seconds);
+  gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, btn_ddns_sync_now);
+  gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, label_ddns_status);
   gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, label_rcon_host_hint);
   gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, label_rcon_port_hint);
   gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, label_resource_limits);
@@ -11495,6 +15266,103 @@ pumpkin_window_new(AdwApplication *app)
   return GTK_WINDOW(g_object_new(PUMPKIN_TYPE_WINDOW, "application", app, NULL));
 }
 
+static void
+auto_start_context_free(AutoStartContext *ctx)
+{
+  if (ctx == NULL) {
+    return;
+  }
+  g_clear_object(&ctx->server);
+  g_clear_object(&ctx->self);
+  g_free(ctx);
+}
+
+static gboolean
+auto_start_server_timeout_cb(gpointer user_data)
+{
+  AutoStartContext *ctx = user_data;
+  if (ctx == NULL || ctx->self == NULL || ctx->server == NULL) {
+    auto_start_context_free(ctx);
+    return G_SOURCE_REMOVE;
+  }
+
+  PumpkinWindow *self = ctx->self;
+  PumpkinServer *server = ctx->server;
+  ensure_server_log_handler(self, server);
+
+  if (server_is_running_ui(self, server)) {
+    auto_start_context_free(ctx);
+    return G_SOURCE_REMOVE;
+  }
+  if (!server_has_installation(self, server)) {
+    append_log_for_server(self, server, "[SMPK] Auto-start skipped: Pumpkin is not installed.");
+    auto_start_context_free(ctx);
+    return G_SOURCE_REMOVE;
+  }
+
+  g_autoptr(GError) error = NULL;
+  if (!pumpkin_server_start(server, &error)) {
+    if (error != NULL) {
+      append_log_for_server(self, server, error->message);
+      if (self->current == server) {
+        self->ui_state = UI_STATE_ERROR;
+        set_details_error(self, error->message);
+      }
+    }
+  } else {
+    set_server_running_hint(self, server, TRUE);
+    append_log_for_server(self, server, "[SMPK] Started automatically on launch.");
+    if (self->current == server) {
+      self->ui_state = UI_STATE_RUNNING;
+      self->user_stop_requested = FALSE;
+      set_console_warning(self, NULL, FALSE);
+    }
+  }
+
+  queue_overview_refresh(self, self->current == server);
+  auto_start_context_free(ctx);
+  return G_SOURCE_REMOVE;
+}
+
+void
+pumpkin_window_schedule_auto_start_servers(PumpkinWindow *self)
+{
+  if (self == NULL || self->store == NULL) {
+    return;
+  }
+
+  GListModel *model = get_server_model(self);
+  if (model == NULL) {
+    return;
+  }
+
+  guint n = g_list_model_get_n_items(model);
+  for (guint i = 0; i < n; i++) {
+    PumpkinServer *server = g_list_model_get_item(model, i);
+    if (server == NULL) {
+      continue;
+    }
+    if (!pumpkin_server_get_auto_start_on_launch(server)) {
+      g_object_unref(server);
+      continue;
+    }
+    if (server_is_running_ui(self, server)) {
+      g_object_unref(server);
+      continue;
+    }
+
+    int delay = pumpkin_server_get_auto_start_delay(server);
+    if (delay <= 0) {
+      delay = 1;
+    }
+
+    AutoStartContext *ctx = g_new0(AutoStartContext, 1);
+    ctx->self = g_object_ref(self);
+    ctx->server = server;
+    g_timeout_add_seconds((guint)delay, auto_start_server_timeout_cb, ctx);
+  }
+}
+
 void
 pumpkin_window_stop_all_servers(PumpkinWindow *self)
 {
@@ -11506,6 +15374,9 @@ pumpkin_window_stop_all_servers(PumpkinWindow *self)
   }
 
   GListModel *model = pumpkin_server_store_get_model(self->store);
+  if (!G_IS_LIST_MODEL(model)) {
+    return;
+  }
   guint n = g_list_model_get_n_items(model);
   for (guint i = 0; i < n; i++) {
     PumpkinServer *server = g_list_model_get_item(model, i);
@@ -11532,7 +15403,10 @@ pumpkin_window_select_server(PumpkinWindow *self, const char *id_or_name)
     return;
   }
 
-  GListModel *model = pumpkin_server_store_get_model(self->store);
+  GListModel *model = get_server_model(self);
+  if (model == NULL) {
+    return;
+  }
   guint n = g_list_model_get_n_items(model);
   for (guint i = 0; i < n; i++) {
     PumpkinServer *server = g_list_model_get_item(model, i);

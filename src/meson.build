@@ -85,4 +85,14 @@ if host_machine.system() == 'linux' and gtk3_dep.found() and appindicator_dep.fo
   )
 elif host_machine.system() == 'linux'
   warning('Tray helper disabled: missing gtk+-3.0 and/or appindicator (ayatana-appindicator3-0.1 or appindicator3-0.1)')
+elif host_machine.system() == 'windows'
+  shell32_dep = cc.find_library('shell32', required: true)
+  user32_dep = cc.find_library('user32', required: true)
+  executable(
+    'smashed-pumpkin-tray',
+    ['tray-win.c', config_h],
+    include_directories: inc,
+    dependencies: [shell32_dep, user32_dep],
+    install: true
+  )
 endif

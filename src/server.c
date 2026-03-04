@@ -23,7 +23,10 @@
 enum {
   SERVER_STATS_SAMPLE_MSEC_DEFAULT = 200,
   SERVER_STATS_SAMPLE_MSEC_MIN = 2,
-  SERVER_STATS_SAMPLE_MSEC_MAX = 2000
+  SERVER_STATS_SAMPLE_MSEC_MAX = 2000,
+  SERVER_DDNS_INTERVAL_SECONDS_DEFAULT = 300,
+  SERVER_DDNS_INTERVAL_SECONDS_MIN = 30,
+  SERVER_DDNS_INTERVAL_SECONDS_MAX = 86400
 };
 
 static const char *
@@ -62,6 +65,15 @@ struct _PumpkinServer {
   char *installed_build_label;
   char *rcon_host;
   char *rcon_password;
+  char *domain;
+  gboolean ddns_enabled;
+  char *ddns_provider;
+  char *ddns_cf_api_token;
+  char *ddns_cf_zone_id;
+  char *ddns_cf_record_id;
+  gboolean ddns_cf_proxied;
+  gboolean ddns_update_ipv6;
+  int ddns_interval_seconds;
   int rcon_port;
   int port;
   int bedrock_port;
@@ -115,6 +127,11 @@ pumpkin_server_finalize(GObject *object)
   g_clear_pointer(&self->installed_build_label, g_free);
   g_clear_pointer(&self->rcon_host, g_free);
   g_clear_pointer(&self->rcon_password, g_free);
+  g_clear_pointer(&self->domain, g_free);
+  g_clear_pointer(&self->ddns_provider, g_free);
+  g_clear_pointer(&self->ddns_cf_api_token, g_free);
+  g_clear_pointer(&self->ddns_cf_zone_id, g_free);
+  g_clear_pointer(&self->ddns_cf_record_id, g_free);
   g_clear_object(&self->process);
   g_clear_object(&self->stdout_dis);
   g_clear_object(&self->stderr_dis);
@@ -172,6 +189,14 @@ pumpkin_server_init(PumpkinServer *self)
   self->auto_update_minute = 0;
   self->auto_start_on_launch = FALSE;
   self->auto_start_delay = 10;
+  self->ddns_enabled = FALSE;
+  self->ddns_provider = g_strdup("cloudflare");
+  self->ddns_cf_api_token = NULL;
+  self->ddns_cf_zone_id = NULL;
+  self->ddns_cf_record_id = NULL;
+  self->ddns_cf_proxied = FALSE;
+  self->ddns_update_ipv6 = FALSE;
+  self->ddns_interval_seconds = SERVER_DDNS_INTERVAL_SECONDS_DEFAULT;
   self->pid = 0;
 }
 
@@ -251,6 +276,15 @@ clamp_stats_sample_msec(int requested)
 {
   if (requested < SERVER_STATS_SAMPLE_MSEC_MIN || requested > SERVER_STATS_SAMPLE_MSEC_MAX) {
     return SERVER_STATS_SAMPLE_MSEC_DEFAULT;
+  }
+  return requested;
+}
+
+static int
+clamp_ddns_interval_seconds(int requested)
+{
+  if (requested < SERVER_DDNS_INTERVAL_SECONDS_MIN || requested > SERVER_DDNS_INTERVAL_SECONDS_MAX) {
+    return SERVER_DDNS_INTERVAL_SECONDS_DEFAULT;
   }
   return requested;
 }
@@ -455,6 +489,57 @@ pumpkin_server_load(const char *dir, GError **error)
     self->max_players = 20;
   }
 
+  g_clear_pointer(&self->domain, g_free);
+  self->domain = g_key_file_get_string(keyfile, "server", "domain", NULL);
+  if (self->domain != NULL && self->domain[0] == '\0') {
+    g_clear_pointer(&self->domain, g_free);
+  }
+  if (self->domain == NULL) {
+    self->domain = g_key_file_get_string(keyfile, "server", "java_domain", NULL);
+    if (self->domain != NULL && self->domain[0] == '\0') {
+      g_clear_pointer(&self->domain, g_free);
+    }
+  }
+  if (self->domain == NULL) {
+    self->domain = g_key_file_get_string(keyfile, "server", "bedrock_domain", NULL);
+    if (self->domain != NULL && self->domain[0] == '\0') {
+      g_clear_pointer(&self->domain, g_free);
+    }
+  }
+
+  if (g_key_file_has_key(keyfile, "ddns", "enabled", NULL)) {
+    self->ddns_enabled = g_key_file_get_boolean(keyfile, "ddns", "enabled", NULL);
+  }
+  g_clear_pointer(&self->ddns_provider, g_free);
+  self->ddns_provider = g_key_file_get_string(keyfile, "ddns", "provider", NULL);
+  if (self->ddns_provider == NULL || self->ddns_provider[0] == '\0') {
+    g_clear_pointer(&self->ddns_provider, g_free);
+    self->ddns_provider = g_strdup("cloudflare");
+  }
+  g_clear_pointer(&self->ddns_cf_api_token, g_free);
+  self->ddns_cf_api_token = g_key_file_get_string(keyfile, "ddns", "cloudflare_api_token", NULL);
+  if (self->ddns_cf_api_token != NULL && self->ddns_cf_api_token[0] == '\0') {
+    g_clear_pointer(&self->ddns_cf_api_token, g_free);
+  }
+  g_clear_pointer(&self->ddns_cf_zone_id, g_free);
+  self->ddns_cf_zone_id = g_key_file_get_string(keyfile, "ddns", "cloudflare_zone_id", NULL);
+  if (self->ddns_cf_zone_id != NULL && self->ddns_cf_zone_id[0] == '\0') {
+    g_clear_pointer(&self->ddns_cf_zone_id, g_free);
+  }
+  g_clear_pointer(&self->ddns_cf_record_id, g_free);
+  self->ddns_cf_record_id = g_key_file_get_string(keyfile, "ddns", "cloudflare_record_id", NULL);
+  if (self->ddns_cf_record_id != NULL && self->ddns_cf_record_id[0] == '\0') {
+    g_clear_pointer(&self->ddns_cf_record_id, g_free);
+  }
+  if (g_key_file_has_key(keyfile, "ddns", "cloudflare_proxied", NULL)) {
+    self->ddns_cf_proxied = g_key_file_get_boolean(keyfile, "ddns", "cloudflare_proxied", NULL);
+  }
+  if (g_key_file_has_key(keyfile, "ddns", "update_ipv6", NULL)) {
+    self->ddns_update_ipv6 = g_key_file_get_boolean(keyfile, "ddns", "update_ipv6", NULL);
+  }
+  self->ddns_interval_seconds = clamp_ddns_interval_seconds(
+    g_key_file_get_integer(keyfile, "ddns", "interval_seconds", NULL));
+
   self->max_cpu_cores = g_key_file_get_integer(keyfile, "server", "max_cpu_cores", NULL);
   if (self->max_cpu_cores < 0) {
     self->max_cpu_cores = 0;
@@ -521,6 +606,27 @@ pumpkin_server_save(PumpkinServer *self, GError **error)
   g_key_file_set_integer(keyfile, "server", "port", self->port);
   g_key_file_set_integer(keyfile, "server", "bedrock_port", self->bedrock_port);
   g_key_file_set_integer(keyfile, "server", "max_players", self->max_players);
+  if (self->domain != NULL && self->domain[0] != '\0') {
+    g_key_file_set_string(keyfile, "server", "domain", self->domain);
+  }
+  g_key_file_set_boolean(keyfile, "ddns", "enabled", self->ddns_enabled);
+  if (self->ddns_provider != NULL && self->ddns_provider[0] != '\0') {
+    g_key_file_set_string(keyfile, "ddns", "provider", self->ddns_provider);
+  } else {
+    g_key_file_set_string(keyfile, "ddns", "provider", "cloudflare");
+  }
+  if (self->ddns_cf_api_token != NULL && self->ddns_cf_api_token[0] != '\0') {
+    g_key_file_set_string(keyfile, "ddns", "cloudflare_api_token", self->ddns_cf_api_token);
+  }
+  if (self->ddns_cf_zone_id != NULL && self->ddns_cf_zone_id[0] != '\0') {
+    g_key_file_set_string(keyfile, "ddns", "cloudflare_zone_id", self->ddns_cf_zone_id);
+  }
+  if (self->ddns_cf_record_id != NULL && self->ddns_cf_record_id[0] != '\0') {
+    g_key_file_set_string(keyfile, "ddns", "cloudflare_record_id", self->ddns_cf_record_id);
+  }
+  g_key_file_set_boolean(keyfile, "ddns", "cloudflare_proxied", self->ddns_cf_proxied);
+  g_key_file_set_boolean(keyfile, "ddns", "update_ipv6", self->ddns_update_ipv6);
+  g_key_file_set_integer(keyfile, "ddns", "interval_seconds", clamp_ddns_interval_seconds(self->ddns_interval_seconds));
   g_key_file_set_integer(keyfile, "server", "max_cpu_cores", self->max_cpu_cores);
   g_key_file_set_integer(keyfile, "server", "max_ram_mb", self->max_ram_mb);
   g_key_file_set_integer(keyfile, "server", "stats_sample_msec", self->stats_sample_msec);
@@ -614,6 +720,60 @@ int
 pumpkin_server_get_rcon_port(PumpkinServer *self)
 {
   return self->rcon_port;
+}
+
+const char *
+pumpkin_server_get_domain(PumpkinServer *self)
+{
+  return self->domain;
+}
+
+gboolean
+pumpkin_server_get_ddns_enabled(PumpkinServer *self)
+{
+  return self->ddns_enabled;
+}
+
+const char *
+pumpkin_server_get_ddns_provider(PumpkinServer *self)
+{
+  return self->ddns_provider;
+}
+
+const char *
+pumpkin_server_get_ddns_cf_api_token(PumpkinServer *self)
+{
+  return self->ddns_cf_api_token;
+}
+
+const char *
+pumpkin_server_get_ddns_cf_zone_id(PumpkinServer *self)
+{
+  return self->ddns_cf_zone_id;
+}
+
+const char *
+pumpkin_server_get_ddns_cf_record_id(PumpkinServer *self)
+{
+  return self->ddns_cf_record_id;
+}
+
+gboolean
+pumpkin_server_get_ddns_cf_proxied(PumpkinServer *self)
+{
+  return self->ddns_cf_proxied;
+}
+
+gboolean
+pumpkin_server_get_ddns_update_ipv6(PumpkinServer *self)
+{
+  return self->ddns_update_ipv6;
+}
+
+int
+pumpkin_server_get_ddns_interval_seconds(PumpkinServer *self)
+{
+  return clamp_ddns_interval_seconds(self->ddns_interval_seconds);
 }
 
 int
@@ -789,6 +949,79 @@ pumpkin_server_set_rcon_password(PumpkinServer *self, const char *password)
 {
   g_free(self->rcon_password);
   self->rcon_password = g_strdup(password);
+}
+
+void
+pumpkin_server_set_domain(PumpkinServer *self, const char *domain)
+{
+  g_free(self->domain);
+  if (domain != NULL && *domain != '\0') {
+    self->domain = g_strdup(domain);
+  } else {
+    self->domain = NULL;
+  }
+}
+
+void
+pumpkin_server_set_ddns_enabled(PumpkinServer *self, gboolean enabled)
+{
+  self->ddns_enabled = enabled;
+}
+
+void
+pumpkin_server_set_ddns_provider(PumpkinServer *self, const char *provider)
+{
+  g_clear_pointer(&self->ddns_provider, g_free);
+  if (provider != NULL && *provider != '\0') {
+    self->ddns_provider = g_strdup(provider);
+  } else {
+    self->ddns_provider = g_strdup("cloudflare");
+  }
+}
+
+void
+pumpkin_server_set_ddns_cf_api_token(PumpkinServer *self, const char *token)
+{
+  g_clear_pointer(&self->ddns_cf_api_token, g_free);
+  if (token != NULL && *token != '\0') {
+    self->ddns_cf_api_token = g_strdup(token);
+  }
+}
+
+void
+pumpkin_server_set_ddns_cf_zone_id(PumpkinServer *self, const char *zone_id)
+{
+  g_clear_pointer(&self->ddns_cf_zone_id, g_free);
+  if (zone_id != NULL && *zone_id != '\0') {
+    self->ddns_cf_zone_id = g_strdup(zone_id);
+  }
+}
+
+void
+pumpkin_server_set_ddns_cf_record_id(PumpkinServer *self, const char *record_id)
+{
+  g_clear_pointer(&self->ddns_cf_record_id, g_free);
+  if (record_id != NULL && *record_id != '\0') {
+    self->ddns_cf_record_id = g_strdup(record_id);
+  }
+}
+
+void
+pumpkin_server_set_ddns_cf_proxied(PumpkinServer *self, gboolean proxied)
+{
+  self->ddns_cf_proxied = proxied;
+}
+
+void
+pumpkin_server_set_ddns_update_ipv6(PumpkinServer *self, gboolean enabled)
+{
+  self->ddns_update_ipv6 = enabled;
+}
+
+void
+pumpkin_server_set_ddns_interval_seconds(PumpkinServer *self, int seconds)
+{
+  self->ddns_interval_seconds = clamp_ddns_interval_seconds(seconds);
 }
 
 void
