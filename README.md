@@ -14,6 +14,10 @@ meson compile -C buildDir
 ./buildDir/src/smashed-pumpkin
 ```
 
+## Windows (Winget)
+Windows releases are prepared as MSI installers (`x64`, `x86`, `arm64`) and include ready-to-submit Winget manifests.  
+See [docs/winget.md](docs/winget.md) and [docs/release-pipeline.md](docs/release-pipeline.md).
+
 ## Tray icon on GNOME
 GNOME Shell does not show legacy tray icons by default.
 Install and enable the `AppIndicator and KStatusNotifierItem Support` extension to see the tray icon.
