@@ -61,25 +61,17 @@
     <release version="0.4.1" date="2026-03-04">
       <description>
         <ul>
-          <li>Player management is much more stable: search, sorting, and admin actions are more reliable.</li>
-          <li>Moderation was expanded with ban reasons plus ban-ip and pardon-ip flows.</li>
-          <li>The console was refined with clearer timestamps, better filters, and less noisy output.</li>
-          <li>New per-server Domains tab with Java/Bedrock DNS guidance and Dynamic DNS options.</li>
-          <li>Desktop release pipeline now ships Flatpak (x86_64 + aarch64), Windows MSI (x64), and macOS app bundles.</li>
-          <li>Release publishing is now intentionally manual with strict version consistency checks.</li>
+          <li>New server networks: You can now manage multiple servers as one group and start, stop, or update them together.</li>
+          <li>New Domains tab with Dynamic DNS: DNS records can now be updated automatically when your public IP changes.</li>
         </ul>
-        <p>Android/APK was evaluated, but is not release-ready yet for the current GTK4+libadwaita stack.</p>
+        <p>Thank you to everyone in the community whose feedback directly shaped this update.</p>
       </description>
       <description xml:lang="de">
         <ul>
-          <li>Spielerverwaltung deutlich stabiler: Suchen, Sortieren und Admin-Aktionen funktionieren zuverlässiger.</li>
-          <li>Moderation wurde ausgebaut: inklusive Ban-Gründen sowie ban-ip und pardon-ip.</li>
-          <li>Die Konsole wurde überarbeitet: klarere Zeitstempel, bessere Filter und weniger Stör-Ausgaben.</li>
-          <li>Neuer Domains-Tab pro Server mit DNS-Anleitung für Java/Bedrock und Dynamic-DNS-Optionen.</li>
-          <li>Desktop-Release-Pipeline erweitert: Flatpak (x86_64 + aarch64), Windows MSI (x64) und macOS App-Bundles.</li>
-          <li>Release-Veröffentlichung ist jetzt bewusst manuell steuerbar, inklusive strikter Versionsprüfung.</li>
+          <li>Neue Server-Netzwerke: Mehrere Server lassen sich jetzt als Verbund verwalten und gemeinsam starten, stoppen und aktualisieren.</li>
+          <li>Neuer Domains-Tab mit Dynamic DNS: Bei wechselnder öffentlicher IP können DNS-Einträge jetzt automatisch aktualisiert werden.</li>
         </ul>
-        <p>Android/APK wurde geprüft, ist für den aktuellen GTK4+libadwaita-Stack aber noch nicht release-reif.</p>
+        <p>Vielen Dank für euer Feedback, das diese Funktionen direkt mitgeprägt hat.</p>
       </description>
     </release>
     <release version="0.4.0" date="2026-02-28">
