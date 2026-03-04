@@ -2,10 +2,10 @@
 <component type="desktop-application">
   <id>@APP_ID@</id>
   <name>@APP_NAME@</name>
-  <summary>Manage PumpkinMC servers</summary>
+  <summary>Easy Minecraft server manager for Pumpkin</summary>
   <description>
-    <p>Smashed Pumpkin helps you install, update, start and manage PumpkinMC servers without losing worlds or plugins. It keeps track of server instances, provides clear status information with logs and organizes everything in a modern GNOME interface.</p>
-    <p>Planned management features include plugin directories, player lists, permissions and world data with safe defaults plus quick access to configuration files.</p>
+    <p>Smashed Pumpkin is a desktop app to manage Minecraft servers that run on Pumpkin. You can create servers, start and stop them, install updates, and check their status in one place.</p>
+    <p>It also helps with everyday admin tasks like viewing the live console, managing worlds and plugins, and checking player activity without doing everything by terminal commands.</p>
   </description>
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>GPL-3.0-or-later</project_license>
@@ -53,6 +53,18 @@
     <control>touch</control>
   </supports>
   <releases>
+    <release version="0.4.1" date="2026-03-01">
+      <description>
+        <ul>
+          <li>Player admin actions were hardened: op/deop now work reliably without syntax failures.</li>
+          <li>CPU spikes from aggressive background polling were reduced.</li>
+          <li>Added a new per-server Domains tab with Java/Bedrock DNS guidance.</li>
+          <li>Improved adaptive layout behavior for narrow portrait/mobile-like window sizes.</li>
+          <li>Desktop CI now includes Linux, macOS, and Windows builds.</li>
+        </ul>
+        <p>Android/APK was evaluated, but is not release-ready yet for the current GTK4+libadwaita stack.</p>
+      </description>
+    </release>
     <release version="0.4.0" date="2026-02-28">
       <description>
         <ul>
