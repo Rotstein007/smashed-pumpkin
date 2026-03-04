@@ -3,13 +3,23 @@ name: Flatpak
 on:
   push:
     branches: ["master"]
+    tags: ["v*"]
   pull_request:
     branches: ["master"]
   workflow_dispatch:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    name: Flatpak ${{ matrix.flatpak_arch }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - flatpak_arch: x86_64
+            runner: ubuntu-latest
+          - flatpak_arch: aarch64
+            runner: ubuntu-24.04-arm
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -29,14 +39,27 @@ jobs:
           export XDG_RUNTIME_DIR=/tmp/xdg-runtime-$UID
           mkdir -p "$XDG_RUNTIME_DIR"
           chmod 700 "$XDG_RUNTIME_DIR"
-          flatpak-builder --user --repo=flatpak-repo --install-deps-from=flathub --install-deps-from=flathub-beta --force-clean --disable-rofiles-fuse build-dir build-aux/flatpak/dev.rotstein.SmashedPumpkin.json
+          flatpak-builder \
+            --user \
+            --repo=flatpak-repo \
+            --install-deps-from=flathub \
+            --install-deps-from=flathub-beta \
+            --force-clean \
+            --disable-rofiles-fuse \
+            build-dir \
+            build-aux/flatpak/dev.rotstein.SmashedPumpkin.json
 
       - name: Bundle Flatpak
         run: |
-          flatpak build-bundle --arch=x86_64 flatpak-repo SmashedPumpkin.flatpak dev.rotstein.SmashedPumpkin master
+          flatpak build-bundle \
+            --arch=${{ matrix.flatpak_arch }} \
+            flatpak-repo \
+            SmashedPumpkin-${{ matrix.flatpak_arch }}.flatpak \
+            dev.rotstein.SmashedPumpkin \
+            master
 
       - name: Upload Bundle
         uses: actions/upload-artifact@v4
         with:
-          name: SmashedPumpkin.flatpak
-          path: SmashedPumpkin.flatpak
+          name: SmashedPumpkin-${{ matrix.flatpak_arch }}.flatpak
+          path: SmashedPumpkin-${{ matrix.flatpak_arch }}.flatpak
