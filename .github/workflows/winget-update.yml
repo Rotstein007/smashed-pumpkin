@@ -75,16 +75,22 @@ jobs:
             throw "wingetcreate.exe download failed."
           }
 
-      - name: Ensure package exists in winget-pkgs
+      - name: Check package existence in winget-pkgs
+        id: package_exists
         shell: pwsh
         run: |
           $packageId = "${{ steps.validate.outputs.package_id }}"
           .\wingetcreate.exe show $packageId *> $null
-          if ($LASTEXITCODE -ne 0) {
-            throw "Package '$packageId' does not exist in winget-pkgs yet. Initial onboarding must be submitted once before using this update workflow."
+          if ($LASTEXITCODE -eq 0) {
+            "exists=true" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+            Write-Host "Package '$packageId' already exists in winget-pkgs. Running update flow."
+          } else {
+            "exists=false" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+            Write-Host "Package '$packageId' does not exist in winget-pkgs yet. Running initial onboarding flow."
           }
 
       - name: Submit update to winget-pkgs
+        if: steps.package_exists.outputs.exists == 'true'
         shell: pwsh
         env:
           WINGET_SUBMIT_TOKEN: ${{ secrets.WINGET_SUBMIT_TOKEN }}
@@ -101,3 +107,71 @@ jobs:
             -v $version `
             -t $env:WINGET_SUBMIT_TOKEN `
             --submit
+
+      - name: Submit initial package to winget-pkgs
+        if: steps.package_exists.outputs.exists == 'false'
+        shell: pwsh
+        env:
+          WINGET_SUBMIT_TOKEN: ${{ secrets.WINGET_SUBMIT_TOKEN }}
+        run: |
+          $packageId = "${{ steps.validate.outputs.package_id }}"
+          $version = "${{ steps.validate.outputs.version }}"
+          $url = "${{ steps.validate.outputs.installer_url_x64 }}"
+          $publisher = "Rotstein"
+          $packageName = "Smashed Pumpkin"
+          $shortDescription = "Desktop management app for Pumpkin servers."
+
+          Write-Host "Preparing initial winget manifest for: $packageId $version"
+          Invoke-WebRequest $url -OutFile installer-x64.msi
+
+          $sha = (Get-FileHash installer-x64.msi -Algorithm SHA256).Hash.ToUpperInvariant()
+
+          $installer = New-Object -ComObject WindowsInstaller.Installer
+          $database = $installer.GetType().InvokeMember('OpenDatabase', 'InvokeMethod', $null, $installer, @('installer-x64.msi', 0))
+          $view = $database.OpenView("SELECT `Value` FROM `Property` WHERE `Property`='ProductCode'")
+          $view.Execute()
+          $record = $view.Fetch()
+          if (-not $record) { throw "Could not read ProductCode from MSI." }
+          $productCode = $record.StringData(1)
+          if ([string]::IsNullOrWhiteSpace($productCode)) { throw "ProductCode in MSI is empty." }
+
+          New-Item -ItemType Directory -Path winget -Force | Out-Null
+
+          @"
+          PackageIdentifier: $packageId
+          PackageVersion: $version
+          InstallerType: msi
+          Scope: machine
+          Installers:
+          - Architecture: x64
+            InstallerUrl: $url
+            InstallerSha256: $sha
+            ProductCode: '$productCode'
+          ManifestType: installer
+          ManifestVersion: 1.6.0
+          "@ | Set-Content "winget/$packageId.installer.yaml"
+
+          @"
+          PackageIdentifier: $packageId
+          PackageVersion: $version
+          PackageLocale: en-US
+          Publisher: $publisher
+          PackageName: $packageName
+          ShortDescription: $shortDescription
+          ManifestType: defaultLocale
+          ManifestVersion: 1.6.0
+          "@ | Set-Content "winget/$packageId.locale.en-US.yaml"
+
+          @"
+          PackageIdentifier: $packageId
+          PackageVersion: $version
+          DefaultLocale: en-US
+          ManifestType: version
+          ManifestVersion: 1.6.0
+          "@ | Set-Content "winget/$packageId.yaml"
+
+          Write-Host "Submitting initial winget package PR..."
+          .\wingetcreate.exe submit "winget/$packageId.yaml" `
+            -p "$packageId $version" `
+            -t $env:WINGET_SUBMIT_TOKEN `
+            -n
