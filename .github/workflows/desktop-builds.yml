@@ -8,6 +8,10 @@ on:
     branches: ["master"]
   workflow_dispatch:
 
+concurrency:
+  group: desktop-builds-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: write
 
@@ -60,6 +64,7 @@ jobs:
         with:
           name: smashed-pumpkin-linux-${{ matrix.arch }}
           path: smashed-pumpkin-linux-${{ matrix.arch }}.tar.gz
+          retention-days: 14
 
   macos:
     name: macOS ${{ matrix.arch }}
@@ -146,6 +151,7 @@ jobs:
         with:
           name: smashed-pumpkin-macos-${{ matrix.arch }}
           path: smashed-pumpkin-macos-${{ matrix.arch }}.app.zip
+          retention-days: 14
 
   flatpak:
     name: Flatpak ${{ matrix.flatpak_arch }}
@@ -201,6 +207,7 @@ jobs:
         with:
           name: SmashedPumpkin-${{ matrix.flatpak_arch }}.flatpak
           path: SmashedPumpkin-${{ matrix.flatpak_arch }}.flatpak
+          retention-days: 14
 
   windows:
     name: Windows ${{ matrix.arch }} (MSI)
@@ -343,6 +350,7 @@ jobs:
           path: |
             smashed-pumpkin-windows-${{ matrix.arch }}.msi
             winget/${{ matrix.arch }}.json
+          retention-days: 14
 
   winget-manifests:
     name: Build winget manifests
@@ -445,6 +453,7 @@ jobs:
         with:
           name: winget-manifests
           path: winget/
+          retention-days: 14
 
   release:
     name: Publish GitHub Release
@@ -457,7 +466,29 @@ jobs:
         with:
           path: release-assets
 
+      - name: Collect installable files only
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s globstar nullglob
+
+          mkdir -p publish-assets
+
+          for file in release-assets/**/smashed-pumpkin-linux-*.tar.gz; do cp "$file" publish-assets/; done
+          for file in release-assets/**/smashed-pumpkin-macos-*.app.zip; do cp "$file" publish-assets/; done
+          for file in release-assets/**/smashed-pumpkin-windows-*.msi; do cp "$file" publish-assets/; done
+          for file in release-assets/**/SmashedPumpkin-*.flatpak; do cp "$file" publish-assets/; done
+
+          count="$(find publish-assets -maxdepth 1 -type f | wc -l | tr -d ' ')"
+          if [[ "$count" -eq 0 ]]; then
+            echo "No installable release files found."
+            exit 1
+          fi
+
+          echo "Publishing these files:"
+          ls -1 publish-assets
+
       - name: Publish release assets
         uses: softprops/action-gh-release@v2
         with:
-          files: release-assets/**/*
+          files: publish-assets/*

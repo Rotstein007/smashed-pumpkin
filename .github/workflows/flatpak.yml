@@ -8,6 +8,13 @@ on:
     branches: ["master"]
   workflow_dispatch:
 
+concurrency:
+  group: flatpak-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
 jobs:
   build:
     name: Flatpak ${{ matrix.flatpak_arch }}
@@ -63,3 +70,4 @@ jobs:
         with:
           name: SmashedPumpkin-${{ matrix.flatpak_arch }}.flatpak
           path: SmashedPumpkin-${{ matrix.flatpak_arch }}.flatpak
+          retention-days: 14
