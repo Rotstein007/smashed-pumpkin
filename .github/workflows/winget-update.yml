@@ -30,14 +30,15 @@ jobs:
         run: |
           $packageId = "${{ inputs.package_identifier }}"
           $version = "${{ inputs.version }}"
-          $url = "${{ inputs.installer_url_x64 }}"
+          $urlRaw = "${{ inputs.installer_url_x64 }}"
+          $url = $urlRaw.Trim().Trim('"').Trim("'").Trim('<').Trim('>')
 
           if ([string]::IsNullOrWhiteSpace($packageId) -or [string]::IsNullOrWhiteSpace($version) -or [string]::IsNullOrWhiteSpace($url)) {
             throw "package_identifier, version and installer_url_x64 are required."
           }
 
           if (-not ($url -match '^https://')) {
-            throw "installer_url_x64 must be a direct HTTPS URL."
+            throw "installer_url_x64 must be a direct HTTPS URL (for example: https://github.com/.../smashed-pumpkin-windows-x64.msi)."
           }
 
           try {
