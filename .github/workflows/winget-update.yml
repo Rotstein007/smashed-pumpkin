@@ -81,14 +81,19 @@ jobs:
         shell: pwsh
         run: |
           $packageId = "${{ steps.validate.outputs.package_id }}"
-          .\wingetcreate.exe show $packageId *> $null
-          if ($LASTEXITCODE -eq 0) {
+          $PSNativeCommandUseErrorActionPreference = $false
+          & .\wingetcreate.exe show $packageId *> $null
+          $exists = ($LASTEXITCODE -eq 0)
+
+          if ($exists) {
             "exists=true" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
             Write-Host "Package '$packageId' already exists in winget-pkgs. Running update flow."
           } else {
             "exists=false" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
             Write-Host "Package '$packageId' does not exist in winget-pkgs yet. Running initial onboarding flow."
           }
+
+          exit 0
 
       - name: Submit update to winget-pkgs
         if: steps.package_exists.outputs.exists == 'true'
