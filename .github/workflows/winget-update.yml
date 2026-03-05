@@ -71,10 +71,28 @@ jobs:
       - name: Install wingetcreate
         shell: pwsh
         run: |
-          Invoke-WebRequest https://aka.ms/wingetcreate/latest -OutFile wingetcreate.exe
-          if (-not (Test-Path .\wingetcreate.exe)) {
-            throw "wingetcreate.exe download failed."
+          $ErrorActionPreference = "Stop"
+          $target = Join-Path $PWD "wingetcreate.exe"
+          $urls = @(
+            "https://aka.ms/wingetcreate/latest",
+            "https://github.com/microsoft/winget-create/releases/latest/download/wingetcreate.exe"
+          )
+
+          $downloaded = $false
+          foreach ($url in $urls) {
+            Write-Host "Downloading wingetcreate from: $url"
+            & curl.exe -fL --retry 8 --retry-delay 2 --retry-all-errors $url -o $target
+            if ($LASTEXITCODE -eq 0 -and (Test-Path $target) -and ((Get-Item $target).Length -gt 0)) {
+              $downloaded = $true
+              break
+            }
           }
+
+          if (-not $downloaded) {
+            throw "wingetcreate.exe download failed after retries and fallback URLs."
+          }
+
+          & .\wingetcreate.exe version
 
       - name: Check package existence in winget-pkgs
         id: package_exists
