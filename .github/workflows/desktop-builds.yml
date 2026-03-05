@@ -386,13 +386,13 @@ jobs:
           LOCALE_FILE="$OUT_DIR/${PKG_ID}.locale.en-US.yaml"
           VERSION_FILE="$OUT_DIR/${PKG_ID}.yaml"
 
-          cat > "$INSTALLER_FILE" <<EOF
-          PackageIdentifier: ${PKG_ID}
-          PackageVersion: ${VERSION}
-          InstallerType: msi
-          Scope: machine
-          Installers:
-          EOF
+          {
+            echo "PackageIdentifier: ${PKG_ID}"
+            echo "PackageVersion: ${VERSION}"
+            echo "InstallerType: msi"
+            echo "Scope: machine"
+            echo "Installers:"
+          } > "$INSTALLER_FILE"
 
           found=0
           for meta in windows-artifacts/**/winget/*.json; do
@@ -403,12 +403,12 @@ jobs:
             product_code=$(jq -r '.product_code' "$meta")
             url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}/${file}"
 
-            cat >> "$INSTALLER_FILE" <<EOF
-            - Architecture: ${arch}
-              InstallerUrl: ${url}
-              InstallerSha256: ${sha}
-              ProductCode: '${product_code}'
-            EOF
+            {
+              echo "- Architecture: ${arch}"
+              echo "  InstallerUrl: ${url}"
+              echo "  InstallerSha256: ${sha}"
+              echo "  ProductCode: '${product_code}'"
+            } >> "$INSTALLER_FILE"
           done
 
           if [[ "$found" -eq 0 ]]; then
@@ -416,29 +416,29 @@ jobs:
             exit 1
           fi
 
-          cat >> "$INSTALLER_FILE" <<EOF
-          ManifestType: installer
-          ManifestVersion: 1.6.0
-          EOF
+          {
+            echo "ManifestType: installer"
+            echo "ManifestVersion: 1.6.0"
+          } >> "$INSTALLER_FILE"
 
-          cat > "$LOCALE_FILE" <<EOF
-          PackageIdentifier: ${PKG_ID}
-          PackageVersion: ${VERSION}
-          PackageLocale: en-US
-          Publisher: Rotstein
-          PackageName: Smashed Pumpkin
-          ShortDescription: Desktop management app for Pumpkin servers.
-          ManifestType: defaultLocale
-          ManifestVersion: 1.6.0
-          EOF
+          {
+            echo "PackageIdentifier: ${PKG_ID}"
+            echo "PackageVersion: ${VERSION}"
+            echo "PackageLocale: en-US"
+            echo "Publisher: Rotstein"
+            echo "PackageName: Smashed Pumpkin"
+            echo "ShortDescription: Desktop management app for Pumpkin servers."
+            echo "ManifestType: defaultLocale"
+            echo "ManifestVersion: 1.6.0"
+          } > "$LOCALE_FILE"
 
-          cat > "$VERSION_FILE" <<EOF
-          PackageIdentifier: ${PKG_ID}
-          PackageVersion: ${VERSION}
-          DefaultLocale: en-US
-          ManifestType: version
-          ManifestVersion: 1.6.0
-          EOF
+          {
+            echo "PackageIdentifier: ${PKG_ID}"
+            echo "PackageVersion: ${VERSION}"
+            echo "DefaultLocale: en-US"
+            echo "ManifestType: version"
+            echo "ManifestVersion: 1.6.0"
+          } > "$VERSION_FILE"
 
       - name: Upload winget manifests
         uses: actions/upload-artifact@v4
