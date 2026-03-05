@@ -1,22 +1,31 @@
 <h1><img src="data/icons/hicolor/scalable/apps/dev.rotstein.SmashedPumpkin.svg" width="35" alt="Smashed Pumpkin" style="vertical-align:middle"> Smashed Pumpkin</h1>
 
-Manage PumpkinMC servers with a modern GNOME desktop app.
+Smashed Pumpkin is a GNOME-style desktop manager for Pumpkin Minecraft servers.
+It helps you run, update, and manage standalone servers or full server networks from one place.
+The app is 100% free and open source.
 
-## Get it
-```
-https://flathub.org/apps/dev.rotstein.SmashedPumpkin
+## Download
+
+### Linux
+```bash
+flatpak install flathub dev.rotstein.SmashedPumpkin
 ```
 
-## Build (Meson)
+### Windows
+```powershell
+winget install Rotstein.SmashedPumpkin
+```
+
+### macOS
+- Apple Silicon (ARM64): [Download](https://nightly.link/Rotstein007/smashed-pumpkin/workflows/desktop-builds/master/smashed-pumpkin-macos-arm64.zip)
+- Intel (x64): [Download](https://nightly.link/Rotstein007/smashed-pumpkin/workflows/desktop-builds/master/smashed-pumpkin-macos-x64.zip)
+
+## Build it yourself (short)
 ```bash
 meson setup buildDir
 meson compile -C buildDir
 ./buildDir/src/smashed-pumpkin
 ```
-
-## Windows (Winget)
-Windows releases are prepared as MSI installers (`x64`, `x86`, `arm64`) and include ready-to-submit Winget manifests.  
-See [docs/winget.md](docs/winget.md) and [docs/release-pipeline.md](docs/release-pipeline.md).
 
 ## Tray icon on GNOME
 GNOME Shell does not show legacy tray icons by default.
