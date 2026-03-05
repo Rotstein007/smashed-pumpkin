@@ -92,8 +92,6 @@ jobs:
             throw "wingetcreate.exe download failed after retries and fallback URLs."
           }
 
-          & .\wingetcreate.exe version
-
       - name: Check package existence in winget-pkgs
         id: package_exists
         shell: pwsh
