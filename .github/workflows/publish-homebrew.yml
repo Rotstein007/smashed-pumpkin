@@ -16,8 +16,7 @@ jobs:
       startsWith(github.event.workflow_run.head_branch, 'v')
     runs-on: ubuntu-latest
     steps:
-      - name: Check Homebrew tap configuration
-        id: config
+      - name: Validate Homebrew tap configuration
         shell: bash
         env:
           TAP_REPOSITORY: ${{ vars.HOMEBREW_TAP_REPOSITORY }}
@@ -26,15 +25,12 @@ jobs:
           set -euo pipefail
 
           if [[ -z "${TAP_REPOSITORY}" || -z "${TAP_TOKEN}" ]]; then
-            echo "enabled=false" >> "$GITHUB_OUTPUT"
-            echo "Homebrew tap automation is not configured. Set HOMEBREW_TAP_REPOSITORY and HOMEBREW_TAP_TOKEN."
-            exit 0
+            echo "Homebrew tap automation is not configured."
+            echo "Set repository variable HOMEBREW_TAP_REPOSITORY and secret HOMEBREW_TAP_TOKEN."
+            exit 1
           fi
 
-          echo "enabled=true" >> "$GITHUB_OUTPUT"
-
       - name: Download Homebrew cask artifact
-        if: steps.config.outputs.enabled == 'true'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -46,7 +42,6 @@ jobs:
             --dir homebrew-artifact
 
       - name: Publish cask to tap repository
-        if: steps.config.outputs.enabled == 'true'
         shell: bash
         env:
           TAP_REPOSITORY: ${{ vars.HOMEBREW_TAP_REPOSITORY }}

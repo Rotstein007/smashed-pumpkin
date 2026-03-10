@@ -147,7 +147,37 @@ jobs:
             throw "Missing repository secret WINGET_SUBMIT_TOKEN."
           }
 
+      - name: Check for existing open WinGet PR
+        id: existing_pr
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          $packageId = "${{ steps.validate.outputs.package_id }}"
+          $version = "${{ steps.validate.outputs.version }}"
+          $title = "$packageId $version"
+          $query = [uri]::EscapeDataString("repo:microsoft/winget-pkgs is:pr is:open `"$title`"")
+          $headers = @{
+            Accept = "application/vnd.github+json"
+          }
+          if (-not [string]::IsNullOrWhiteSpace($env:GITHUB_TOKEN)) {
+            $headers["Authorization"] = "Bearer $($env:GITHUB_TOKEN)"
+          }
+
+          $response = Invoke-RestMethod -Uri "https://api.github.com/search/issues?q=$query" -Headers $headers -Method Get
+          $match = $response.items | Where-Object { $_.title -eq $title } | Select-Object -First 1
+
+          if ($match) {
+            "should_submit=false" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+            "existing_pr_url=$($match.html_url)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+            Write-Host "An open WinGet PR for $title already exists: $($match.html_url)"
+          } else {
+            "should_submit=true" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+            Write-Host "No open WinGet PR found for $title."
+          }
+
       - name: Install wingetcreate
+        if: steps.existing_pr.outputs.should_submit == 'true'
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
@@ -172,6 +202,7 @@ jobs:
           }
 
       - name: Check package existence in winget-pkgs
+        if: steps.existing_pr.outputs.should_submit == 'true'
         id: package_exists
         shell: pwsh
         run: |
@@ -191,7 +222,7 @@ jobs:
           exit 0
 
       - name: Submit update to winget-pkgs
-        if: steps.package_exists.outputs.exists == 'true'
+        if: steps.existing_pr.outputs.should_submit == 'true' && steps.package_exists.outputs.exists == 'true'
         shell: pwsh
         env:
           WINGET_SUBMIT_TOKEN: ${{ secrets.WINGET_SUBMIT_TOKEN }}
@@ -210,7 +241,7 @@ jobs:
             --submit
 
       - name: Submit initial package to winget-pkgs
-        if: steps.package_exists.outputs.exists == 'false'
+        if: steps.existing_pr.outputs.should_submit == 'true' && steps.package_exists.outputs.exists == 'false'
         shell: pwsh
         env:
           WINGET_SUBMIT_TOKEN: ${{ secrets.WINGET_SUBMIT_TOKEN }}
@@ -291,3 +322,10 @@ jobs:
           .\wingetcreate.exe submit "winget" `
             -p "$packageId $version" `
             -t $env:WINGET_SUBMIT_TOKEN
+
+      - name: Skip duplicate WinGet submission
+        if: steps.existing_pr.outputs.should_submit != 'true'
+        shell: pwsh
+        run: |
+          Write-Host "Skipping WinGet submission because an open PR already exists:"
+          Write-Host "${{ steps.existing_pr.outputs.existing_pr_url }}"
