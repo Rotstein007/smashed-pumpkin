@@ -20,23 +20,25 @@ jobs:
         id: config
         shell: bash
         env:
+          REPOSITORY_OWNER: ${{ github.repository_owner }}
           TAP_REPOSITORY_VAR: ${{ vars.HOMEBREW_TAP_REPOSITORY }}
           TAP_REPOSITORY_SECRET: ${{ secrets.HOMEBREW_TAP_REPOSITORY }}
           TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
         run: |
           set -euo pipefail
 
-          TAP_REPOSITORY="${TAP_REPOSITORY_VAR:-}"
+          TAP_REPOSITORY="${TAP_REPOSITORY_VAR:-${TAP_REPOSITORY_SECRET:-}}"
           if [[ -z "${TAP_REPOSITORY}" ]]; then
-            TAP_REPOSITORY="${TAP_REPOSITORY_SECRET:-}"
+            TAP_REPOSITORY="${REPOSITORY_OWNER}/homebrew-tap"
           fi
 
-          if [[ -z "${TAP_REPOSITORY}" || -z "${TAP_TOKEN}" ]]; then
+          if [[ -z "${TAP_TOKEN}" ]]; then
             echo "Homebrew tap automation is not configured."
-            echo "Set HOMEBREW_TAP_REPOSITORY as a repository variable or secret, and HOMEBREW_TAP_TOKEN as a secret."
+            echo "Set HOMEBREW_TAP_TOKEN as a repository secret."
             exit 1
           fi
 
+          echo "Publishing Homebrew cask to ${TAP_REPOSITORY}"
           echo "tap_repository=${TAP_REPOSITORY}" >> "$GITHUB_OUTPUT"
 
       - name: Download Homebrew cask artifact

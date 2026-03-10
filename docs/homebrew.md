@@ -24,10 +24,14 @@ That repository should contain the generated `Casks/smashed-pumpkin.rb`.
 This repository can also publish the cask automatically after a successful tagged `Desktop Builds` run.
 For that, configure:
 
-- `HOMEBREW_TAP_REPOSITORY` as either a repository variable or a repository secret
-  Example: `Rotstein007/homebrew-tap`
 - repository secret `HOMEBREW_TAP_TOKEN`
   GitHub token with push access to that tap repository
+
+Optional:
+
+- `HOMEBREW_TAP_REPOSITORY` as either a repository variable or a repository secret
+  Example: `Rotstein007/homebrew-tap`
+  If omitted, CI defaults to `${OWNER}/homebrew-tap`.
 
 Typical install flow after the tap exists:
 
