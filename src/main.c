@@ -153,6 +153,11 @@ init_windows_runtime(void)
     prepend_search_path_env("XDG_DATA_DIRS", share_dir);
   }
 
+  g_autofree gchar *etc_dir = g_build_filename(prefix, "etc", NULL);
+  if (g_file_test(etc_dir, G_FILE_TEST_IS_DIR)) {
+    g_setenv("XDG_CONFIG_DIRS", etc_dir, TRUE);
+  }
+
   g_setenv("GTK_DATA_PREFIX", prefix, TRUE);
   g_setenv("GTK_EXE_PREFIX", prefix, TRUE);
 
@@ -167,6 +172,16 @@ init_windows_runtime(void)
   if (g_file_test(gio_module_dir, G_FILE_TEST_IS_DIR)) {
     g_setenv("GIO_MODULE_DIR", gio_module_dir, TRUE);
     g_setenv("GIO_EXTRA_MODULES", gio_module_dir, TRUE);
+  }
+
+  g_autofree gchar *fontconfig_dir = g_build_filename(etc_dir, "fonts", NULL);
+  g_autofree gchar *fontconfig_file =
+    g_build_filename(fontconfig_dir, "fonts.conf", NULL);
+  if (g_file_test(fontconfig_dir, G_FILE_TEST_IS_DIR)) {
+    g_setenv("FONTCONFIG_PATH", fontconfig_dir, TRUE);
+  }
+  if (g_file_test(fontconfig_file, G_FILE_TEST_EXISTS)) {
+    g_setenv("FONTCONFIG_FILE", fontconfig_file, TRUE);
   }
 
   prepare_gdk_pixbuf_cache(prefix, bin_dir);

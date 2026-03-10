@@ -78,8 +78,19 @@ copy_dir_contents "${runtime_prefix}/lib/gdk-pixbuf-2.0" \
 copy_dir_contents "${runtime_prefix}/lib/gtk-4.0" \
   "${bundle_root}/lib/gtk-4.0"
 
+copy_dir_contents "${runtime_prefix}/etc/fonts" \
+  "${bundle_root}/etc/fonts"
+copy_dir_contents "${runtime_prefix}/etc/gtk-4.0" \
+  "${bundle_root}/etc/gtk-4.0"
+copy_dir_contents "${runtime_prefix}/etc/pango" \
+  "${bundle_root}/etc/pango"
+
 copy_dir_contents "${runtime_prefix}/share/glib-2.0/schemas" \
   "${bundle_root}/share/glib-2.0/schemas"
+copy_dir_contents "${runtime_prefix}/share/fontconfig" \
+  "${bundle_root}/share/fontconfig"
+copy_dir_contents "${runtime_prefix}/share/themes" \
+  "${bundle_root}/share/themes"
 copy_dir_contents "${runtime_prefix}/share/gtk-4.0" \
   "${bundle_root}/share/gtk-4.0"
 copy_dir_contents "${runtime_prefix}/share/libadwaita-1" \
