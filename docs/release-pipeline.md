@@ -5,9 +5,10 @@
 
 ## Desktop Builds workflow
 - Linux native: `x64`, `arm64` (`.tar.gz`)
-- macOS: `x64` (Intel), `arm64` (Apple Silicon) as unsigned `.pkg`
-- Windows: `x64`, `x86`, `arm64` as `.msi`
-- Winget: generates ready-to-submit manifest files as artifact (`winget-manifests`)
+- macOS: `x64` (Intel), `arm64` (Apple Silicon) as native `.app.zip`
+- Windows: `x64` as `.msi`
+- Winget: generates ready-to-submit manifest files as artifact (`winget-manifests`) and triggers the WinGet submission workflow from published releases
+- Homebrew: generates a ready-to-publish cask artifact (`homebrew-cask`) for a separate tap repository
 - GitHub Release: uploads all generated artifacts for tagged builds
 
 ## Flatpak workflow
@@ -15,5 +16,9 @@
 - Uses Flathub remotes and existing Flatpak manifest
 
 ## Winget publication
-The workflow prepares manifests, but publishing to the official winget source still requires submitting to `microsoft/winget-pkgs`.
-Use the generated `winget-manifests` artifact from the tagged build.
+Published GitHub Releases now trigger the `Submit WinGet Update` workflow automatically.
+The workflow resolves the permanent GitHub Release MSI URL, handles initial onboarding if the package is not yet present in `microsoft/winget-pkgs`, and otherwise submits a regular update.
+
+## Homebrew publication
+Homebrew support is prepared as a cask, not a formula, because the project ships signed macOS app bundles rather than CLI binaries.
+The tagged build generates a `homebrew-cask` artifact that can be copied into a separate `homebrew-*` tap repository.

@@ -257,27 +257,15 @@ jobs:
 
       - name: Configure
         shell: msys2 {0}
-        run: meson setup build --buildtype=release
+        run: meson setup build --buildtype=release --prefix=/
 
       - name: Build
         shell: msys2 {0}
         run: meson compile -C build
 
-      - name: Collect Windows bundle
+      - name: Stage Windows bundle
         shell: msys2 {0}
-        run: |
-          mkdir -p dist
-          cp build/src/smashed-pumpkin.exe dist/
-          if [ -f build/src/smashed-pumpkin-tray.exe ]; then
-            cp build/src/smashed-pumpkin-tray.exe dist/
-          fi
-          for exe in dist/*.exe; do
-            ldd "$exe" | awk '/mingw|clangarm64/ {print $3}' | while read -r dll; do
-              if [ -n "$dll" ] && [ -f "$dll" ]; then
-                cp -n "$dll" dist/
-              fi
-            done
-          done
+        run: build-aux/windows/stage-bundle.sh package-root
 
       - name: Install WiX Toolset
         shell: powershell
@@ -304,22 +292,47 @@ jobs:
               <Package InstallerVersion="500" Compressed="yes" InstallScope="perMachine" Platform="$platform" />
               <MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
               <MediaTemplate EmbedCab="yes" />
+              <Property Id="ARPURLINFOABOUT" Value="https://github.com/${{ github.repository }}" />
+              <Property Id="ARPHELPLINK" Value="https://github.com/${{ github.repository }}/issues" />
+              <Property Id="ARPCONTACT" Value="Rotstein" />
+              <Property Id="ARPINSTALLLOCATION" Value="[INSTALLDIR]" />
 
               <Directory Id="TARGETDIR" Name="SourceDir">
                 <Directory Id="$programFilesDir">
                   <Directory Id="INSTALLDIR" Name="Smashed Pumpkin" />
                 </Directory>
+                <Directory Id="ProgramMenuFolder">
+                  <Directory Id="ProgramMenuDir" Name="Smashed Pumpkin" />
+                </Directory>
               </Directory>
+
+              <DirectoryRef Id="ProgramMenuDir">
+                <Component Id="StartMenuShortcutComponent" Guid="A02EBB2D-B6B4-4FD9-9E88-96DBE60E1226">
+                  <Shortcut Id="ApplicationStartMenuShortcut"
+                            Name="Smashed Pumpkin"
+                            Description="Desktop management app for Pumpkin servers"
+                            Target="[INSTALLDIR]bin\smashed-pumpkin.exe"
+                            WorkingDirectory="INSTALLDIR" />
+                  <RemoveFolder Id="RemoveProgramMenuDir" On="uninstall" />
+                  <RegistryValue Root="HKLM"
+                                 Key="Software\Rotstein\Smashed Pumpkin"
+                                 Name="Installed"
+                                 Type="integer"
+                                 Value="1"
+                                 KeyPath="yes" />
+                </Component>
+              </DirectoryRef>
 
               <Feature Id="MainFeature" Title="Smashed Pumpkin" Level="1">
                 <ComponentGroupRef Id="AppFiles" />
+                <ComponentRef Id="StartMenuShortcutComponent" />
               </Feature>
             </Product>
           </Wix>
           "@ | Set-Content Product.wxs
 
-          heat dir dist -nologo -gg -srd -sreg -scom -cg AppFiles -dr INSTALLDIR -var var.SourceDir -out Files.wxs
-          candle -nologo -arch $arch -dSourceDir="dist" Product.wxs Files.wxs
+          heat dir package-root -nologo -gg -srd -sreg -scom -cg AppFiles -dr INSTALLDIR -var var.SourceDir -out Files.wxs
+          candle -nologo -arch $arch -dSourceDir="package-root" Product.wxs Files.wxs
           light -nologo Product.wixobj Files.wixobj -out "smashed-pumpkin-windows-${{ matrix.arch }}.msi"
 
       - name: Generate winget metadata
@@ -434,8 +447,21 @@ jobs:
             echo "PackageVersion: ${VERSION}"
             echo "PackageLocale: en-US"
             echo "Publisher: Rotstein"
+            echo "PublisherUrl: https://github.com/${GITHUB_REPOSITORY}"
+            echo "PublisherSupportUrl: https://github.com/${GITHUB_REPOSITORY}/issues"
             echo "PackageName: Smashed Pumpkin"
+            echo "PackageUrl: https://github.com/${GITHUB_REPOSITORY}"
+            echo "License: GPL-3.0-or-later"
+            echo "LicenseUrl: https://github.com/${GITHUB_REPOSITORY}/blob/${GITHUB_SHA}/LICENSE"
             echo "ShortDescription: Desktop management app for Pumpkin servers."
+            echo "Description: Manage Pumpkin Minecraft servers and server networks from a native GTK desktop app."
+            echo "Moniker: smashed-pumpkin"
+            echo "ReleaseNotesUrl: https://github.com/${GITHUB_REPOSITORY}/releases/tag/${GITHUB_REF_NAME}"
+            echo "Tags:"
+            echo "- minecraft"
+            echo "- pumpkin"
+            echo "- server"
+            echo "- gtk"
             echo "ManifestType: defaultLocale"
             echo "ManifestVersion: 1.6.0"
           } > "$LOCALE_FILE"
@@ -453,6 +479,53 @@ jobs:
         with:
           name: winget-manifests
           path: winget/
+          retention-days: 14
+
+  homebrew-cask:
+    name: Build Homebrew cask
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    needs: [macos, release]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download macOS artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: smashed-pumpkin-macos-*
+          path: macos-artifacts
+
+      - name: Generate Homebrew cask
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          VERSION="$(sed -n "s/.*version: '\\([^']*\\)'.*/\\1/p" meson.build | head -n1)"
+          if [[ -z "${VERSION}" ]]; then
+            echo "Could not resolve app version from meson.build"
+            exit 1
+          fi
+
+          INTEL_ZIP="$(find macos-artifacts -type f -name 'smashed-pumpkin-macos-x64.app.zip' | head -n1)"
+          ARM_ZIP="$(find macos-artifacts -type f -name 'smashed-pumpkin-macos-arm64.app.zip' | head -n1)"
+          if [[ -z "${INTEL_ZIP}" || -z "${ARM_ZIP}" ]]; then
+            echo "Expected both macOS app zip artifacts."
+            exit 1
+          fi
+
+          build-aux/homebrew/generate-cask.sh \
+            "${VERSION}" \
+            "${GITHUB_REPOSITORY}" \
+            homebrew \
+            "${INTEL_ZIP}" \
+            "${ARM_ZIP}"
+
+      - name: Upload Homebrew cask
+        uses: actions/upload-artifact@v4
+        with:
+          name: homebrew-cask
+          path: homebrew/
           retention-days: 14
 
   release:

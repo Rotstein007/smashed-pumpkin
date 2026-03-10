@@ -4,6 +4,8 @@ build-*/
 _build/
 .flatpak-builder/
 buildDir/flatpak/
+!build-aux/
+!build-aux/**
 
 # IDEs/editors
 .idea/

@@ -1,6 +1,8 @@
 name: Submit WinGet Update
 
 on:
+  release:
+    types: [published]
   workflow_dispatch:
     inputs:
       package_identifier:
@@ -21,6 +23,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: winget-${{ github.event.release.tag_name || inputs.version || github.run_id }}
+  cancel-in-progress: false
+
 jobs:
   submit-winget-update:
     runs-on: windows-latest
@@ -31,10 +37,11 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
-          $packageId = "${{ inputs.package_identifier }}"
-          $versionInput = "${{ inputs.version }}"
+          $isReleaseEvent = "${{ github.event_name }}" -eq "release"
+          $packageId = if ($isReleaseEvent) { "Rotstein.SmashedPumpkin" } else { "${{ inputs.package_identifier }}" }
+          $versionInput = if ($isReleaseEvent) { "${{ github.event.release.tag_name }}" } else { "${{ inputs.version }}" }
           $version = $versionInput.Trim()
-          $urlRaw = "${{ inputs.installer_url_x64 }}"
+          $urlRaw = if ($isReleaseEvent) { "" } else { "${{ inputs.installer_url_x64 }}" }
           $url = $urlRaw.Trim().Trim('"').Trim("'").Trim('<').Trim('>')
           $repo = "${{ github.repository }}"
 
@@ -206,6 +213,9 @@ jobs:
           $publisher = "Rotstein"
           $packageName = "Smashed Pumpkin"
           $shortDescription = "Desktop management app for Pumpkin servers."
+          $releaseNotesUrl = "https://github.com/${{ github.repository }}/releases/tag/v$version"
+          $packageUrl = "https://github.com/${{ github.repository }}"
+          $licenseUrl = "$packageUrl/blob/${{ github.sha }}/LICENSE"
 
           Write-Host "Preparing initial winget manifest for: $packageId $version"
           Invoke-WebRequest $url -OutFile installer-x64.msi
@@ -242,8 +252,21 @@ jobs:
           PackageVersion: $version
           PackageLocale: en-US
           Publisher: $publisher
+          PublisherUrl: $packageUrl
+          PublisherSupportUrl: $packageUrl/issues
           PackageName: $packageName
+          PackageUrl: $packageUrl
+          License: GPL-3.0-or-later
+          LicenseUrl: $licenseUrl
           ShortDescription: $shortDescription
+          Description: Manage Pumpkin Minecraft servers and server networks from a native GTK desktop app.
+          Moniker: smashed-pumpkin
+          ReleaseNotesUrl: $releaseNotesUrl
+          Tags:
+          - minecraft
+          - pumpkin
+          - server
+          - gtk
           ManifestType: defaultLocale
           ManifestVersion: 1.6.0
           "@ | Set-Content "winget/$packageId.locale.en-US.yaml"
