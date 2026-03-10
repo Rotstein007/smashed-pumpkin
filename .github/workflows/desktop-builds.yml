@@ -295,13 +295,12 @@ jobs:
               <Property Id="ARPURLINFOABOUT" Value="https://github.com/${{ github.repository }}" />
               <Property Id="ARPHELPLINK" Value="https://github.com/${{ github.repository }}/issues" />
               <Property Id="ARPCONTACT" Value="Rotstein" />
-              <Property Id="ARPINSTALLLOCATION" Value="[INSTALLDIR]" />
 
               <Directory Id="TARGETDIR" Name="SourceDir">
                 <Directory Id="$programFilesDir">
                   <Directory Id="INSTALLDIR" Name="Smashed Pumpkin" />
                 </Directory>
-                <Directory Id="ProgramMenuFolder">
+                <Directory Id="CommonProgramsFolder">
                   <Directory Id="ProgramMenuDir" Name="Smashed Pumpkin" />
                 </Directory>
               </Directory>

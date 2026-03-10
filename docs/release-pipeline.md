@@ -11,9 +11,8 @@
 - Homebrew: generates a ready-to-publish cask artifact (`homebrew-cask`) for a separate tap repository
 - GitHub Release: uploads all generated artifacts for tagged builds
 
-## Flatpak workflow
-- Flatpak bundles for `x86_64` and `aarch64`
-- Uses Flathub remotes and existing Flatpak manifest
+## Flatpak builds
+Flatpak bundles for `x86_64` and `aarch64` are built inside the `Desktop Builds` workflow so release publishing and platform artifacts stay in one pipeline.
 
 ## Winget publication
 Published GitHub Releases now trigger the `Submit WinGet Update` workflow automatically.
