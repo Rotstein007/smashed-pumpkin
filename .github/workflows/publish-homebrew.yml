@@ -17,18 +17,27 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Validate Homebrew tap configuration
+        id: config
         shell: bash
         env:
-          TAP_REPOSITORY: ${{ vars.HOMEBREW_TAP_REPOSITORY }}
+          TAP_REPOSITORY_VAR: ${{ vars.HOMEBREW_TAP_REPOSITORY }}
+          TAP_REPOSITORY_SECRET: ${{ secrets.HOMEBREW_TAP_REPOSITORY }}
           TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
         run: |
           set -euo pipefail
 
+          TAP_REPOSITORY="${TAP_REPOSITORY_VAR:-}"
+          if [[ -z "${TAP_REPOSITORY}" ]]; then
+            TAP_REPOSITORY="${TAP_REPOSITORY_SECRET:-}"
+          fi
+
           if [[ -z "${TAP_REPOSITORY}" || -z "${TAP_TOKEN}" ]]; then
             echo "Homebrew tap automation is not configured."
-            echo "Set repository variable HOMEBREW_TAP_REPOSITORY and secret HOMEBREW_TAP_TOKEN."
+            echo "Set HOMEBREW_TAP_REPOSITORY as a repository variable or secret, and HOMEBREW_TAP_TOKEN as a secret."
             exit 1
           fi
+
+          echo "tap_repository=${TAP_REPOSITORY}" >> "$GITHUB_OUTPUT"
 
       - name: Download Homebrew cask artifact
         shell: bash
@@ -44,7 +53,7 @@ jobs:
       - name: Publish cask to tap repository
         shell: bash
         env:
-          TAP_REPOSITORY: ${{ vars.HOMEBREW_TAP_REPOSITORY }}
+          TAP_REPOSITORY: ${{ steps.config.outputs.tap_repository }}
           TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
         run: |
           set -euo pipefail
