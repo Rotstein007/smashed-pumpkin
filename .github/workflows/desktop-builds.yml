@@ -487,18 +487,20 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: release-assets
+          merge-multiple: true
 
       - name: Collect installable files only
         shell: bash
         run: |
           set -euo pipefail
-          shopt -s globstar nullglob
 
           mkdir -p publish-assets
 
-          for file in release-assets/**/smashed-pumpkin-macos-*.app.zip; do cp "$file" publish-assets/; done
-          for file in release-assets/**/smashed-pumpkin-windows-*.msi; do cp "$file" publish-assets/; done
-          for file in release-assets/**/SmashedPumpkin-*.flatpak; do cp "$file" publish-assets/; done
+          find release-assets -maxdepth 1 -type f \
+            \( -name 'smashed-pumpkin-macos-*.app.zip' \
+            -o -name 'smashed-pumpkin-windows-*.msi' \
+            -o -name 'SmashedPumpkin-*.flatpak' \) \
+            -exec cp -t publish-assets {} +
 
           count="$(find publish-assets -maxdepth 1 -type f | wc -l | tr -d ' ')"
           if [[ "$count" -eq 0 ]]; then
