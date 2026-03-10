@@ -4,7 +4,6 @@
 - Tag push: `vX.Y.Z`
 
 ## Desktop Builds workflow
-- Linux native: `x64`, `arm64` (`.tar.gz`)
 - macOS: `x64` (Intel), `arm64` (Apple Silicon) as native `.app.zip`
 - Windows: `x64` as `.msi`
 - Winget: generates ready-to-submit manifest files as artifact (`winget-manifests`) and triggers the WinGet submission workflow from published releases
