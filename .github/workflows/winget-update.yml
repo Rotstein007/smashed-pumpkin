@@ -288,6 +288,6 @@ jobs:
           "@ | Set-Content "winget/$packageId.yaml"
 
           Write-Host "Submitting initial winget package PR..."
-          .\wingetcreate.exe submit "winget/$packageId.yaml" `
+          .\wingetcreate.exe submit "winget" `
             -p "$packageId $version" `
             -t $env:WINGET_SUBMIT_TOKEN
