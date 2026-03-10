@@ -290,5 +290,4 @@ jobs:
           Write-Host "Submitting initial winget package PR..."
           .\wingetcreate.exe submit "winget/$packageId.yaml" `
             -p "$packageId $version" `
-            -t $env:WINGET_SUBMIT_TOKEN `
-            -n
+            -t $env:WINGET_SUBMIT_TOKEN
