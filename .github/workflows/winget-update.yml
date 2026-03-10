@@ -1,8 +1,9 @@
 name: Submit WinGet Update
 
 on:
-  release:
-    types: [published]
+  workflow_run:
+    workflows: ["Desktop Builds"]
+    types: [completed]
   workflow_dispatch:
     inputs:
       package_identifier:
@@ -29,6 +30,13 @@ concurrency:
 
 jobs:
   submit-winget-update:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (
+        github.event_name == 'workflow_run' &&
+        github.event.workflow_run.conclusion == 'success' &&
+        startsWith(github.event.workflow_run.head_branch, 'v')
+      )
     runs-on: windows-latest
     steps:
       - name: Validate inputs
@@ -37,11 +45,11 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
-          $isReleaseEvent = "${{ github.event_name }}" -eq "release"
-          $packageId = if ($isReleaseEvent) { "Rotstein.SmashedPumpkin" } else { "${{ inputs.package_identifier }}" }
-          $versionInput = if ($isReleaseEvent) { "${{ github.event.release.tag_name }}" } else { "${{ inputs.version }}" }
+          $isWorkflowRunEvent = "${{ github.event_name }}" -eq "workflow_run"
+          $packageId = if ($isWorkflowRunEvent) { "Rotstein.SmashedPumpkin" } else { "${{ inputs.package_identifier }}" }
+          $versionInput = if ($isWorkflowRunEvent) { "${{ github.event.workflow_run.head_branch }}" } else { "${{ inputs.version }}" }
           $version = $versionInput.Trim()
-          $urlRaw = if ($isReleaseEvent) { "" } else { "${{ inputs.installer_url_x64 }}" }
+          $urlRaw = if ($isWorkflowRunEvent) { "" } else { "${{ inputs.installer_url_x64 }}" }
           $url = $urlRaw.Trim().Trim('"').Trim("'").Trim('<').Trim('>')
           $repo = "${{ github.repository }}"
 

@@ -14,9 +14,10 @@
 Flatpak bundles for `x86_64` and `aarch64` are built inside the `Desktop Builds` workflow so release publishing and platform artifacts stay in one pipeline.
 
 ## Winget publication
-Published GitHub Releases now trigger the `Submit WinGet Update` workflow automatically.
+Successful tagged `Desktop Builds` runs now trigger the `Submit WinGet Update` workflow automatically.
 The workflow resolves the permanent GitHub Release MSI URL, handles initial onboarding if the package is not yet present in `microsoft/winget-pkgs`, and otherwise submits a regular update.
 
 ## Homebrew publication
 Homebrew support is prepared as a cask, not a formula, because the project ships signed macOS app bundles rather than CLI binaries.
 The tagged build generates a `homebrew-cask` artifact that can be copied into a separate `homebrew-*` tap repository.
+If `HOMEBREW_TAP_REPOSITORY` and `HOMEBREW_TAP_TOKEN` are configured, the cask can also be pushed there automatically after a successful tagged `Desktop Builds` run.

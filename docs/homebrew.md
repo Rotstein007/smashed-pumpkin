@@ -19,6 +19,16 @@ The generated cask points to the permanent GitHub Release URLs for:
 Use a separate tap repository named like `homebrew-tap` or `homebrew-smashed-pumpkin`.
 That repository should contain the generated `Casks/smashed-pumpkin.rb`.
 
+## Full automation
+
+This repository can also publish the cask automatically after a successful tagged `Desktop Builds` run.
+For that, configure:
+
+- repository variable `HOMEBREW_TAP_REPOSITORY`
+  Example: `Rotstein007/homebrew-tap`
+- repository secret `HOMEBREW_TAP_TOKEN`
+  GitHub token with push access to that tap repository
+
 Typical install flow after the tap exists:
 
 ```bash

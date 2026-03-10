@@ -1,0 +1,74 @@
+name: Publish Homebrew Cask
+
+on:
+  workflow_run:
+    workflows: ["Desktop Builds"]
+    types: [completed]
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  publish-homebrew-cask:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      startsWith(github.event.workflow_run.head_branch, 'v')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check Homebrew tap configuration
+        id: config
+        shell: bash
+        env:
+          TAP_REPOSITORY: ${{ vars.HOMEBREW_TAP_REPOSITORY }}
+          TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          if [[ -z "${TAP_REPOSITORY}" || -z "${TAP_TOKEN}" ]]; then
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "Homebrew tap automation is not configured. Set HOMEBREW_TAP_REPOSITORY and HOMEBREW_TAP_TOKEN."
+            exit 0
+          fi
+
+          echo "enabled=true" >> "$GITHUB_OUTPUT"
+
+      - name: Download Homebrew cask artifact
+        if: steps.config.outputs.enabled == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh run download "${{ github.event.workflow_run.id }}" \
+            --repo "${{ github.repository }}" \
+            --name homebrew-cask \
+            --dir homebrew-artifact
+
+      - name: Publish cask to tap repository
+        if: steps.config.outputs.enabled == 'true'
+        shell: bash
+        env:
+          TAP_REPOSITORY: ${{ vars.HOMEBREW_TAP_REPOSITORY }}
+          TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          test -f homebrew-artifact/Casks/smashed-pumpkin.rb
+
+          git clone "https://x-access-token:${TAP_TOKEN}@github.com/${TAP_REPOSITORY}.git" tap-repo
+          mkdir -p tap-repo/Casks
+          cp homebrew-artifact/Casks/smashed-pumpkin.rb tap-repo/Casks/smashed-pumpkin.rb
+
+          cd tap-repo
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          if git diff --quiet -- Casks/smashed-pumpkin.rb; then
+            echo "Homebrew cask already up to date."
+            exit 0
+          fi
+
+          git add Casks/smashed-pumpkin.rb
+          git commit -m "Update smashed-pumpkin cask for ${{ github.event.workflow_run.head_branch }}"
+          git push origin HEAD
