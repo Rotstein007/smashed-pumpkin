@@ -29,6 +29,26 @@ copy_dir_contents() {
   cp -R "$src"/. "$dest"/
 }
 
+normalize_meson_install_layout() {
+  local app_path
+  local nested_prefix
+
+  app_path="$(find "$bundle_root" -path '*/bin/smashed-pumpkin.exe' -print -quit)"
+  if [[ -z "$app_path" ]]; then
+    echo "Could not locate smashed-pumpkin.exe in staged Meson install." >&2
+    exit 1
+  fi
+
+  nested_prefix="$(dirname "$(dirname "$app_path")")"
+  if [[ "$nested_prefix" == "$bundle_root" ]]; then
+    return
+  fi
+
+  copy_dir_contents "$nested_prefix" "$bundle_root"
+  rm -rf "$nested_prefix"
+  find "$bundle_root" -depth -mindepth 1 -type d -empty -delete
+}
+
 copy_runtime_deps() {
   local copied=1
 
@@ -56,6 +76,7 @@ copy_runtime_deps() {
 
 rm -rf "$bundle_root"
 meson install -C build --destdir "$bundle_root"
+normalize_meson_install_layout
 
 mkdir -p "$bundle_bin"
 

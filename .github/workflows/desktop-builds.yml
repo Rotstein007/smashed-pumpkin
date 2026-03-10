@@ -217,6 +217,21 @@ jobs:
         shell: msys2 {0}
         run: build-aux/windows/stage-bundle.sh package-root
 
+      - name: Validate staged Windows bundle layout
+        shell: msys2 {0}
+        run: |
+          set -euo pipefail
+
+          test -f package-root/bin/smashed-pumpkin.exe
+          test -f package-root/bin/smashed-pumpkin-tray.exe
+
+          mapfile -t app_paths < <(find package-root -path '*/bin/smashed-pumpkin.exe' -print)
+          if [[ "${#app_paths[@]}" -ne 1 || "${app_paths[0]}" != "package-root/bin/smashed-pumpkin.exe" ]]; then
+            printf 'Unexpected staged app paths:\n' >&2
+            printf '%s\n' "${app_paths[@]}" >&2
+            exit 1
+          fi
+
       - name: Install WiX Toolset
         shell: powershell
         run: choco install wixtoolset --yes --no-progress
