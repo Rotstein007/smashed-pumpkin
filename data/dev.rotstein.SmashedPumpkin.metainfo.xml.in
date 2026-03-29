@@ -6,10 +6,8 @@
   <summary xml:lang="de">Pumpkin-Minecraft-Server im GNOME-Stil verwalten</summary>
   <description>
     <p>Smashed Pumpkin is a GNOME-style app for managing your Pumpkin Minecraft server.</p>
-    <p>It helps you run and maintain your server and checks automatically for new updates.</p>
-  </description>
-  <description xml:lang="de">
     <p>Smashed Pumpkin ist eine App im GNOME-Stil zur Verwaltung deines Pumpkin-Minecraft-Servers.</p>
+    <p>It helps you run and maintain your server and checks automatically for new updates.</p>
     <p>Sie hilft dir beim Betrieb und bei der Pflege deines Servers und sucht automatisch nach Updates.</p>
   </description>
   <metadata_license>CC0-1.0</metadata_license>
@@ -110,19 +108,15 @@
       <description>
         <ul>
           <li>The app now feels cleaner and more modern, with a clearer server overview and refined detail views.</li>
+          <li xml:lang="de">Die App wirkt jetzt aufgeräumter und moderner, mit einer klareren Serverübersicht und überarbeiteten Detailansichten.</li>
           <li>Plugins, worlds, and server groups are easier to manage, with better actions and less visual clutter.</li>
+          <li xml:lang="de">Plugins, Welten und Servergruppen lassen sich angenehmer verwalten, mit besseren Aktionen und weniger visuellem Ballast.</li>
           <li>Networks and player management have been expanded to make larger setups easier to organize.</li>
+          <li xml:lang="de">Netzwerke und Spielerverwaltung wurden erweitert, damit sich größere Setups übersichtlicher organisieren lassen.</li>
           <li>Many smaller improvements make updates, restarts, and everyday use more reliable.</li>
+          <li xml:lang="de">Viele kleine Verbesserungen machen Updates, Neustarts und den Alltag insgesamt zuverlässiger.</li>
         </ul>
         <p>Thank you for your feedback. It directly shaped this update.</p>
-      </description>
-      <description xml:lang="de">
-        <ul>
-          <li>Die App wirkt jetzt aufgeräumter und moderner, mit einer klareren Serverübersicht und überarbeiteten Detailansichten.</li>
-          <li>Plugins, Welten und Servergruppen lassen sich angenehmer verwalten, mit besseren Aktionen und weniger visuellem Ballast.</li>
-          <li>Netzwerke und Spielerverwaltung wurden erweitert, damit sich größere Setups übersichtlicher organisieren lassen.</li>
-          <li>Viele kleine Verbesserungen machen Updates, Neustarts und den Alltag insgesamt zuverlässiger.</li>
-        </ul>
         <p>Vielen Dank für euer Feedback. Es hat dieses Update direkt mitgeprägt.</p>
       </description>
     </release>
@@ -130,15 +124,11 @@
       <description>
         <ul>
           <li>New server networks: You can now manage multiple servers as one group and start, stop, or update them together.</li>
+          <li xml:lang="de">Neue Server-Netzwerke: Mehrere Server lassen sich jetzt als Verbund verwalten und gemeinsam starten, stoppen und aktualisieren.</li>
           <li>New Domains tab with Dynamic DNS: DNS records can now be updated automatically when your public IP changes.</li>
+          <li xml:lang="de">Neuer Domains-Tab mit Dynamic DNS: Bei wechselnder öffentlicher IP können DNS-Einträge jetzt automatisch aktualisiert werden.</li>
         </ul>
         <p>Thank you to everyone in the community whose feedback directly shaped this update.</p>
-      </description>
-      <description xml:lang="de">
-        <ul>
-          <li>Neue Server-Netzwerke: Mehrere Server lassen sich jetzt als Verbund verwalten und gemeinsam starten, stoppen und aktualisieren.</li>
-          <li>Neuer Domains-Tab mit Dynamic DNS: Bei wechselnder öffentlicher IP können DNS-Einträge jetzt automatisch aktualisiert werden.</li>
-        </ul>
         <p>Vielen Dank für euer Feedback, das diese Funktionen direkt mitgeprägt hat.</p>
       </description>
     </release>
