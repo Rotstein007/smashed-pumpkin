@@ -8,9 +8,11 @@ struct _PumpkinConfig {
   char *default_download_url;
   gboolean use_cache;
   gboolean run_in_background;
+  gboolean detailed_overview_cards;
   gboolean autostart_on_boot;
   gboolean start_minimized;
   gboolean auto_start_servers_enabled;
+  gboolean review_prompt_shown;
   PumpkinDateFormat date_format;
   PumpkinTimeFormat time_format;
 };
@@ -76,9 +78,11 @@ pumpkin_config_load(GError **error)
   config->default_download_url = g_strdup("");
   config->use_cache = TRUE;
   config->run_in_background = TRUE;
+  config->detailed_overview_cards = FALSE;
   config->autostart_on_boot = FALSE;
   config->start_minimized = FALSE;
   config->auto_start_servers_enabled = FALSE;
+  config->review_prompt_shown = FALSE;
   config->date_format = PUMPKIN_DATE_FORMAT_DMY;
   config->time_format = PUMPKIN_TIME_FORMAT_24H;
 
@@ -104,6 +108,10 @@ pumpkin_config_load(GError **error)
       config->run_in_background = g_key_file_get_boolean(key, "behavior", "run_in_background", NULL);
     }
 
+    if (g_key_file_has_key(key, "behavior", "detailed_overview_cards", NULL)) {
+      config->detailed_overview_cards = g_key_file_get_boolean(key, "behavior", "detailed_overview_cards", NULL);
+    }
+
     if (g_key_file_has_key(key, "behavior", "autostart_on_boot", NULL)) {
       config->autostart_on_boot = g_key_file_get_boolean(key, "behavior", "autostart_on_boot", NULL);
     }
@@ -114,6 +122,10 @@ pumpkin_config_load(GError **error)
 
     if (g_key_file_has_key(key, "behavior", "auto_start_servers_enabled", NULL)) {
       config->auto_start_servers_enabled = g_key_file_get_boolean(key, "behavior", "auto_start_servers_enabled", NULL);
+    }
+
+    if (g_key_file_has_key(key, "behavior", "review_prompt_shown", NULL)) {
+      config->review_prompt_shown = g_key_file_get_boolean(key, "behavior", "review_prompt_shown", NULL);
     }
 
     if (g_key_file_has_key(key, "behavior", "date_format", NULL)) {
@@ -173,9 +185,11 @@ pumpkin_config_save(PumpkinConfig *config, GError **error)
   g_key_file_set_boolean(key, "storage", "use_cache", config->use_cache);
   g_key_file_set_string(key, "updates", "default_download_url", config->default_download_url);
   g_key_file_set_boolean(key, "behavior", "run_in_background", config->run_in_background);
+  g_key_file_set_boolean(key, "behavior", "detailed_overview_cards", config->detailed_overview_cards);
   g_key_file_set_boolean(key, "behavior", "autostart_on_boot", config->autostart_on_boot);
   g_key_file_set_boolean(key, "behavior", "start_minimized", config->start_minimized);
   g_key_file_set_boolean(key, "behavior", "auto_start_servers_enabled", config->auto_start_servers_enabled);
+  g_key_file_set_boolean(key, "behavior", "review_prompt_shown", config->review_prompt_shown);
   g_key_file_set_integer(key, "behavior", "date_format", config->date_format);
   g_key_file_set_integer(key, "behavior", "time_format", config->time_format);
 
@@ -222,6 +236,12 @@ pumpkin_config_get_run_in_background(PumpkinConfig *config)
   return config->run_in_background;
 }
 
+gboolean
+pumpkin_config_get_detailed_overview_cards(PumpkinConfig *config)
+{
+  return config->detailed_overview_cards;
+}
+
 void
 pumpkin_config_set_base_dir(PumpkinConfig *config, const char *path)
 {
@@ -248,6 +268,12 @@ pumpkin_config_set_run_in_background(PumpkinConfig *config, gboolean enabled)
   config->run_in_background = enabled;
 }
 
+void
+pumpkin_config_set_detailed_overview_cards(PumpkinConfig *config, gboolean enabled)
+{
+  config->detailed_overview_cards = enabled;
+}
+
 gboolean
 pumpkin_config_get_autostart_on_boot(PumpkinConfig *config)
 {
@@ -264,6 +290,12 @@ gboolean
 pumpkin_config_get_auto_start_servers_enabled(PumpkinConfig *config)
 {
   return config->auto_start_servers_enabled;
+}
+
+gboolean
+pumpkin_config_get_review_prompt_shown(PumpkinConfig *config)
+{
+  return config->review_prompt_shown;
 }
 
 PumpkinDateFormat
@@ -294,6 +326,12 @@ void
 pumpkin_config_set_auto_start_servers_enabled(PumpkinConfig *config, gboolean enabled)
 {
   config->auto_start_servers_enabled = enabled;
+}
+
+void
+pumpkin_config_set_review_prompt_shown(PumpkinConfig *config, gboolean shown)
+{
+  config->review_prompt_shown = shown;
 }
 
 void

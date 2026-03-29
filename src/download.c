@@ -1,3 +1,4 @@
+#include "config.h"
 #include "download.h"
 
 #include <libsoup/soup.h>
@@ -33,9 +34,25 @@ static SoupSession *
 get_shared_session(void)
 {
   if (shared_session == NULL) {
-    shared_session = soup_session_new();
+    shared_session = soup_session_new_with_options("user-agent",
+                                                   APP_NAME "/" APP_VERSION,
+                                                   NULL);
   }
   return shared_session;
+}
+
+static gboolean
+content_type_is_probably_text(const char *content_type)
+{
+  if (content_type == NULL || *content_type == '\0') {
+    return FALSE;
+  }
+
+  return g_str_has_prefix(content_type, "text/") ||
+         g_str_equal(content_type, "application/json") ||
+         g_str_equal(content_type, "application/xml") ||
+         g_str_equal(content_type, "text/xml") ||
+         g_str_equal(content_type, "application/xhtml+xml");
 }
 
 static void
@@ -97,7 +114,11 @@ on_read_chunk(GObject *source, GAsyncResult *res, gpointer user_data)
 
   gsize size = g_bytes_get_size(bytes);
   if (size == 0) {
-    g_task_return_boolean(task, TRUE);
+    if (!g_output_stream_close(state->output, g_task_get_cancellable(task), &error)) {
+      g_task_return_error(task, g_steal_pointer(&error));
+    } else {
+      g_task_return_boolean(task, TRUE);
+    }
     g_object_unref(task);
     return;
   }
@@ -157,7 +178,18 @@ on_download_ready(GObject *source, GAsyncResult *res, gpointer user_data)
     return;
   }
   SoupMessageHeaders *headers = soup_message_get_response_headers(state->message);
+  const char *content_type = soup_message_headers_get_content_type(headers, NULL);
+  GUri *uri = soup_message_get_uri(state->message);
+  g_autofree char *final_url = uri != NULL ? g_uri_to_string_partial(uri, G_URI_HIDE_PASSWORD) : NULL;
   state->total = soup_message_headers_get_content_length(headers);
+
+  if (content_type_is_probably_text(content_type)) {
+    g_task_return_new_error(task, G_IO_ERROR, G_IO_ERROR_FAILED,
+                            "Download returned %s instead of a binary (HTTP %u, URL %s)",
+                            content_type, status, final_url != NULL ? final_url : state->url);
+    g_object_unref(task);
+    return;
+  }
 
   g_autoptr(GInputStream) request_stream = state->stream;
 
@@ -463,7 +495,15 @@ on_resolve_ready(GObject *source, GAsyncResult *res, gpointer user_data)
 
   g_autoptr(GBytes) bytes = soup_session_send_and_read_finish(state->session, res, &error);
   if (bytes == NULL) {
-    g_task_return_error(task, g_steal_pointer(&error));
+    g_autofree char *fallback = fallback_nightly_url();
+    if (fallback != NULL) {
+      PumpkinResolvedDownload *resolved = g_new0(PumpkinResolvedDownload, 1);
+      resolved->url = g_strdup(fallback);
+      resolved->result_code = PUMPKIN_DOWNLOAD_FALLBACK_USED;
+      g_task_return_pointer(task, resolved, (GDestroyNotify)pumpkin_resolved_download_free);
+    } else {
+      g_task_return_error(task, g_steal_pointer(&error));
+    }
     g_object_unref(task);
     return;
   }

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE cambalache-project SYSTEM "cambalache-project.dtd">
+<!-- Created for Cambalache 1.0 -->
+<cambalache-project version="1.0.0" target_tk="gtk-4.0" depends="libadwaita-1.5">
+  <gresources filename="smashed-pumpkin.gresource.xml.in" sha256="f69a24c6fdad99aa0fca08dfd499f6cb11d00b5537847f8b15ddb437b9085253"/>
+  <css filename="style.css" sha256="2d1333cb9ce88d833cecd30d6ab585cb81b80f07ac79347083faf7a117400f52" priority="600"/>
+  <ui template-class="PumpkinWindow" filename="ui/window.ui" sha256="7f0c8e05e33a0f4fd882cdc103e8797a16d91ce9bed8a56656d3a6a5f01b5d78">
+    <css-provider>style.css</css-provider>
+  </ui>
+</cambalache-project>

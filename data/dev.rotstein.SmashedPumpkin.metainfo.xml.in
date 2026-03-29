@@ -25,28 +25,76 @@
   <content_rating type="oars-1.1"/>
   <screenshots>
     <screenshot type="default">
-      <image type="source">https://raw.githubusercontent.com/Rotstein007/smashed-pumpkin/master/data/screenshots/smashed-pumpkin-console.png</image>
+      <image type="source">https://raw.githubusercontent.com/Rotstein007/smashed-pumpkin/master/data/screenshots/start-screen.png</image>
+      <caption xml:lang="en">Start screen</caption>
+    </screenshot>
+    <screenshot>
+      <image type="source">https://raw.githubusercontent.com/Rotstein007/smashed-pumpkin/master/data/screenshots/start-screen-wm.png</image>
+      <caption xml:lang="en">Start screen in light mode</caption>
+    </screenshot>
+    <screenshot>
+      <image type="source">https://raw.githubusercontent.com/Rotstein007/smashed-pumpkin/master/data/screenshots/start-screen-rating.png</image>
+      <caption xml:lang="en">Feedback prompt</caption>
+    </screenshot>
+    <screenshot>
+      <image type="source">https://raw.githubusercontent.com/Rotstein007/smashed-pumpkin/master/data/screenshots/start-screen-rating-wm.png</image>
+      <caption xml:lang="en">Feedback prompt in light mode</caption>
+    </screenshot>
+    <screenshot>
+      <image type="source">https://raw.githubusercontent.com/Rotstein007/smashed-pumpkin/master/data/screenshots/console.png</image>
       <caption xml:lang="en">Server console</caption>
     </screenshot>
     <screenshot>
-      <image type="source">https://raw.githubusercontent.com/Rotstein007/smashed-pumpkin/master/data/screenshots/smashed-pumpkin-stats.png</image>
+      <image type="source">https://raw.githubusercontent.com/Rotstein007/smashed-pumpkin/master/data/screenshots/console-wm.png</image>
+      <caption xml:lang="en">Server console in light mode</caption>
+    </screenshot>
+    <screenshot>
+      <image type="source">https://raw.githubusercontent.com/Rotstein007/smashed-pumpkin/master/data/screenshots/stats.png</image>
       <caption xml:lang="en">Resource stats</caption>
     </screenshot>
     <screenshot>
-      <image type="source">https://raw.githubusercontent.com/Rotstein007/smashed-pumpkin/master/data/screenshots/smashed-pumpkin-logs.png</image>
-      <caption xml:lang="en">Log files</caption>
+      <image type="source">https://raw.githubusercontent.com/Rotstein007/smashed-pumpkin/master/data/screenshots/stats-wm.png</image>
+      <caption xml:lang="en">Resource stats in light mode</caption>
     </screenshot>
     <screenshot>
-      <image type="source">https://raw.githubusercontent.com/Rotstein007/smashed-pumpkin/master/data/screenshots/smashed-pumpkin-plugins.png</image>
+      <image type="source">https://raw.githubusercontent.com/Rotstein007/smashed-pumpkin/master/data/screenshots/player.png</image>
+      <caption xml:lang="en">Players</caption>
+    </screenshot>
+    <screenshot>
+      <image type="source">https://raw.githubusercontent.com/Rotstein007/smashed-pumpkin/master/data/screenshots/player-wm.png</image>
+      <caption xml:lang="en">Players in light mode</caption>
+    </screenshot>
+    <screenshot>
+      <image type="source">https://raw.githubusercontent.com/Rotstein007/smashed-pumpkin/master/data/screenshots/plugins.png</image>
       <caption xml:lang="en">Plugin manager</caption>
     </screenshot>
     <screenshot>
-      <image type="source">https://raw.githubusercontent.com/Rotstein007/smashed-pumpkin/master/data/screenshots/smashed-pumpkin-worlds.png</image>
-      <caption xml:lang="en">Worlds</caption>
+      <image type="source">https://raw.githubusercontent.com/Rotstein007/smashed-pumpkin/master/data/screenshots/plugins-wm.png</image>
+      <caption xml:lang="en">Plugin manager in light mode</caption>
     </screenshot>
     <screenshot>
-      <image type="source">https://raw.githubusercontent.com/Rotstein007/smashed-pumpkin/master/data/screenshots/smashed-pumpkin-settings.png</image>
+      <image type="source">https://raw.githubusercontent.com/Rotstein007/smashed-pumpkin/master/data/screenshots/world.png</image>
+      <caption xml:lang="en">World manager</caption>
+    </screenshot>
+    <screenshot>
+      <image type="source">https://raw.githubusercontent.com/Rotstein007/smashed-pumpkin/master/data/screenshots/world-wm.png</image>
+      <caption xml:lang="en">World manager in light mode</caption>
+    </screenshot>
+    <screenshot>
+      <image type="source">https://raw.githubusercontent.com/Rotstein007/smashed-pumpkin/master/data/screenshots/logs.png</image>
+      <caption xml:lang="en">Log files</caption>
+    </screenshot>
+    <screenshot>
+      <image type="source">https://raw.githubusercontent.com/Rotstein007/smashed-pumpkin/master/data/screenshots/logs-wm.png</image>
+      <caption xml:lang="en">Log files in light mode</caption>
+    </screenshot>
+    <screenshot>
+      <image type="source">https://raw.githubusercontent.com/Rotstein007/smashed-pumpkin/master/data/screenshots/settings.png</image>
       <caption xml:lang="en">Server settings</caption>
+    </screenshot>
+    <screenshot>
+      <image type="source">https://raw.githubusercontent.com/Rotstein007/smashed-pumpkin/master/data/screenshots/settings-wm.png</image>
+      <caption xml:lang="en">Server settings in light mode</caption>
     </screenshot>
   </screenshots>
   <requires>
@@ -58,6 +106,26 @@
     <control>touch</control>
   </supports>
   <releases>
+    <release version="0.5.0" date="2026-03-29">
+      <description>
+        <ul>
+          <li>The app now feels cleaner and more modern, with a clearer server overview and refined detail views.</li>
+          <li>Plugins, worlds, and server groups are easier to manage, with better actions and less visual clutter.</li>
+          <li>Networks and player management have been expanded to make larger setups easier to organize.</li>
+          <li>Many smaller improvements make updates, restarts, and everyday use more reliable.</li>
+        </ul>
+        <p>Thank you for your feedback. It directly shaped this update.</p>
+      </description>
+      <description xml:lang="de">
+        <ul>
+          <li>Die App wirkt jetzt aufgeräumter und moderner, mit einer klareren Serverübersicht und überarbeiteten Detailansichten.</li>
+          <li>Plugins, Welten und Servergruppen lassen sich angenehmer verwalten, mit besseren Aktionen und weniger visuellem Ballast.</li>
+          <li>Netzwerke und Spielerverwaltung wurden erweitert, damit sich größere Setups übersichtlicher organisieren lassen.</li>
+          <li>Viele kleine Verbesserungen machen Updates, Neustarts und den Alltag insgesamt zuverlässiger.</li>
+        </ul>
+        <p>Vielen Dank für euer Feedback. Es hat dieses Update direkt mitgeprägt.</p>
+      </description>
+    </release>
     <release version="0.4.1" date="2026-03-04">
       <description>
         <ul>

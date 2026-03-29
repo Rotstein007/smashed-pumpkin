@@ -19,17 +19,60 @@
   border-radius: 10px;
 }
 
+.overview-list row:hover > .card {
+  border-radius: 10px;
+  background: alpha(currentColor, 0.06);
+  outline: 1px solid alpha(currentColor, 0.14);
+  outline-offset: -1px;
+}
+
 .overview-list {
   background-color: transparent;
 }
 
 .overview-card {
   min-width: 220px;
+  transition: none;
+}
+
+.network-members-shell {
+  border-left: 2px solid alpha(currentColor, 0.18);
+  padding-left: 14px;
+}
+
+.network-member-card:hover {
+  background: alpha(currentColor, 0.06);
+  outline: 1px solid alpha(currentColor, 0.14);
+  outline-offset: -1px;
+}
+
+.overview-compact-title {
+  font-size: 1.35rem;
+  font-weight: 700;
 }
 
 .card-button {
   min-height: 28px;
   padding: 2px 10px;
+}
+
+.overview-square-button {
+  min-height: 32px;
+  min-width: 32px;
+  padding: 0;
+}
+
+button.card-button.overview-square-button {
+  min-height: 32px;
+  min-width: 32px;
+  padding: 0;
+}
+
+button.card-button.overview-square-button > box,
+button.card-button.overview-square-button > image {
+  min-height: 32px;
+  min-width: 32px;
+  padding: 0;
 }
 
 .details-action-row button,
@@ -240,6 +283,6 @@ switch.compact-switch slider {
   min-width: 160px;
 }
 
-.sponsor-heart-icon {
-  color: #bf3989;
+.sponsor-heart-button .sponsor-heart-icon {
+  font-size: 1.05rem;
 }

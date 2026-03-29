@@ -359,6 +359,77 @@ toml_replace_or_append(const char *contents, const char *key, const char *value_
   return g_strdup_printf("%s%s%s\n", base, needs_nl ? "\n" : "", replacement);
 }
 
+static char *
+toml_replace_or_append_in_section(const char *contents,
+                                  const char *section,
+                                  const char *key,
+                                  const char *value_literal)
+{
+  if (section == NULL || *section == '\0' || key == NULL || *key == '\0' || value_literal == NULL) {
+    return g_strdup(contents != NULL ? contents : "");
+  }
+
+  g_auto(GStrv) lines = g_strsplit(contents != NULL ? contents : "", "\n", -1);
+  GString *out = g_string_new(NULL);
+  g_autofree char *section_header = g_strdup_printf("[%s]", section);
+  g_autofree char *replacement = g_strdup_printf("%s = %s", key, value_literal);
+  gboolean in_section = FALSE;
+  gboolean section_found = FALSE;
+  gboolean key_replaced = FALSE;
+
+  for (guint i = 0; lines[i] != NULL; i++) {
+    const char *line = lines[i];
+    g_autofree char *trimmed = g_strdup(line);
+    g_strstrip(trimmed);
+    gboolean is_section_header = trimmed[0] == '[';
+
+    if (in_section && is_section_header) {
+      if (!key_replaced) {
+        g_string_append_printf(out, "%s\n", replacement);
+        key_replaced = TRUE;
+      }
+      in_section = FALSE;
+    }
+
+    if (g_strcmp0(trimmed, section_header) == 0) {
+      section_found = TRUE;
+      in_section = TRUE;
+      g_string_append_printf(out, "%s\n", line);
+      continue;
+    }
+
+    if (in_section) {
+      g_autofree char *escaped_key = g_regex_escape_string(key, -1);
+      g_autofree char *pattern = g_strdup_printf("^\\s*%s\\s*=\\s*.*$", escaped_key);
+      g_autoptr(GRegex) regex = g_regex_new(pattern, 0, 0, NULL);
+      if (regex != NULL && g_regex_match(regex, line, 0, NULL)) {
+        g_string_append_printf(out, "%s\n", replacement);
+        key_replaced = TRUE;
+        continue;
+      }
+    }
+
+    g_string_append_printf(out, "%s\n", line);
+  }
+
+  if (in_section && !key_replaced) {
+    g_string_append_printf(out, "%s\n", replacement);
+    key_replaced = TRUE;
+  }
+
+  if (!section_found) {
+    if (out->len > 0 && out->str[out->len - 1] != '\n') {
+      g_string_append_c(out, '\n');
+    }
+    if (out->len > 1) {
+      g_string_append_c(out, '\n');
+    }
+    g_string_append_printf(out, "%s\n%s\n", section_header, replacement);
+  }
+
+  return g_string_free(out, FALSE);
+}
+
 static gboolean
 sync_pumpkin_basic_configuration(PumpkinServer *self, GError **error)
 {
@@ -386,7 +457,24 @@ sync_pumpkin_basic_configuration(PumpkinServer *self, GError **error)
   g_autofree char *step1 = toml_replace_or_append(contents, "java_edition_address", java_addr);
   g_autofree char *step2 = toml_replace_or_append(step1, "bedrock_edition_address", bedrock_addr);
   g_autofree char *step3 = toml_replace_or_append(step2, "max_players", max_players);
-  return g_file_set_contents(path, step3, -1, error);
+  if (!g_file_set_contents(path, step3, -1, error)) {
+    return FALSE;
+  }
+
+  g_autofree char *features_path = g_build_filename(config_dir, "features.toml", NULL);
+  g_autofree char *features_contents = NULL;
+  g_file_get_contents(features_path, &features_contents, NULL, NULL);
+  if (features_contents == NULL) {
+    features_contents = g_strdup("");
+  }
+
+  g_autofree char *query_addr = g_strdup_printf("\"0.0.0.0:%d\"", self->port > 0 ? self->port : 25565);
+  g_autofree char *rcon_addr = g_strdup_printf("\"0.0.0.0:%d\"", self->rcon_port > 0 ? self->rcon_port : 25575);
+  g_autofree char *features_step1 =
+    toml_replace_or_append_in_section(features_contents, "networking.query", "address", query_addr);
+  g_autofree char *features_step2 =
+    toml_replace_or_append_in_section(features_step1, "networking.rcon", "address", rcon_addr);
+  return g_file_set_contents(features_path, features_step2, -1, error);
 }
 
 static gboolean

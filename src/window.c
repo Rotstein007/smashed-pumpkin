@@ -1,9 +1,14 @@
-#include "window.h"
+#include "window-internal.h"
 #include "app.h"
 
-#include "app-config.h"
 #include "download.h"
-#include "server-store.h"
+#include "window-console.h"
+#include "window-lifecycle.h"
+#include "window-networks.h"
+#include "window-player-data.h"
+#include "window-players.h"
+#include "window-parse.h"
+#include "window-protocol.h"
 
 #include <gio/gio.h>
 #include <gdk-pixbuf/gdk-pixbuf.h>
@@ -28,299 +33,7 @@
 #endif
 #include <time.h>
 
-#define DEFAULT_STATS_SAMPLE_MSEC 200
-#define STATS_SAMPLE_MSEC_MIN 2
-#define STATS_SAMPLE_MSEC_MAX 2000
-#define STATS_HISTORY_SECONDS 180
-#define STATS_SAMPLES ((STATS_HISTORY_SECONDS * 1000) / DEFAULT_STATS_SAMPLE_MSEC)
-#define PLAYER_STATE_FLUSH_INTERVAL_USEC (15 * G_USEC_PER_SEC)
-#define CONSOLE_MAX_LINES 5000
-#define NETWORK_PROXY_JAVA_PORT 25565
-#define NETWORK_PROXY_BEDROCK_PORT 19132
-#define NETWORK_PROXY_RCON_PORT 25575
-#define MIN_VALID_PUMPKIN_BINARY_BYTES (512 * 1024)
-#define DDNS_TICK_SECONDS 30
-#define DDNS_INTERVAL_SECONDS_MIN 30
-#define DDNS_INTERVAL_SECONDS_MAX 86400
-#define DDNS_INTERVAL_SECONDS_DEFAULT 300
-#define DDNS_API_IPIFY_URL "https://api.ipify.org?format=text"
-#define DDNS_API_CLOUDFLARE_BASE "https://api.cloudflare.com/client/v4"
-
-struct _PumpkinWindow {
-  AdwApplicationWindow parent_instance;
-
-  AdwViewStack *view_stack;
-  AdwViewStack *details_stack;
-  AdwViewSwitcher *details_switcher;
-  AdwViewSwitcher *players_switcher;
-  GtkBox *overview_page_box;
-  GtkBox *overview_header_row;
-  GtkBox *details_page_box;
-  GtkBox *details_header_row;
-  GtkBox *details_identity_row;
-  GtkBox *console_command_row;
-  GtkBox *servers_page_box;
-  GtkBox *servers_header_row;
-  GtkBox *domains_page_box;
-
-  GtkListBox *server_list;
-  GtkTextView *log_view;
-  GtkListBox *overview_list;
-  GtkListBox *overview_network_list;
-  char *latest_url;
-  char *latest_build_id;
-  char *latest_build_label;
-  guint latest_poll_id;
-  gboolean latest_resolve_in_flight;
-
-  GtkButton *btn_add_server;
-  GtkButton *btn_remove_server;
-  GtkButton *btn_add_server_overview;
-  GtkButton *btn_add_network_overview;
-  GtkButton *btn_servers_back;
-  GtkButton *btn_import_server;
-  GtkButton *btn_import_server_overview;
-  GtkButton *btn_sponsor_pumpkin;
-  GtkButton *btn_open_plugins;
-  GtkButton *btn_open_players;
-  GtkButton *btn_open_worlds;
-  GtkButton *btn_save_settings;
-
-  GtkListBox *plugin_list;
-  GtkListBox *world_list;
-  GtkListBox *player_list;
-  GtkSearchEntry *player_search;
-  GtkButton *btn_player_sort_last_online;
-  GtkButton *btn_player_sort_playtime;
-  GtkButton *btn_player_sort_first_joined;
-  GtkButton *btn_player_sort_name;
-  GtkBox *plugin_drop_hint;
-  GtkBox *world_drop_hint;
-  GtkSearchEntry *whitelist_search;
-  GtkSearchEntry *banned_search;
-  GtkListBox *whitelist_list;
-  GtkListBox *banned_list;
-  GtkListBox *log_files_list;
-  GtkTextView *log_file_view;
-  GtkDropDown *log_filter;
-  GtkDropDown *log_level_filter;
-  GtkEntry *log_search;
-  GtkButton *btn_open_logs;
-  GtkButton *btn_clear_all_logs;
-  GtkLabel *label_sys_cpu;
-  GtkLabel *label_sys_ram;
-  GtkLabel *label_srv_cpu;
-  GtkLabel *label_srv_ram;
-  GtkBox *stats_row;
-  GtkDrawingArea *stats_graph_usage;
-  GtkDrawingArea *stats_graph_players;
-  GtkDrawingArea *stats_graph_disk;
-  GtkLabel *label_stats_cpu;
-  GtkLabel *label_stats_ram;
-  GtkLabel *label_stats_disk;
-  GtkLabel *label_stats_players;
-  GtkRevealer *console_warning_revealer;
-  GtkLabel *console_warning_label;
-  GtkLabel *label_resource_limits;
-
-  GtkLabel *details_title;
-  GtkImage *details_server_icon;
-  GtkButton *btn_details_back;
-  GtkButton *btn_details_start;
-  GtkButton *btn_details_stop;
-  GtkButton *btn_details_restart;
-  GtkButton *btn_details_install;
-  GtkButton *btn_details_update;
-  GtkButton *btn_details_check_updates;
-  GtkBox *details_action_row;
-  GtkEntry *entry_command;
-  GtkButton *btn_console_send;
-  GtkButton *btn_console_copy;
-  GtkButton *btn_console_clear;
-  GtkMenuButton *btn_console_filter;
-  GtkButton *btn_console_filter_all;
-  GtkCheckButton *check_console_trace;
-  GtkCheckButton *check_console_debug;
-  GtkCheckButton *check_console_info;
-  GtkCheckButton *check_console_warn;
-  GtkCheckButton *check_console_error;
-  GtkCheckButton *check_console_smpk;
-  GtkCheckButton *check_console_other;
-  GtkButton *btn_open_server_root;
-  GtkLabel *details_error;
-  GtkRevealer *details_error_revealer;
-  GtkLabel *details_status;
-  GtkRevealer *details_status_revealer;
-  guint status_timeout_id;
-  GtkProgressBar *download_progress;
-  GtkRevealer *download_progress_revealer;
-  guint restart_delay_id;
-  guint start_delay_id;
-  guint auto_update_countdown_id;
-  GHashTable *download_progress_state;
-  gboolean close_while_download_confirmed;
-  gboolean restart_requested;
-  gboolean user_stop_requested;
-  gboolean restart_pending;
-  PumpkinServer *auto_update_server;
-  int auto_update_countdown_remaining;
-  gint64 auto_update_cooldown_until;
-  gint64 last_auto_update_eval_at;
-  int auto_update_last_schedule_day;
-  char *auto_update_last_schedule_server_id;
-  char *auto_update_last_attempt_server_id;
-  char *auto_update_last_attempt_build_id;
-  guint stats_refresh_id;
-  int stats_sample_msec;
-  unsigned long long last_total_jiffies;
-  unsigned long long last_idle_jiffies;
-  unsigned long long last_proc_jiffies;
-  double last_proc_cpu_smoothed;
-  int last_proc_pid;
-  long clk_tck;
-  double stats_cpu[STATS_SAMPLES];
-  double stats_ram_mb[STATS_SAMPLES];
-  double stats_disk_mb[STATS_SAMPLES];
-  double stats_players[STATS_SAMPLES];
-  int stats_index;
-  int stats_count;
-  double last_tps;
-  gboolean last_tps_valid;
-  gboolean tps_enabled;
-  int query_players;
-  int query_max_players;
-  gint64 query_updated_at;
-  gboolean query_valid;
-  gboolean query_in_flight;
-  int list_snapshot_players;
-  int list_snapshot_max_players;
-  gint64 list_snapshot_updated_at;
-  gint64 last_tps_request_at;
-  gint64 last_player_list_request_at;
-  gint64 last_player_state_flush_at;
-  gboolean player_state_dirty;
-  guint pending_auto_tps_lines;
-  guint pending_auto_list_lines;
-  guint pending_java_platform_hints;
-  guint pending_bedrock_platform_hints;
-
-  int ui_state;
-
-  GtkEntry *entry_server_name;
-  GtkEntry *entry_download_url;
-  GtkButton *btn_choose_icon;
-  GtkButton *btn_reset_icon;
-  GtkEntry *entry_server_port;
-  GtkEntry *entry_bedrock_port;
-  GtkEntry *entry_max_players;
-  GtkEntry *entry_stats_sample_msec;
-  GtkEntry *entry_max_cpu_cores;
-  GtkEntry *entry_max_ram_mb;
-  GtkLabel *label_java_port_hint;
-  GtkLabel *label_bedrock_port_hint;
-  GtkLabel *label_max_players_hint;
-  GtkLabel *label_stats_sample_hint;
-  GtkLabel *label_max_cpu_hint;
-  GtkLabel *label_max_ram_hint;
-  GtkSwitch *switch_auto_restart;
-  GtkEntry *entry_auto_restart_delay;
-  GtkSwitch *switch_auto_update;
-  GtkSwitch *switch_auto_update_schedule;
-  GtkEntry *entry_auto_update_time;
-  GtkLabel *label_auto_update_time_hint;
-  GtkEntry *entry_rcon_host;
-  GtkEntry *entry_rcon_port;
-  GtkPasswordEntry *entry_rcon_password;
-  GtkEntry *entry_domain;
-  GtkLabel *label_domains_target;
-  GtkButton *btn_save_domains;
-  GtkSwitch *switch_ddns_enabled;
-  GtkEntry *entry_ddns_cf_zone_id;
-  GtkPasswordEntry *entry_ddns_cf_api_token;
-  GtkEntry *entry_ddns_cf_record_id;
-  GtkSwitch *switch_ddns_cf_proxied;
-  GtkEntry *entry_ddns_interval_seconds;
-  GtkButton *btn_ddns_sync_now;
-  GtkLabel *label_ddns_status;
-  GtkSwitch *switch_use_cache;
-  GtkSwitch *switch_run_in_background;
-  GtkSwitch *switch_autostart_on_boot;
-  GtkSwitch *switch_start_minimized;
-  GtkSwitch *switch_auto_start_servers;
-  GtkDropDown *drop_date_format;
-  GtkDropDown *drop_time_format;
-  GtkListBox *autostart_server_list;
-  GtkButton *btn_add_autostart_server;
-  GtkButton *btn_save_general_settings;
-  GtkButton *btn_reset_general_settings;
-  GtkButton *btn_reset_server_settings;
-  GtkButton *btn_clear_cache;
-  GtkLabel *label_rcon_host_hint;
-  GtkLabel *label_rcon_port_hint;
-  gboolean settings_dirty;
-  gboolean settings_loading;
-  gboolean settings_guard;
-  gboolean settings_invalid;
-  gboolean background_hold;
-  char *last_details_page;
-  char *pending_details_page;
-  char *pending_view_page;
-  PumpkinServer *pending_server;
-  char *current_log_path;
-
-  PumpkinServerStore *store;
-  PumpkinServer *current;
-  PumpkinConfig *config;
-  guint players_refresh_id;
-  gboolean player_list_signature_valid;
-  guint64 player_list_signature;
-  guint player_list_signature_count;
-  gboolean player_list_pointer_inside;
-  gint64 player_list_interaction_until;
-  int player_sort_field;
-  gboolean player_sort_ascending;
-  GHashTable *live_player_names;
-  GHashTable *platform_hint_by_ip;
-  GHashTable *player_states;
-  GHashTable *player_states_by_uuid;
-  GHashTable *player_states_by_name;
-  GHashTable *deleted_player_keys;
-  GHashTable *player_head_downloads;
-  GHashTable *console_buffers;
-  GHashTable *server_running_hints;
-  GPtrArray *command_history;
-  int command_history_index;
-  char *command_history_draft;
-  GPtrArray *networks;
-  AdwDialog *network_details_dialog;
-  GtkBox *network_details_members_box;
-  GtkProgressBar *network_details_progress;
-  char *network_details_network_id;
-  guint overview_refresh_idle_id;
-  gboolean overview_refresh_needs_details;
-  guint network_details_refresh_idle_id;
-  gint64 suppress_warning_beep_until;
-  guint ddns_timer_id;
-  gboolean ddns_sync_in_flight;
-  GHashTable *ddns_last_sync_by_server;
-  GHashTable *ddns_status_by_server;
-};
-
 G_DEFINE_FINAL_TYPE(PumpkinWindow, pumpkin_window, ADW_TYPE_APPLICATION_WINDOW)
-
-enum {
-  UI_STATE_IDLE = 0,
-  UI_STATE_STARTING,
-  UI_STATE_RUNNING,
-  UI_STATE_STOPPING,
-  UI_STATE_RESTARTING,
-  UI_STATE_ERROR
-};
-
-typedef struct {
-  PumpkinWindow *self;
-  PumpkinServer *server;
-} RestartContext;
 
 typedef struct {
   PumpkinWindow *self;
@@ -342,131 +55,6 @@ typedef struct DownloadContext {
   gboolean restart_after_download;
 } DownloadContext;
 
-typedef struct {
-  goffset current;
-  goffset total;
-  gboolean active;
-  GtkWidget *overview_bar;
-} DownloadProgressState;
-
-typedef struct {
-  PumpkinWindow *self;
-  PumpkinServer *server;
-  char *url;
-  char *build_id;
-  char *build_label;
-  char *cache_path;
-  gboolean restart_after_download;
-  guint attempts;
-} CacheWaitContext;
-
-typedef struct {
-  PumpkinWindow *self;
-  PumpkinServer *server;
-  char *host;
-  int port;
-} QueryPlayersContext;
-
-typedef struct {
-  int players;
-  int max_players;
-  gboolean ok;
-} QueryResult;
-
-typedef enum {
-  PLAYER_PLATFORM_UNKNOWN = 0,
-  PLAYER_PLATFORM_JAVA,
-  PLAYER_PLATFORM_BEDROCK
-} PlayerPlatform;
-
-typedef enum {
-  CONSOLE_LEVEL_OTHER = 0,
-  CONSOLE_LEVEL_TRACE,
-  CONSOLE_LEVEL_DEBUG,
-  CONSOLE_LEVEL_INFO,
-  CONSOLE_LEVEL_WARN,
-  CONSOLE_LEVEL_ERROR,
-  CONSOLE_LEVEL_SMPK
-} ConsoleLevel;
-
-typedef struct {
-  char *key;
-  char *name;
-  char *uuid;
-  char *last_ip;
-  gboolean ip_banned_hint;
-  PlayerPlatform platform;
-  gboolean online;
-  gint64 first_joined_unix;
-  gint64 last_online_unix;
-  guint64 playtime_seconds;
-  gint64 session_started_mono;
-} PlayerState;
-
-typedef struct {
-  int field;
-  gboolean ascending;
-  GHashTable *op_level_map;
-  gint64 now_unix;
-} PlayerSortSettings;
-
-typedef struct {
-  PumpkinWindow *self;
-  PumpkinServer *server;
-  char *uuid_key;
-  char *cache_path;
-} PlayerHeadDownloadContext;
-
-typedef struct {
-  char *id;
-  char *name;
-  char *proxy_server_id;
-  GPtrArray *member_server_ids; /* array of char* */
-} ServerNetwork;
-
-typedef struct {
-  char *server_id;
-  GtkCheckButton *check;
-} NetworkServerChoice;
-
-typedef struct {
-  char *network_id;
-  GPtrArray *choices; /* array of NetworkServerChoice* */
-  AdwDialog *owner_dialog;
-} NetworkProxyDialogContext;
-
-typedef struct {
-  PumpkinWindow *self;
-  PumpkinServer *server;
-} AutoStartContext;
-
-typedef struct {
-  char *server_id;
-  char *server_name;
-  char *domain;
-  char *provider;
-  char *api_token;
-  char *zone_id;
-  char *record_id;
-  gboolean proxied;
-} DdnsServerConfig;
-
-typedef struct {
-  char *server_id;
-  gboolean success;
-  gboolean changed;
-  char *record_id;
-  char *message;
-} DdnsServerResult;
-
-typedef struct {
-  GPtrArray *servers; /* array of DdnsServerConfig* */
-} DdnsSyncRequest;
-
-typedef struct {
-  char *public_ipv4;
-  GPtrArray *results; /* array of DdnsServerResult* */
-} DdnsSyncResult;
 
 static void start_download_for_server(PumpkinWindow *self,
                                       PumpkinServer *server,
@@ -475,9 +63,9 @@ static void start_download_for_server(PumpkinWindow *self,
                                       gboolean restart_after_download);
 static void on_download_done(GObject *source, GAsyncResult *res, gpointer user_data);
 static void on_overview_update_clicked(GtkButton *button, gpointer user_data);
-static void on_overview_settings_clicked(GtkButton *button, gpointer user_data);
+static void open_overview_server_details(PumpkinWindow *self, PumpkinServer *server, AdwDialog *dialog);
+static void on_overview_row_activated(GtkListBox *box, GtkListBoxRow *row, PumpkinWindow *self);
 static void on_servers_back(GtkButton *button, PumpkinWindow *self);
-static gboolean server_has_installation(PumpkinWindow *self, PumpkinServer *server);
 static void on_overview_network_start_all_clicked(GtkButton *button, gpointer user_data);
 static void on_overview_network_stop_all_clicked(GtkButton *button, gpointer user_data);
 static void on_overview_network_update_all_clicked(GtkButton *button, gpointer user_data);
@@ -490,6 +78,11 @@ static void on_overview_network_set_proxy_confirmed(GObject *dialog, GAsyncResul
 static void on_overview_network_clear_proxy_clicked(GtkButton *button, gpointer user_data);
 static void on_overview_network_set_proxy_clicked(GtkButton *button, gpointer user_data);
 static void on_overview_network_delete_clicked(GtkButton *button, gpointer user_data);
+static void on_overview_network_delete_confirmed(GObject *dialog, GAsyncResult *res, gpointer user_data);
+static void on_overview_network_toggle_expanded(GtkToggleButton *button, PumpkinWindow *self);
+static void on_choose_network_icon_clicked(GtkButton *button, PumpkinWindow *self);
+static void on_choose_network_icon_done(GObject *source, GAsyncResult *res, gpointer user_data);
+static void on_reset_network_icon_clicked(GtkButton *button, PumpkinWindow *self);
 static void on_add_network_overview(GtkButton *button, PumpkinWindow *self);
 static void on_add_network_confirmed(GObject *dialog, GAsyncResult *res, gpointer user_data);
 static void refresh_network_details_dialog(PumpkinWindow *self);
@@ -497,18 +90,19 @@ static void update_network_details_progress_for_active(PumpkinWindow *self);
 static void clear_network_details_dialog_tracking(PumpkinWindow *self);
 static void queue_network_details_refresh(PumpkinWindow *self);
 static gboolean refresh_network_details_idle(gpointer user_data);
+static char *network_icon_path(PumpkinWindow *self, const char *network_id);
+static GtkWidget *create_network_icon_widget(PumpkinWindow *self, ServerNetwork *network, int pixel_size);
+static gboolean network_is_expanded(PumpkinWindow *self, const char *network_id);
 static void on_overview_remove_clicked(GtkButton *button, PumpkinWindow *self);
 static void on_overview_remove_confirmed(GObject *dialog, GAsyncResult *res, gpointer user_data);
 static void on_sponsor_pumpkin_clicked(GtkButton *button, PumpkinWindow *self);
+static void on_plugins_marketplace_clicked(GtkButton *button, PumpkinWindow *self);
 static void open_uri_external(PumpkinWindow *self, const char *uri);
 static void on_add_server_confirmed(GObject *dialog, GAsyncResult *res, gpointer user_data);
 static void on_add_server_entry_activate(GtkEntry *entry, PumpkinWindow *self);
 static void on_import_server(GtkButton *button, PumpkinWindow *self);
 static void on_import_server_done(GObject *source, GAsyncResult *res, gpointer user_data);
 static void on_details_back(GtkButton *button, PumpkinWindow *self);
-static void on_details_start(GtkButton *button, PumpkinWindow *self);
-static void on_details_stop(GtkButton *button, PumpkinWindow *self);
-static void on_details_restart(GtkButton *button, PumpkinWindow *self);
 static void on_download_progress(goffset current, goffset total, gpointer user_data);
 static void on_details_install(GtkButton *button, PumpkinWindow *self);
 static void on_details_update(GtkButton *button, PumpkinWindow *self);
@@ -517,16 +111,12 @@ static void command_history_reset_navigation(PumpkinWindow *self);
 static void trigger_latest_resolve(PumpkinWindow *self);
 static gboolean poll_latest_release_tick(gpointer data);
 static void update_check_updates_badge(PumpkinWindow *self);
-static void update_settings_form(PumpkinWindow *self);
+void update_settings_form(PumpkinWindow *self);
 static void on_save_settings(GtkButton *button, PumpkinWindow *self);
 static gboolean server_settings_require_restart(PumpkinWindow *self);
 static void save_settings_impl(PumpkinWindow *self, gboolean restart_server);
 static void on_restart_required_save_confirmed(AdwAlertDialog *dialog, const char *response, PumpkinWindow *self);
 static void complete_pending_settings_navigation(PumpkinWindow *self);
-static void on_console_copy(GtkButton *button, PumpkinWindow *self);
-static void on_console_clear(GtkButton *button, PumpkinWindow *self);
-static void on_console_filter_toggled(GtkCheckButton *button, PumpkinWindow *self);
-static void on_console_filter_all_clicked(GtkButton *button, PumpkinWindow *self);
 static void on_settings_changed(GtkEditable *editable, PumpkinWindow *self);
 static void on_settings_switch_changed(GObject *object, GParamSpec *pspec, PumpkinWindow *self);
 static void populate_autostart_server_list(PumpkinWindow *self);
@@ -537,7 +127,6 @@ static void on_save_general_settings(GtkButton *button, PumpkinWindow *self);
 static void on_reset_general_settings(GtkButton *button, PumpkinWindow *self);
 static void on_reset_server_settings(GtkButton *button, PumpkinWindow *self);
 static void mark_settings_dirty(PumpkinWindow *self);
-static void append_log(PumpkinWindow *self, const char *line);
 static void set_details_status(PumpkinWindow *self, const char *message, guint timeout_seconds);
 static void on_clear_cache(GtkButton *button, PumpkinWindow *self);
 static char *cache_dir_for_config(PumpkinWindow *self);
@@ -547,16 +136,10 @@ static void on_details_stack_changed(GObject *object, GParamSpec *pspec, Pumpkin
 static void update_save_button(PumpkinWindow *self);
 static void get_system_limits(int *max_cores, int *max_ram_mb);
 static void validate_settings_limits(PumpkinWindow *self);
-static int parse_limit_entry(GtkEntry *entry, int max_value);
-static gboolean parse_tps_from_line(const char *line, double *out);
 static void on_settings_leave_confirmed(GObject *dialog, GAsyncResult *res, gpointer user_data);
 static gboolean on_window_close_request(GtkWindow *window, gpointer user_data);
 static void on_close_during_update_confirmed(GObject *dialog, GAsyncResult *res, gpointer user_data);
 static void on_window_visible_changed(GObject *object, GParamSpec *pspec, gpointer user_data);
-static gboolean query_minecraft_players(const char *host, int port, int *out_players, int *out_max_players);
-static gboolean is_player_list_snapshot_line(const char *line);
-static gboolean parse_clock_time_text(const char *text, int *out_hour, int *out_minute);
-static gboolean parse_clock_time_entry(GtkEntry *entry, int *out_hour, int *out_minute);
 static int sanitize_stats_sample_msec(int value);
 static int current_stats_sample_msec(PumpkinWindow *self);
 static gint64 query_stale_usec(PumpkinWindow *self);
@@ -567,39 +150,33 @@ static void restart_stats_refresh_timer(PumpkinWindow *self);
 static void restart_players_refresh_timer(PumpkinWindow *self);
 static void apply_stats_sample_msec(PumpkinWindow *self, int msec, gboolean reset_history);
 static void update_auto_update_controls_sensitivity(PumpkinWindow *self);
-static void clear_auto_update_countdown(PumpkinWindow *self);
 static gboolean auto_update_countdown_tick(gpointer data);
 static void maybe_trigger_auto_update(PumpkinWindow *self);
-static void on_send_command(GtkWidget *widget, PumpkinWindow *self);
-static gboolean on_command_entry_key_pressed(GtkEventControllerKey *controller,
-                                             guint keyval,
-                                             guint keycode,
-                                             GdkModifierType state,
-                                             PumpkinWindow *self);
 static void on_choose_icon(GtkButton *button, PumpkinWindow *self);
 static void on_reset_icon(GtkButton *button, PumpkinWindow *self);
 static void on_plugin_delete_clicked(GtkButton *button, PumpkinWindow *self);
+static void on_plugin_delete_confirmed(GObject *dialog, GAsyncResult *res, gpointer user_data);
 static void on_plugin_overwrite_confirmed(GObject *dialog, GAsyncResult *res, gpointer user_data);
 static void select_server(PumpkinWindow *self, PumpkinServer *server);
 static void refresh_overview_list(PumpkinWindow *self);
-static void queue_overview_refresh(PumpkinWindow *self, gboolean include_details);
+static void queue_log_file_scroll_to_end(PumpkinWindow *self);
 static void refresh_overview_network_list(PumpkinWindow *self);
 static GtkWidget *create_overview_server_card(PumpkinWindow *self,
                                               PumpkinServer *server,
                                               const char *network_id,
                                               AdwDialog *network_dialog);
-static GListModel *get_server_model(PumpkinWindow *self);
+GListModel *get_server_model(PumpkinWindow *self);
 static GtkWidget *create_server_row(PumpkinWindow *self, PumpkinServer *server);
 static GtkWidget *create_server_icon_widget(PumpkinServer *server);
 static void update_details(PumpkinWindow *self);
 static void refresh_plugin_list(PumpkinWindow *self);
 static void on_world_delete_clicked(GtkButton *button, PumpkinWindow *self);
+static void on_world_delete_confirmed(GObject *dialog, GAsyncResult *res, gpointer user_data);
 static void refresh_world_list(PumpkinWindow *self);
 static void refresh_player_list(PumpkinWindow *self);
 static void refresh_whitelist_list(PumpkinWindow *self);
 static void refresh_banned_list(PumpkinWindow *self);
 static gboolean refresh_players_tick(gpointer user_data);
-static void invalidate_player_list_signature(PumpkinWindow *self);
 static gboolean delete_player_tracking(PumpkinWindow *self,
                                        const char *state_key,
                                        const char *name,
@@ -635,10 +212,12 @@ static void on_player_list_pressed(GtkGestureClick *gesture,
                                    double y,
                                    PumpkinWindow *self);
 static void on_player_search_changed(GtkEditable *editable, PumpkinWindow *self);
-static void on_player_sort_button_clicked(GtkButton *button, PumpkinWindow *self);
-static void update_player_sort_buttons(PumpkinWindow *self);
-static void on_whitelist_search_changed(GtkEditable *editable, PumpkinWindow *self);
-static void on_banned_search_changed(GtkEditable *editable, PumpkinWindow *self);
+static void refresh_active_player_section(PumpkinWindow *self);
+static void update_player_sort_controls(PumpkinWindow *self);
+static void update_player_search_placeholder(PumpkinWindow *self);
+static void on_player_sort_dropdown_changed(GObject *object, GParamSpec *pspec, PumpkinWindow *self);
+static void on_player_sort_order_toggled(GtkToggleButton *button, PumpkinWindow *self);
+static void on_players_stack_visible_child_changed(GObject *object, GParamSpec *pspec, PumpkinWindow *self);
 static void refresh_log_files(PumpkinWindow *self);
 static void on_log_filter_changed(GObject *object, GParamSpec *pspec, PumpkinWindow *self);
 static void on_log_level_filter_changed(GObject *object, GParamSpec *pspec, PumpkinWindow *self);
@@ -647,8 +226,7 @@ static void on_log_file_activated(GtkListBox *box, GtkListBoxRow *row, PumpkinWi
 static void on_open_logs(GtkButton *button, PumpkinWindow *self);
 static void on_clear_all_logs(GtkButton *button, PumpkinWindow *self);
 static char *build_label_from_binary_path(PumpkinWindow *self, const char *bin_path);
-static gboolean restart_after_delay(gpointer data);
-static gboolean start_after_delay(gpointer data);
+gboolean start_after_delay(gpointer data);
 static gboolean on_plugins_drop(GtkDropTarget *target, const GValue *value, double x, double y, PumpkinWindow *self);
 static gboolean on_worlds_drop(GtkDropTarget *target, const GValue *value, double x, double y, PumpkinWindow *self);
 static gboolean install_server_from_binary_path(PumpkinWindow *self,
@@ -665,33 +243,24 @@ static GdkDragAction on_plugins_drop_enter(GtkDropTarget *target, double x, doub
 static void on_plugins_drop_leave(GtkDropTarget *target, PumpkinWindow *self);
 static GdkDragAction on_worlds_drop_enter(GtkDropTarget *target, double x, double y, PumpkinWindow *self);
 static void on_worlds_drop_leave(GtkDropTarget *target, PumpkinWindow *self);
-static void set_console_warning(PumpkinWindow *self, const char *message, gboolean visible);
-static char *strip_ansi(const char *line);
-static char *sanitize_console_text(const char *line);
-static char *format_console_line(PumpkinWindow *self, const char *line, ConsoleLevel *out_level);
-static ConsoleLevel console_level_from_text(const char *level_text);
-static const char *console_level_tag_name(ConsoleLevel level);
-static gboolean console_level_enabled(PumpkinWindow *self, ConsoleLevel level);
-static void apply_console_filters_to_buffer(PumpkinWindow *self, GtkTextBuffer *buffer);
-static void ensure_console_buffer_tags(PumpkinWindow *self, GtkTextBuffer *buffer);
-static void apply_console_filters(PumpkinWindow *self);
+static void set_hover_delete_button_visible(GtkWidget *button, gboolean visible);
+static void on_hover_delete_row_enter(GtkEventControllerMotion *controller, double x, double y, GtkWidget *button);
+static void on_hover_delete_row_leave(GtkEventControllerMotion *controller, GtkWidget *button);
+static void attach_hover_delete_button(GtkWidget *row, GtkWidget *button);
+static void on_sponsor_button_enter(GtkEventControllerMotion *controller, double x, double y, PumpkinWindow *self);
+static void on_sponsor_button_leave(GtkEventControllerMotion *controller, PumpkinWindow *self);
+static gboolean remove_widget_on_idle(gpointer data);
+static void on_overview_embedded_server_pressed(GtkGestureClick *gesture,
+                                                int n_press,
+                                                double x,
+                                                double y,
+                                                PumpkinWindow *self);
 static gboolean hide_status_cb(gpointer data);
 static gboolean update_stats_tick(gpointer data);
 static void reset_stats_history(PumpkinWindow *self);
 static void set_stats_graphs_disabled(PumpkinWindow *self, gboolean disabled);
 static void on_open_server_root(GtkButton *button, PumpkinWindow *self);
-static gboolean restart_after_delay(gpointer data);
 static void select_server_row(PumpkinWindow *self, PumpkinServer *server);
-static void player_state_free(PlayerState *state);
-static void player_states_clear(PumpkinWindow *self);
-static void player_states_load(PumpkinWindow *self, PumpkinServer *server);
-static void player_states_save(PumpkinWindow *self, PumpkinServer *server);
-static void player_states_mark_all_offline(PumpkinWindow *self);
-static PlayerState *ensure_player_state(PumpkinWindow *self, const char *uuid, const char *name, gboolean create);
-static void player_state_mark_online(PumpkinWindow *self, PlayerState *state, PlayerPlatform platform_hint);
-static void player_state_mark_offline(PumpkinWindow *self, PlayerState *state);
-static guint64 player_state_effective_playtime(const PlayerState *state);
-static int player_online_count(PumpkinWindow *self);
 static void ingest_players_from_disk(PumpkinWindow *self);
 static char *format_unix_time(PumpkinWindow *self, gint64 unix_ts);
 static char *format_duration(guint64 seconds);
@@ -699,44 +268,16 @@ static char *relative_time_label(gint64 unix_ts);
 static const char *date_time_pattern_for_config(PumpkinWindow *self);
 static char *normalize_build_label(PumpkinWindow *self, const char *label);
 static const char *platform_label(PlayerPlatform platform);
-static PlayerPlatform platform_from_line(const char *line);
-static PlayerPlatform platform_guess_from_uuid(const char *uuid);
-static void add_name_uuid_pairs(GHashTable *map, const char *contents);
-static char *resolve_data_file(PumpkinServer *server, const char *filename);
-static char *extract_ip_from_socket_text(const char *text);
 static GPtrArray *build_ip_unban_candidates(const char *raw_ip);
 static gboolean refresh_player_list_deferred(gpointer data);
 static gboolean send_pardon_ip_for_player(PumpkinWindow *self, const char *raw_ip, const char *state_key);
-static void remember_platform_hint_for_ip(PumpkinWindow *self, const char *ip, PlayerPlatform platform);
-static PlayerPlatform platform_hint_for_ip(PumpkinWindow *self, const char *ip);
 static void set_player_head_image(PumpkinWindow *self, GtkImage *image, const char *uuid);
 static void on_player_head_download_done(GObject *source, GAsyncResult *res, gpointer user_data);
-static char *player_tracking_file(PumpkinServer *server);
 static char *command_history_file(PumpkinServer *server);
 static void command_history_load(PumpkinWindow *self, PumpkinServer *server);
 static gboolean server_download_active(PumpkinWindow *self, PumpkinServer *server);
 static gboolean any_download_active(PumpkinWindow *self);
-static gboolean server_is_running_ui(PumpkinWindow *self, PumpkinServer *server);
-static void set_server_running_hint(PumpkinWindow *self, PumpkinServer *server, gboolean running);
-static char *pick_latest_banned_ip(PumpkinWindow *self);
-static void ensure_server_log_handler(PumpkinWindow *self, PumpkinServer *server);
-static ServerNetwork *server_network_new(const char *id, const char *name);
-static void server_network_free(ServerNetwork *network);
-static char *network_config_path(PumpkinWindow *self);
-static void networks_load(PumpkinWindow *self);
-static gboolean networks_save(PumpkinWindow *self);
-static ServerNetwork *find_network_by_id(PumpkinWindow *self, const char *id);
-static gboolean network_has_member(ServerNetwork *network, const char *server_id);
-static gboolean network_member_token_matches_server(const char *token, PumpkinServer *server);
-static gboolean network_includes_server(ServerNetwork *network, PumpkinServer *server);
-static void network_add_member(ServerNetwork *network, const char *server_id);
-static void network_remove_member(ServerNetwork *network, const char *server_id);
-static gboolean server_in_any_network(PumpkinWindow *self, const char *server_id);
-static void networks_prune_server(PumpkinWindow *self, const char *server_id);
-static PumpkinServer *find_server_by_id(PumpkinWindow *self, const char *server_id);
 static guint network_update_actionable_count(PumpkinWindow *self, ServerNetwork *network);
-static char *sanitize_network_id(const char *name);
-static gboolean apply_network_auto_ports(PumpkinWindow *self, ServerNetwork *network);
 static void auto_start_context_free(AutoStartContext *ctx);
 static gboolean auto_start_server_timeout_cb(gpointer user_data);
 
@@ -749,7 +290,7 @@ apply_compact_button(GtkWidget *button)
   gtk_widget_set_size_request(button, -1, 24);
 }
 
-static void
+void
 set_details_error(PumpkinWindow *self, const char *message)
 {
   if (self->details_error == NULL) {
@@ -833,90 +374,6 @@ log_line_matches_level(const char *line, int level_index)
   return TRUE;
 }
 
-static gboolean
-console_level_matches_log_filter(ConsoleLevel level, int level_index)
-{
-  if (level_index <= 0) {
-    return TRUE;
-  }
-  if (level_index == 1) {
-    return level == CONSOLE_LEVEL_INFO;
-  }
-  if (level_index == 2) {
-    return level == CONSOLE_LEVEL_WARN;
-  }
-  if (level_index == 3) {
-    return level == CONSOLE_LEVEL_ERROR;
-  }
-  return TRUE;
-}
-
-static gboolean
-is_auto_poll_noise_line(const char *line)
-{
-  if (line == NULL) {
-    return FALSE;
-  }
-  g_autofree char *clean = strip_ansi(line);
-  const char *check = clean != NULL ? clean : line;
-  if (is_player_list_snapshot_line(check)) {
-    return TRUE;
-  }
-  double tps = 0.0;
-  if (parse_tps_from_line(check, &tps)) {
-    return TRUE;
-  }
-  return FALSE;
-}
-
-static const char *
-get_entry_text(GtkEntry *entry)
-{
-  if (entry == NULL) {
-    return NULL;
-  }
-  return gtk_editable_get_text(GTK_EDITABLE(entry));
-}
-
-static int
-get_entry_int_value(GtkEntry *entry)
-{
-  if (entry == NULL) {
-    return 0;
-  }
-  const char *text = gtk_editable_get_text(GTK_EDITABLE(entry));
-  if (text == NULL || *text == '\0') {
-    return 0;
-  }
-  return atoi(text);
-}
-
-static gboolean
-strings_equal(const char *a, const char *b)
-{
-  const char *left = a != NULL ? a : "";
-  const char *right = b != NULL ? b : "";
-  return g_strcmp0(left, right) == 0;
-}
-
-static gboolean
-entry_matches_string(GtkEntry *entry, const char *value)
-{
-  if (entry == NULL) {
-    return TRUE;
-  }
-  return strings_equal(get_entry_text(entry), value);
-}
-
-static gboolean
-entry_matches_int(GtkEntry *entry, int value)
-{
-  if (entry == NULL) {
-    return TRUE;
-  }
-  return get_entry_int_value(entry) == value;
-}
-
 /* ---- Autostart server list helpers ---- */
 
 typedef struct {
@@ -938,13 +395,12 @@ autostart_row_ctx_free(gpointer data, GClosure *closure)
 static void
 on_autostart_delay_changed(GtkEditable *editable, PumpkinWindow *self)
 {
-  const char *text = gtk_editable_get_text(editable);
+  GtkEntry *entry = GTK_ENTRY(editable);
   PumpkinServer *server = g_object_get_data(G_OBJECT(editable), "server");
-  if (server != NULL && text != NULL) {
-    int val = atoi(text);
-    if (val > 0) {
-      pumpkin_server_set_auto_start_delay(server, val);
-    }
+  int value = 0;
+  gboolean has_value = FALSE;
+  if (server != NULL && pumpkin_parse_optional_positive_int(entry, &value, &has_value) && has_value && value > 0) {
+    pumpkin_server_set_auto_start_delay(server, value);
   }
   if (!self->settings_loading) {
     self->settings_dirty = TRUE;
@@ -1147,6 +603,10 @@ on_save_general_settings(GtkButton *button, PumpkinWindow *self)
   if (self->switch_run_in_background != NULL) {
     pumpkin_config_set_run_in_background(self->config, gtk_switch_get_active(self->switch_run_in_background));
   }
+  if (self->switch_detailed_overview_cards != NULL) {
+    pumpkin_config_set_detailed_overview_cards(self->config,
+                                               gtk_switch_get_active(self->switch_detailed_overview_cards));
+  }
   if (self->switch_autostart_on_boot != NULL) {
     gboolean autostart = gtk_switch_get_active(self->switch_autostart_on_boot);
     pumpkin_config_set_autostart_on_boot(self->config, autostart);
@@ -1218,6 +678,9 @@ on_reset_general_response(AdwAlertDialog *dialog, const char *response, PumpkinW
   }
   if (self->switch_run_in_background != NULL) {
     gtk_switch_set_active(self->switch_run_in_background, TRUE);
+  }
+  if (self->switch_detailed_overview_cards != NULL) {
+    gtk_switch_set_active(self->switch_detailed_overview_cards, FALSE);
   }
   if (self->switch_use_cache != NULL) {
     gtk_switch_set_active(self->switch_use_cache, TRUE);
@@ -1467,6 +930,11 @@ global_switches_match(PumpkinWindow *self)
       pumpkin_config_get_run_in_background(self->config) != gtk_switch_get_active(self->switch_run_in_background)) {
     return FALSE;
   }
+  if (self->switch_detailed_overview_cards != NULL &&
+      pumpkin_config_get_detailed_overview_cards(self->config) !=
+        gtk_switch_get_active(self->switch_detailed_overview_cards)) {
+    return FALSE;
+  }
   if (self->switch_autostart_on_boot != NULL &&
       pumpkin_config_get_autostart_on_boot(self->config) != gtk_switch_get_active(self->switch_autostart_on_boot)) {
     return FALSE;
@@ -1497,38 +965,38 @@ settings_match_server(PumpkinWindow *self)
     return TRUE;
   }
   PumpkinServer *server = self->current;
-  if (!entry_matches_string(self->entry_server_name, pumpkin_server_get_name(server))) {
+  if (!pumpkin_entry_matches_string(self->entry_server_name, pumpkin_server_get_name(server))) {
     return FALSE;
   }
-  if (!entry_matches_string(self->entry_download_url, pumpkin_server_get_download_url(server))) {
+  if (!pumpkin_entry_matches_string(self->entry_download_url, pumpkin_server_get_download_url(server))) {
     return FALSE;
   }
-  if (!entry_matches_int(self->entry_server_port, pumpkin_server_get_port(server))) {
+  if (!pumpkin_entry_matches_int(self->entry_server_port, pumpkin_server_get_port(server))) {
     return FALSE;
   }
-  if (!entry_matches_int(self->entry_bedrock_port, pumpkin_server_get_bedrock_port(server))) {
+  if (!pumpkin_entry_matches_int(self->entry_bedrock_port, pumpkin_server_get_bedrock_port(server))) {
     return FALSE;
   }
-  if (!entry_matches_int(self->entry_max_players, pumpkin_server_get_max_players(server))) {
+  if (!pumpkin_entry_matches_int(self->entry_max_players, pumpkin_server_get_max_players(server))) {
     return FALSE;
   }
-  if (!entry_matches_int(self->entry_stats_sample_msec, pumpkin_server_get_stats_sample_msec(server))) {
+  if (!pumpkin_entry_matches_int(self->entry_stats_sample_msec, pumpkin_server_get_stats_sample_msec(server))) {
     return FALSE;
   }
   int sys_cores = 0;
   int sys_ram_mb = 0;
   get_system_limits(&sys_cores, &sys_ram_mb);
-  if (parse_limit_entry(self->entry_max_cpu_cores, sys_cores) != pumpkin_server_get_max_cpu_cores(server)) {
+  if (pumpkin_parse_limit_entry(self->entry_max_cpu_cores, sys_cores) != pumpkin_server_get_max_cpu_cores(server)) {
     return FALSE;
   }
-  if (parse_limit_entry(self->entry_max_ram_mb, sys_ram_mb) != pumpkin_server_get_max_ram_mb(server)) {
+  if (pumpkin_parse_limit_entry(self->entry_max_ram_mb, sys_ram_mb) != pumpkin_server_get_max_ram_mb(server)) {
     return FALSE;
   }
   if (self->switch_auto_restart != NULL &&
       pumpkin_server_get_auto_restart(server) != gtk_switch_get_active(self->switch_auto_restart)) {
     return FALSE;
   }
-  if (!entry_matches_int(self->entry_auto_restart_delay, pumpkin_server_get_auto_restart_delay(server))) {
+  if (!pumpkin_entry_matches_int(self->entry_auto_restart_delay, pumpkin_server_get_auto_restart_delay(server))) {
     return FALSE;
   }
   if (self->switch_auto_update != NULL &&
@@ -1542,7 +1010,7 @@ settings_match_server(PumpkinWindow *self)
   if (self->entry_auto_update_time != NULL) {
     int hour = -1;
     int minute = -1;
-    if (!parse_clock_time_entry(self->entry_auto_update_time, &hour, &minute)) {
+    if (!pumpkin_parse_clock_time_entry(self->entry_auto_update_time, &hour, &minute)) {
       return FALSE;
     }
     if (hour != pumpkin_server_get_auto_update_hour(server) ||
@@ -1550,14 +1018,14 @@ settings_match_server(PumpkinWindow *self)
       return FALSE;
     }
   }
-  if (!entry_matches_string(self->entry_rcon_host, pumpkin_server_get_rcon_host(server))) {
+  if (!pumpkin_entry_matches_string(self->entry_rcon_host, pumpkin_server_get_rcon_host(server))) {
     return FALSE;
   }
-  if (!entry_matches_int(self->entry_rcon_port, pumpkin_server_get_rcon_port(server))) {
+  if (!pumpkin_entry_matches_int(self->entry_rcon_port, pumpkin_server_get_rcon_port(server))) {
     return FALSE;
   }
   GtkEntry *rcon_password_entry = self->entry_rcon_password != NULL ? GTK_ENTRY(self->entry_rcon_password) : NULL;
-  if (!entry_matches_string(rcon_password_entry, pumpkin_server_get_rcon_password(server))) {
+  if (!pumpkin_entry_matches_string(rcon_password_entry, pumpkin_server_get_rcon_password(server))) {
     return FALSE;
   }
   return global_switches_match(self);
@@ -1570,7 +1038,7 @@ settings_match_config(PumpkinWindow *self)
     return TRUE;
   }
   if (self->entry_download_url != NULL &&
-      !entry_matches_string(self->entry_download_url, pumpkin_config_get_default_download_url(self->config))) {
+      !pumpkin_entry_matches_string(self->entry_download_url, pumpkin_config_get_default_download_url(self->config))) {
     return FALSE;
   }
   return global_switches_match(self);
@@ -1644,98 +1112,7 @@ on_settings_switch_changed(GObject *object, GParamSpec *pspec, PumpkinWindow *se
   update_auto_update_controls_sensitivity(self);
 }
 
-static gboolean
-parse_optional_positive_int(GtkEntry *entry, int *out_value, gboolean *has_value)
-{
-  const char *text = gtk_editable_get_text(GTK_EDITABLE(entry));
-  if (has_value != NULL) {
-    *has_value = FALSE;
-  }
-  if (text == NULL) {
-    return TRUE;
-  }
-  while (*text == ' ' || *text == '\t') {
-    text++;
-  }
-  if (*text == '\0') {
-    return TRUE;
-  }
-  if (has_value != NULL) {
-    *has_value = TRUE;
-  }
-  char *endptr = NULL;
-  long value = strtol(text, &endptr, 10);
-  if (endptr == text) {
-    return FALSE;
-  }
-  while (*endptr == ' ' || *endptr == '\t') {
-    endptr++;
-  }
-  if (*endptr != '\0') {
-    return FALSE;
-  }
-  if (value < 0 || value > INT_MAX) {
-    return FALSE;
-  }
-  if (out_value != NULL) {
-    *out_value = (int)value;
-  }
-  return TRUE;
-}
-
-static gboolean
-parse_clock_time_text(const char *text, int *out_hour, int *out_minute)
-{
-  if (text == NULL) {
-    return FALSE;
-  }
-  while (*text == ' ' || *text == '\t') {
-    text++;
-  }
-  if (*text == '\0') {
-    return FALSE;
-  }
-
-  char *end = NULL;
-  long hour = strtol(text, &end, 10);
-  if (end == text || *end != ':') {
-    return FALSE;
-  }
-  const char *minutes_text = end + 1;
-  if (!g_ascii_isdigit(minutes_text[0]) || !g_ascii_isdigit(minutes_text[1])) {
-    return FALSE;
-  }
-  char *minutes_end = NULL;
-  long minute = strtol(minutes_text, &minutes_end, 10);
-  while (*minutes_end == ' ' || *minutes_end == '\t') {
-    minutes_end++;
-  }
-  if (*minutes_end != '\0') {
-    return FALSE;
-  }
-  if (hour < 0 || hour > 23 || minute < 0 || minute > 59) {
-    return FALSE;
-  }
-  if (out_hour != NULL) {
-    *out_hour = (int)hour;
-  }
-  if (out_minute != NULL) {
-    *out_minute = (int)minute;
-  }
-  return TRUE;
-}
-
-static gboolean
-parse_clock_time_entry(GtkEntry *entry, int *out_hour, int *out_minute)
-{
-  if (entry == NULL) {
-    return FALSE;
-  }
-  const char *text = gtk_editable_get_text(GTK_EDITABLE(entry));
-  return parse_clock_time_text(text, out_hour, out_minute);
-}
-
-static GListModel *
+GListModel *
 get_server_model(PumpkinWindow *self)
 {
   if (self == NULL || self->store == NULL) {
@@ -1905,7 +1282,7 @@ query_players_task(GTask *task, gpointer source_object, gpointer task_data, GCan
   QueryResult *result = g_new0(QueryResult, 1);
   int players = 0;
   int max_players = 0;
-  if (query_minecraft_players(ctx->host, ctx->port, &players, &max_players)) {
+  if (pumpkin_query_minecraft_players(ctx->host, ctx->port, &players, &max_players)) {
     result->ok = TRUE;
     result->players = players;
     result->max_players = max_players;
@@ -1997,15 +1374,15 @@ validate_settings_limits(PumpkinWindow *self)
   int players_value = 0;
   int stats_sample_value = 0;
   int rcon_port_value = 0;
-  gboolean cpu_parse_ok = parse_optional_positive_int(self->entry_max_cpu_cores, &cpu_value, &cpu_has);
-  gboolean ram_parse_ok = parse_optional_positive_int(self->entry_max_ram_mb, &ram_value, &ram_has);
-  gboolean port_parse_ok = parse_optional_positive_int(self->entry_server_port, &port_value, &port_has);
+  gboolean cpu_parse_ok = pumpkin_parse_optional_positive_int(self->entry_max_cpu_cores, &cpu_value, &cpu_has);
+  gboolean ram_parse_ok = pumpkin_parse_optional_positive_int(self->entry_max_ram_mb, &ram_value, &ram_has);
+  gboolean port_parse_ok = pumpkin_parse_optional_positive_int(self->entry_server_port, &port_value, &port_has);
   gboolean bedrock_port_parse_ok =
-    parse_optional_positive_int(self->entry_bedrock_port, &bedrock_port_value, &bedrock_port_has);
-  gboolean players_parse_ok = parse_optional_positive_int(self->entry_max_players, &players_value, &players_has);
+    pumpkin_parse_optional_positive_int(self->entry_bedrock_port, &bedrock_port_value, &bedrock_port_has);
+  gboolean players_parse_ok = pumpkin_parse_optional_positive_int(self->entry_max_players, &players_value, &players_has);
   gboolean stats_sample_parse_ok =
-    parse_optional_positive_int(self->entry_stats_sample_msec, &stats_sample_value, &stats_sample_has);
-  gboolean rcon_port_parse_ok = parse_optional_positive_int(self->entry_rcon_port, &rcon_port_value, &rcon_port_has);
+    pumpkin_parse_optional_positive_int(self->entry_stats_sample_msec, &stats_sample_value, &stats_sample_has);
+  gboolean rcon_port_parse_ok = pumpkin_parse_optional_positive_int(self->entry_rcon_port, &rcon_port_value, &rcon_port_has);
 
   gboolean cpu_invalid = FALSE;
   gboolean ram_invalid = FALSE;
@@ -2131,7 +1508,7 @@ validate_settings_limits(PumpkinWindow *self)
   if (auto_update_enabled && auto_update_use_schedule) {
     int update_hour = 0;
     int update_minute = 0;
-    if (!parse_clock_time_entry(self->entry_auto_update_time, &update_hour, &update_minute)) {
+    if (!pumpkin_parse_clock_time_entry(self->entry_auto_update_time, &update_hour, &update_minute)) {
       auto_update_time_invalid = TRUE;
       auto_update_time_hint = "Use HH:MM (24h), e.g. 01:00.";
     }
@@ -2486,7 +1863,7 @@ download_progress_state_free(DownloadProgressState *state)
   g_free(state);
 }
 
-static DownloadProgressState *
+DownloadProgressState *
 get_download_progress_state(PumpkinWindow *self, PumpkinServer *server, gboolean create)
 {
   if (self->download_progress_state == NULL || server == NULL) {
@@ -2524,35 +1901,6 @@ any_download_active(PumpkinWindow *self)
     }
   }
   return FALSE;
-}
-
-static void
-set_server_running_hint(PumpkinWindow *self, PumpkinServer *server, gboolean running)
-{
-  if (self == NULL || server == NULL || self->server_running_hints == NULL) {
-    return;
-  }
-  g_hash_table_replace(self->server_running_hints,
-                       g_object_ref(server),
-                       GINT_TO_POINTER(running ? 1 : 0));
-}
-
-static gboolean
-server_running_hint(PumpkinWindow *self, PumpkinServer *server)
-{
-  if (self == NULL || server == NULL || self->server_running_hints == NULL) {
-    return FALSE;
-  }
-  return GPOINTER_TO_INT(g_hash_table_lookup(self->server_running_hints, server)) != 0;
-}
-
-static gboolean
-server_is_running_ui(PumpkinWindow *self, PumpkinServer *server)
-{
-  if (server == NULL) {
-    return FALSE;
-  }
-  return pumpkin_server_get_running(server) || server_running_hint(self, server);
 }
 
 static void
@@ -2614,136 +1962,6 @@ set_download_progress_for_server(PumpkinWindow *self, PumpkinServer *server, gof
 }
 
 static void
-on_console_copy(GtkButton *button, PumpkinWindow *self)
-{
-  (void)button;
-  if (self->log_view == NULL) {
-    return;
-  }
-  GtkTextBuffer *buffer = gtk_text_view_get_buffer(self->log_view);
-  GtkTextIter start;
-  GtkTextIter end;
-  gtk_text_buffer_get_bounds(buffer, &start, &end);
-  g_autofree char *text = gtk_text_buffer_get_text(buffer, &start, &end, FALSE);
-  if (text == NULL) {
-    return;
-  }
-  GdkClipboard *clipboard = gdk_display_get_clipboard(gtk_widget_get_display(GTK_WIDGET(self)));
-  gdk_clipboard_set_text(clipboard, text);
-}
-
-static void
-on_console_clear(GtkButton *button, PumpkinWindow *self)
-{
-  (void)button;
-  if (self->log_view == NULL) {
-    return;
-  }
-  GtkTextBuffer *buffer = gtk_text_view_get_buffer(self->log_view);
-  gtk_text_buffer_set_text(buffer, "", -1);
-}
-
-static const char *
-console_level_token_tag_name(ConsoleLevel level)
-{
-  switch (level) {
-    case CONSOLE_LEVEL_TRACE:
-      return "console-token-trace";
-    case CONSOLE_LEVEL_DEBUG:
-      return "console-token-debug";
-    case CONSOLE_LEVEL_INFO:
-      return "console-token-info";
-    case CONSOLE_LEVEL_WARN:
-      return "console-token-warn";
-    case CONSOLE_LEVEL_ERROR:
-      return "console-token-error";
-    case CONSOLE_LEVEL_SMPK:
-      return "console-token-smpk";
-    case CONSOLE_LEVEL_OTHER:
-    default:
-      return NULL;
-  }
-}
-
-static void
-apply_console_tag_offsets(GtkTextBuffer *buffer, int line_start_offset, int start, int end, const char *tag_name)
-{
-  if (buffer == NULL || tag_name == NULL || *tag_name == '\0' || start < 0 || end <= start) {
-    return;
-  }
-  GtkTextIter iter_start;
-  GtkTextIter iter_end;
-  gtk_text_buffer_get_iter_at_offset(buffer, &iter_start, line_start_offset + start);
-  gtk_text_buffer_get_iter_at_offset(buffer, &iter_end, line_start_offset + end);
-  gtk_text_buffer_apply_tag_by_name(buffer, tag_name, &iter_start, &iter_end);
-}
-
-static void
-apply_console_inline_tags(GtkTextBuffer *buffer, int line_start_offset, const char *display, ConsoleLevel level)
-{
-  if (buffer == NULL || display == NULL || *display == '\0') {
-    return;
-  }
-
-  const char *level_word = NULL;
-  switch (level) {
-    case CONSOLE_LEVEL_TRACE:
-      level_word = "TRACE";
-      break;
-    case CONSOLE_LEVEL_DEBUG:
-      level_word = "DEBUG";
-      break;
-    case CONSOLE_LEVEL_INFO:
-      level_word = "INFO";
-      break;
-    case CONSOLE_LEVEL_WARN:
-      level_word = "WARN";
-      break;
-    case CONSOLE_LEVEL_ERROR:
-      level_word = "ERROR";
-      break;
-    case CONSOLE_LEVEL_SMPK:
-      level_word = "SMPK";
-      break;
-    case CONSOLE_LEVEL_OTHER:
-    default:
-      break;
-  }
-
-  const char *level_tag_name = console_level_token_tag_name(level);
-  if (level_word != NULL && level_tag_name != NULL) {
-    g_autofree char *level_token = g_strdup_printf("[%s]", level_word);
-    const char *token_pos = level_token != NULL ? strstr(display, level_token) : NULL;
-    if (token_pos != NULL) {
-      int token_start = (int)(token_pos - display) + 1;
-      int token_end = token_start + (int)strlen(level_word);
-      apply_console_tag_offsets(buffer, line_start_offset, token_start, token_end, level_tag_name);
-    }
-  }
-
-  static GRegex *startup_ms_re = NULL;
-  if (startup_ms_re == NULL) {
-    startup_ms_re = g_regex_new("\\b[0-9]+ms\\b", G_REGEX_OPTIMIZE, 0, NULL);
-  }
-  if (startup_ms_re == NULL) {
-    return;
-  }
-
-  g_autoptr(GMatchInfo) match = NULL;
-  g_regex_match(startup_ms_re, display, 0, &match);
-  while (match != NULL && g_match_info_matches(match)) {
-    int start = -1;
-    int end = -1;
-    if (g_match_info_fetch_pos(match, 0, &start, &end) && start >= 0 && end > start) {
-      apply_console_tag_offsets(buffer, line_start_offset, start, end, "console-token-startup-ms");
-    }
-    if (!g_match_info_next(match, NULL)) {
-      break;
-    }
-  }
-}
-
-static void
 on_download_progress(goffset current, goffset total, gpointer user_data)
 {
   DownloadContext *ctx = user_data;
@@ -2764,64 +1982,6 @@ on_download_progress(goffset current, goffset total, gpointer user_data)
 }
 
 static void
-append_console_line(PumpkinWindow *self, PumpkinServer *server, const char *line)
-{
-  if (self->log_view == NULL || server == NULL || line == NULL) {
-    return;
-  }
-  ConsoleLevel level = CONSOLE_LEVEL_OTHER;
-  g_autofree char *display = format_console_line(self, line, &level);
-  if (display == NULL || *display == '\0') {
-    return;
-  }
-
-  GtkTextBuffer *buffer = g_hash_table_lookup(self->console_buffers, server);
-  if (buffer == NULL) {
-    buffer = gtk_text_buffer_new(NULL);
-    g_hash_table_insert(self->console_buffers, g_object_ref(server), buffer);
-  }
-  ensure_console_buffer_tags(self, buffer);
-
-  if (self->current == server && gtk_text_view_get_buffer(self->log_view) != buffer) {
-    gtk_text_view_set_buffer(self->log_view, buffer);
-  }
-
-  g_autofree char *with_newline = g_strdup_printf("%s\n", display);
-  int line_start_offset = gtk_text_buffer_get_char_count(buffer);
-  GtkTextIter end;
-  gtk_text_buffer_get_end_iter(buffer, &end);
-  const char *tag_name = console_level_tag_name(level);
-  if (tag_name != NULL && *tag_name != '\0') {
-    gtk_text_buffer_insert_with_tags_by_name(buffer, &end, with_newline, -1, tag_name, NULL);
-  } else {
-    gtk_text_buffer_insert(buffer, &end, with_newline, -1);
-  }
-  apply_console_inline_tags(buffer, line_start_offset, display, level);
-
-  int line_count = gtk_text_buffer_get_line_count(buffer);
-  if (line_count > CONSOLE_MAX_LINES) {
-    int cut_line = line_count - CONSOLE_MAX_LINES;
-    GtkTextIter trim_start;
-    GtkTextIter trim_end;
-    gtk_text_buffer_get_start_iter(buffer, &trim_start);
-    gtk_text_buffer_get_iter_at_line(buffer, &trim_end, cut_line);
-    gtk_text_buffer_delete(buffer, &trim_start, &trim_end);
-  }
-
-  gtk_text_buffer_get_end_iter(buffer, &end);
-
-  GtkTextMark *mark = gtk_text_buffer_get_mark(buffer, "log-end");
-  if (mark == NULL) {
-    mark = gtk_text_buffer_create_mark(buffer, "log-end", &end, FALSE);
-  } else {
-    gtk_text_buffer_move_mark(buffer, mark, &end);
-  }
-  if (gtk_text_view_get_buffer(self->log_view) == buffer) {
-    gtk_text_view_scroll_to_mark(self->log_view, mark, 0.0, TRUE, 0.0, 1.0);
-  }
-}
-
-static void
 on_log_line(PumpkinServer *server, const char *line, PumpkinWindow *self)
 {
   gboolean is_current = (self->current == server);
@@ -2829,7 +1989,7 @@ on_log_line(PumpkinServer *server, const char *line, PumpkinWindow *self)
     line != NULL &&
     (g_strcmp0(line, "Server process exited") == 0 ||
      g_strcmp0(line, "Auto-restart scheduled") == 0);
-  g_autofree char *clean = line != NULL ? strip_ansi(line) : NULL;
+  g_autofree char *clean = line != NULL ? pumpkin_strip_ansi(line) : NULL;
   const char *check = clean != NULL ? clean : line;
   if (check != NULL &&
       *check != '\0' &&
@@ -2852,11 +2012,11 @@ on_log_line(PumpkinServer *server, const char *line, PumpkinWindow *self)
   gboolean tps_line = FALSE;
   gboolean list_line = FALSE;
   if (is_current) {
-    list_line = is_player_list_snapshot_line(check);
+    list_line = pumpkin_is_player_list_snapshot_line(check);
   }
   if (is_current && check != NULL) {
     double tps = 0.0;
-    if (parse_tps_from_line(check, &tps)) {
+    if (pumpkin_parse_tps_from_line(check, &tps)) {
       self->last_tps = tps;
       self->last_tps_valid = TRUE;
       self->tps_enabled = TRUE;
@@ -2896,11 +2056,7 @@ on_log_line(PumpkinServer *server, const char *line, PumpkinWindow *self)
         strstr(check, "Done") != NULL ||
         strstr(check, "Listening") != NULL) {
       self->ui_state = UI_STATE_RUNNING;
-      update_details(self);
-      refresh_plugin_list(self);
-      refresh_world_list(self);
-      refresh_player_list(self);
-      refresh_log_files(self);
+      queue_overview_refresh(self, TRUE);
     }
   }
   if (line != NULL && g_strcmp0(line, "Server process exited") == 0) {
@@ -2927,9 +2083,7 @@ on_log_line(PumpkinServer *server, const char *line, PumpkinWindow *self)
       }
       self->user_stop_requested = FALSE;
       self->ui_state = UI_STATE_IDLE;
-      update_details(self);
       queue_overview_refresh(self, TRUE);
-      refresh_world_list(self);
     }
     if (self->restart_requested && self->restart_pending) {
       self->restart_pending = FALSE;
@@ -2944,7 +2098,7 @@ on_log_line(PumpkinServer *server, const char *line, PumpkinWindow *self)
   }
 }
 
-static void
+void
 ensure_server_log_handler(PumpkinWindow *self, PumpkinServer *server)
 {
   if (self == NULL || server == NULL) {
@@ -2952,33 +2106,6 @@ ensure_server_log_handler(PumpkinWindow *self, PumpkinServer *server)
   }
   g_signal_handlers_disconnect_by_func(server, G_CALLBACK(on_log_line), self);
   g_signal_connect(server, "log-line", G_CALLBACK(on_log_line), self);
-}
-
-static void
-append_log(PumpkinWindow *self, const char *line)
-{
-  if (self == NULL || line == NULL || *line == '\0') {
-    return;
-  }
-  if (self->current == NULL) {
-    return;
-  }
-  g_autofree char *prefixed = g_strdup_printf("[SMPK] %s", line);
-  append_console_line(self, self->current, prefixed);
-}
-
-static void
-append_log_for_server(PumpkinWindow *self, PumpkinServer *server, const char *line)
-{
-  if (self == NULL || line == NULL || *line == '\0') {
-    return;
-  }
-  PumpkinServer *target = server != NULL ? server : self->current;
-  if (target == NULL) {
-    return;
-  }
-  g_autofree char *prefixed = g_strdup_printf("[SMPK] %s", line);
-  append_console_line(self, target, prefixed);
 }
 
 static void
@@ -3068,7 +2195,7 @@ player_last_seen_mtime(const char *players_dir, const char *world_players, const
   return latest;
 }
 
-static char *
+char *
 normalized_key(const char *text)
 {
   if (text == NULL) {
@@ -3080,19 +2207,6 @@ normalized_key(const char *text)
     return NULL;
   }
   return g_ascii_strdown(tmp, -1);
-}
-
-static char *
-player_tracking_file(PumpkinServer *server)
-{
-  if (server == NULL) {
-    return NULL;
-  }
-  g_autofree char *data_dir = pumpkin_server_get_data_dir(server);
-  if (data_dir == NULL) {
-    return NULL;
-  }
-  return g_build_filename(data_dir, "player-tracking.ini", NULL);
 }
 
 static char *
@@ -3143,305 +2257,6 @@ command_history_load(PumpkinWindow *self, PumpkinServer *server)
       continue;
     }
     g_ptr_array_add(self->command_history, g_strdup(line));
-  }
-}
-
-static void
-player_state_free(PlayerState *state)
-{
-  if (state == NULL) {
-    return;
-  }
-  g_clear_pointer(&state->key, g_free);
-  g_clear_pointer(&state->name, g_free);
-  g_clear_pointer(&state->uuid, g_free);
-  g_clear_pointer(&state->last_ip, g_free);
-  g_free(state);
-}
-
-static guint64
-player_state_effective_playtime(const PlayerState *state)
-{
-  if (state == NULL) {
-    return 0;
-  }
-  guint64 total = state->playtime_seconds;
-  if (state->online && state->session_started_mono > 0) {
-    gint64 now_mono = g_get_monotonic_time();
-    if (now_mono > state->session_started_mono) {
-      total += (guint64)((now_mono - state->session_started_mono) / G_USEC_PER_SEC);
-    }
-  }
-  return total;
-}
-
-static void
-player_states_set_dirty(PumpkinWindow *self)
-{
-  if (self == NULL) {
-    return;
-  }
-  self->player_state_dirty = TRUE;
-}
-
-static void
-repoint_player_indexes(PumpkinWindow *self, PlayerState *from_state, PlayerState *to_state)
-{
-  if (self == NULL || from_state == NULL || to_state == NULL) {
-    return;
-  }
-
-  if (self->player_states_by_uuid != NULL) {
-    GHashTableIter iter;
-    gpointer key = NULL;
-    gpointer value = NULL;
-    g_hash_table_iter_init(&iter, self->player_states_by_uuid);
-    while (g_hash_table_iter_next(&iter, &key, &value)) {
-      if (value == from_state) {
-        g_hash_table_iter_replace(&iter, to_state);
-      }
-    }
-  }
-
-  if (self->player_states_by_name != NULL) {
-    GHashTableIter iter;
-    gpointer key = NULL;
-    gpointer value = NULL;
-    g_hash_table_iter_init(&iter, self->player_states_by_name);
-    while (g_hash_table_iter_next(&iter, &key, &value)) {
-      if (value == from_state) {
-        g_hash_table_iter_replace(&iter, to_state);
-      }
-    }
-  }
-}
-
-static void
-merge_player_states(PumpkinWindow *self, PlayerState *dst, PlayerState *src)
-{
-  if (self == NULL || dst == NULL || src == NULL || dst == src) {
-    return;
-  }
-
-  if ((dst->name == NULL || dst->name[0] == '\0') && src->name != NULL && src->name[0] != '\0') {
-    g_free(dst->name);
-    dst->name = g_strdup(src->name);
-  }
-  if ((dst->uuid == NULL || dst->uuid[0] == '\0') && src->uuid != NULL && src->uuid[0] != '\0') {
-    g_free(dst->uuid);
-    dst->uuid = g_strdup(src->uuid);
-  }
-  if (dst->platform == PLAYER_PLATFORM_UNKNOWN && src->platform != PLAYER_PLATFORM_UNKNOWN) {
-    dst->platform = src->platform;
-  }
-  if ((dst->last_ip == NULL || dst->last_ip[0] == '\0') &&
-      src->last_ip != NULL && src->last_ip[0] != '\0') {
-    g_free(dst->last_ip);
-    dst->last_ip = g_strdup(src->last_ip);
-  } else if (src->last_ip != NULL && src->last_ip[0] != '\0' &&
-             src->last_online_unix >= dst->last_online_unix &&
-             g_strcmp0(dst->last_ip, src->last_ip) != 0) {
-    g_free(dst->last_ip);
-    dst->last_ip = g_strdup(src->last_ip);
-  }
-  dst->ip_banned_hint = dst->ip_banned_hint || src->ip_banned_hint;
-  if (dst->first_joined_unix <= 0 ||
-      (src->first_joined_unix > 0 && src->first_joined_unix < dst->first_joined_unix)) {
-    dst->first_joined_unix = src->first_joined_unix;
-  }
-  if (src->last_online_unix > dst->last_online_unix) {
-    dst->last_online_unix = src->last_online_unix;
-  }
-  dst->playtime_seconds += src->playtime_seconds;
-
-  if (src->online) {
-    if (!dst->online) {
-      dst->online = TRUE;
-      dst->session_started_mono = src->session_started_mono > 0
-                                    ? src->session_started_mono
-                                    : g_get_monotonic_time();
-    } else if (src->session_started_mono > 0 &&
-               (dst->session_started_mono <= 0 || src->session_started_mono < dst->session_started_mono)) {
-      dst->session_started_mono = src->session_started_mono;
-    }
-  }
-
-  repoint_player_indexes(self, src, dst);
-  if (self->player_states != NULL && src->key != NULL) {
-    g_hash_table_remove(self->player_states, src->key);
-  }
-  player_states_set_dirty(self);
-}
-
-static void
-allow_deleted_player_tracking(PumpkinWindow *self, const char *uuid, const char *name)
-{
-  if (self == NULL || self->deleted_player_keys == NULL) {
-    return;
-  }
-
-  gboolean changed = FALSE;
-  g_autofree char *uuid_key = normalized_key(uuid);
-  g_autofree char *name_key = normalized_key(name);
-
-  if (uuid_key != NULL) {
-    changed = g_hash_table_remove(self->deleted_player_keys, uuid_key) || changed;
-  }
-  if (name_key != NULL) {
-    changed = g_hash_table_remove(self->deleted_player_keys, name_key) || changed;
-  }
-  if (changed) {
-    player_states_set_dirty(self);
-  }
-}
-
-static PlayerState *
-ensure_player_state(PumpkinWindow *self, const char *uuid, const char *name, gboolean create)
-{
-  if (self == NULL || self->player_states == NULL) {
-    return NULL;
-  }
-
-  g_autofree char *uuid_key = normalized_key(uuid);
-  g_autofree char *name_key = normalized_key(name);
-  if (self->deleted_player_keys != NULL) {
-    if (uuid_key != NULL && g_hash_table_contains(self->deleted_player_keys, uuid_key)) {
-      return NULL;
-    }
-    if (name_key != NULL && g_hash_table_contains(self->deleted_player_keys, name_key)) {
-      return NULL;
-    }
-  }
-  PlayerState *state_by_uuid = NULL;
-  PlayerState *state_by_name = NULL;
-
-  if (uuid_key != NULL && self->player_states_by_uuid != NULL) {
-    state_by_uuid = g_hash_table_lookup(self->player_states_by_uuid, uuid_key);
-  }
-  if (name_key != NULL && self->player_states_by_name != NULL) {
-    state_by_name = g_hash_table_lookup(self->player_states_by_name, name_key);
-  }
-
-  PlayerState *state = NULL;
-  if (state_by_uuid != NULL) {
-    state = state_by_uuid;
-    if (state_by_name != NULL && state_by_name != state_by_uuid) {
-      merge_player_states(self, state, state_by_name);
-    }
-  } else if (state_by_name != NULL) {
-    state = state_by_name;
-  } else if (create) {
-    const char *key = uuid_key != NULL ? uuid_key : name_key;
-    if (key == NULL) {
-      return NULL;
-    }
-    state = g_new0(PlayerState, 1);
-    state->key = g_strdup(key);
-    g_hash_table_insert(self->player_states, g_strdup(key), state);
-    player_states_set_dirty(self);
-  } else {
-    return NULL;
-  }
-
-  if (state != NULL && uuid != NULL && *uuid != '\0') {
-    if (state->uuid == NULL || *state->uuid == '\0') {
-      g_free(state->uuid);
-      state->uuid = g_strdup(uuid);
-      player_states_set_dirty(self);
-    }
-    if (uuid_key != NULL && self->player_states_by_uuid != NULL) {
-      g_hash_table_replace(self->player_states_by_uuid, g_strdup(uuid_key), state);
-    }
-  }
-
-  if (state != NULL && name != NULL && *name != '\0') {
-    if (state->name == NULL || g_strcmp0(state->name, name) != 0) {
-      g_free(state->name);
-      state->name = g_strdup(name);
-      player_states_set_dirty(self);
-    }
-    if (name_key != NULL && self->player_states_by_name != NULL) {
-      g_hash_table_replace(self->player_states_by_name, g_strdup(name_key), state);
-    }
-  }
-
-  return state;
-}
-
-static void
-player_state_mark_online(PumpkinWindow *self, PlayerState *state, PlayerPlatform platform_hint)
-{
-  if (self == NULL || state == NULL) {
-    return;
-  }
-  gint64 now_unix = (gint64)time(NULL);
-  if (platform_hint != PLAYER_PLATFORM_UNKNOWN) {
-    state->platform = platform_hint;
-  }
-  if (!state->online) {
-    state->online = TRUE;
-    state->session_started_mono = g_get_monotonic_time();
-    if (state->first_joined_unix <= 0) {
-      state->first_joined_unix = now_unix;
-    }
-  }
-  if (now_unix > state->last_online_unix) {
-    state->last_online_unix = now_unix;
-  }
-  if (self->live_player_names != NULL) {
-    const char *presence = state->name != NULL ? state->name : state->uuid;
-    if (presence != NULL && *presence != '\0') {
-      g_hash_table_replace(self->live_player_names, g_strdup(presence), g_strdup(presence));
-    }
-  }
-  player_states_set_dirty(self);
-}
-
-static void
-player_state_mark_offline(PumpkinWindow *self, PlayerState *state)
-{
-  if (self == NULL || state == NULL) {
-    return;
-  }
-  gint64 now_unix = (gint64)time(NULL);
-  if (state->online) {
-    if (state->session_started_mono > 0) {
-      gint64 now_mono = g_get_monotonic_time();
-      if (now_mono > state->session_started_mono) {
-        state->playtime_seconds += (guint64)((now_mono - state->session_started_mono) / G_USEC_PER_SEC);
-      }
-    }
-    state->session_started_mono = 0;
-    state->online = FALSE;
-    if (now_unix > state->last_online_unix) {
-      state->last_online_unix = now_unix;
-    }
-    player_states_set_dirty(self);
-  }
-
-  if (self->live_player_names != NULL) {
-    if (state->name != NULL) {
-      g_hash_table_remove(self->live_player_names, state->name);
-    }
-    if (state->uuid != NULL) {
-      g_hash_table_remove(self->live_player_names, state->uuid);
-    }
-  }
-}
-
-static void
-player_states_mark_all_offline(PumpkinWindow *self)
-{
-  if (self == NULL || self->player_states == NULL) {
-    return;
-  }
-  GHashTableIter iter;
-  gpointer key = NULL;
-  gpointer value = NULL;
-  g_hash_table_iter_init(&iter, self->player_states);
-  while (g_hash_table_iter_next(&iter, &key, &value)) {
-    PlayerState *state = value;
-    player_state_mark_offline(self, state);
   }
 }
 
@@ -3553,200 +2368,6 @@ delete_player_tracking(PumpkinWindow *self, const char *state_key, const char *n
   return TRUE;
 }
 
-static int
-player_online_count(PumpkinWindow *self)
-{
-  if (self == NULL || self->player_states == NULL) {
-    return 0;
-  }
-  int count = 0;
-  GHashTableIter iter;
-  gpointer key = NULL;
-  gpointer value = NULL;
-  g_hash_table_iter_init(&iter, self->player_states);
-  while (g_hash_table_iter_next(&iter, &key, &value)) {
-    PlayerState *state = value;
-    if (state->online) {
-      count++;
-    }
-  }
-  return count;
-}
-
-static void
-player_states_clear(PumpkinWindow *self)
-{
-  if (self == NULL) {
-    return;
-  }
-  if (self->live_player_names != NULL) {
-    g_hash_table_remove_all(self->live_player_names);
-  }
-  if (self->platform_hint_by_ip != NULL) {
-    g_hash_table_remove_all(self->platform_hint_by_ip);
-  }
-  if (self->player_states != NULL) {
-    g_hash_table_remove_all(self->player_states);
-  }
-  if (self->player_states_by_uuid != NULL) {
-    g_hash_table_remove_all(self->player_states_by_uuid);
-  }
-  if (self->player_states_by_name != NULL) {
-    g_hash_table_remove_all(self->player_states_by_name);
-  }
-  if (self->deleted_player_keys != NULL) {
-    g_hash_table_remove_all(self->deleted_player_keys);
-  }
-  self->player_state_dirty = FALSE;
-  invalidate_player_list_signature(self);
-}
-
-static void
-player_states_load(PumpkinWindow *self, PumpkinServer *server)
-{
-  if (self == NULL) {
-    return;
-  }
-  player_states_clear(self);
-  if (server == NULL) {
-    return;
-  }
-
-  g_autofree char *path = player_tracking_file(server);
-  if (path == NULL || !g_file_test(path, G_FILE_TEST_EXISTS)) {
-    return;
-  }
-
-  g_autoptr(GError) error = NULL;
-  g_autoptr(GKeyFile) key_file = g_key_file_new();
-  if (!g_key_file_load_from_file(key_file, path, G_KEY_FILE_NONE, &error)) {
-    return;
-  }
-
-  if (self->deleted_player_keys != NULL && g_key_file_has_group(key_file, "__deleted")) {
-    gsize deleted_len = 0;
-    g_auto(GStrv) deleted_keys = g_key_file_get_keys(key_file, "__deleted", &deleted_len, NULL);
-    for (gsize i = 0; i < deleted_len; i++) {
-      const char *entry_key = deleted_keys[i];
-      if (entry_key == NULL || *entry_key == '\0') {
-        continue;
-      }
-      g_autofree char *stored = g_key_file_get_string(key_file, "__deleted", entry_key, NULL);
-      g_autofree char *normalized = normalized_key(stored);
-      if (normalized != NULL) {
-        g_hash_table_add(self->deleted_player_keys, g_strdup(normalized));
-      }
-    }
-  }
-
-  gsize groups_len = 0;
-  g_auto(GStrv) groups = g_key_file_get_groups(key_file, &groups_len);
-  for (gsize i = 0; i < groups_len; i++) {
-    const char *group = groups[i];
-    if (group == NULL || *group == '\0') {
-      continue;
-    }
-    if (g_strcmp0(group, "__deleted") == 0) {
-      continue;
-    }
-
-    PlayerState *state = g_new0(PlayerState, 1);
-    state->key = g_strdup(group);
-    state->name = g_key_file_get_string(key_file, group, "name", NULL);
-    state->uuid = g_key_file_get_string(key_file, group, "uuid", NULL);
-    state->last_ip = g_key_file_get_string(key_file, group, "last_ip", NULL);
-    state->platform = (PlayerPlatform)g_key_file_get_integer(key_file, group, "platform", NULL);
-    if (state->platform < PLAYER_PLATFORM_UNKNOWN || state->platform > PLAYER_PLATFORM_BEDROCK) {
-      state->platform = PLAYER_PLATFORM_UNKNOWN;
-    }
-    state->first_joined_unix = g_key_file_get_int64(key_file, group, "first_joined_unix", NULL);
-    state->last_online_unix = g_key_file_get_int64(key_file, group, "last_online_unix", NULL);
-    gint64 saved_playtime = g_key_file_get_int64(key_file, group, "playtime_seconds", NULL);
-    state->playtime_seconds = saved_playtime > 0 ? (guint64)saved_playtime : 0;
-    state->online = FALSE;
-    state->session_started_mono = 0;
-
-    g_hash_table_insert(self->player_states, g_strdup(group), state);
-
-    g_autofree char *uuid_key = normalized_key(state->uuid);
-    if (uuid_key != NULL) {
-      g_hash_table_replace(self->player_states_by_uuid, g_strdup(uuid_key), state);
-    }
-    g_autofree char *name_key = normalized_key(state->name);
-    if (name_key != NULL) {
-      g_hash_table_replace(self->player_states_by_name, g_strdup(name_key), state);
-    }
-  }
-  self->player_state_dirty = FALSE;
-  invalidate_player_list_signature(self);
-}
-
-static void
-player_states_save(PumpkinWindow *self, PumpkinServer *server)
-{
-  if (self == NULL || server == NULL || self->player_states == NULL || !self->player_state_dirty) {
-    return;
-  }
-
-  g_autoptr(GKeyFile) key_file = g_key_file_new();
-  GHashTableIter iter;
-  gpointer key = NULL;
-  gpointer value = NULL;
-  g_hash_table_iter_init(&iter, self->player_states);
-  while (g_hash_table_iter_next(&iter, &key, &value)) {
-    const char *section = key;
-    PlayerState *state = value;
-    if (section == NULL || state == NULL) {
-      continue;
-    }
-    if (state->name != NULL) {
-      g_key_file_set_string(key_file, section, "name", state->name);
-    }
-    if (state->uuid != NULL) {
-      g_key_file_set_string(key_file, section, "uuid", state->uuid);
-    }
-    if (state->last_ip != NULL && *state->last_ip != '\0') {
-      g_key_file_set_string(key_file, section, "last_ip", state->last_ip);
-    }
-    g_key_file_set_integer(key_file, section, "platform", (int)state->platform);
-    g_key_file_set_int64(key_file, section, "first_joined_unix", state->first_joined_unix);
-    g_key_file_set_int64(key_file, section, "last_online_unix", state->last_online_unix);
-    g_key_file_set_int64(key_file, section, "playtime_seconds",
-                         (gint64)player_state_effective_playtime(state));
-  }
-
-  if (self->deleted_player_keys != NULL && g_hash_table_size(self->deleted_player_keys) > 0) {
-    GHashTableIter deleted_iter;
-    gpointer deleted_key = NULL;
-    gpointer deleted_value = NULL;
-    guint index = 0;
-    g_hash_table_iter_init(&deleted_iter, self->deleted_player_keys);
-    while (g_hash_table_iter_next(&deleted_iter, &deleted_key, &deleted_value)) {
-      const char *deleted_token = deleted_key;
-      if (deleted_token == NULL || *deleted_token == '\0') {
-        continue;
-      }
-      g_autofree char *entry_key = g_strdup_printf("k%u", index++);
-      g_key_file_set_string(key_file, "__deleted", entry_key, deleted_token);
-    }
-  }
-
-  gsize out_len = 0;
-  g_autofree char *serialized = g_key_file_to_data(key_file, &out_len, NULL);
-  if (serialized == NULL) {
-    return;
-  }
-
-  g_autofree char *path = player_tracking_file(server);
-  if (path == NULL) {
-    return;
-  }
-  if (g_file_set_contents(path, serialized, (gssize)out_len, NULL)) {
-    self->player_state_dirty = FALSE;
-    self->last_player_state_flush_at = g_get_monotonic_time();
-  }
-}
-
 static const char *
 platform_label(PlayerPlatform platform)
 {
@@ -3757,83 +2378,6 @@ platform_label(PlayerPlatform platform)
     return "Bedrock";
   }
   return "Unknown";
-}
-
-static PlayerPlatform
-platform_from_line(const char *line)
-{
-  if (line == NULL) {
-    return PLAYER_PLATFORM_UNKNOWN;
-  }
-  g_autofree char *lower = g_ascii_strdown(line, -1);
-  if (strstr(lower, "bedrock") != NULL ||
-      strstr(lower, "floodgate") != NULL ||
-      strstr(lower, "geyser") != NULL ||
-      strstr(lower, "raknet") != NULL) {
-    return PLAYER_PLATFORM_BEDROCK;
-  }
-  if (strstr(lower, "java") != NULL || strstr(lower, "java edition") != NULL) {
-    return PLAYER_PLATFORM_JAVA;
-  }
-  return PLAYER_PLATFORM_UNKNOWN;
-}
-
-static PlayerPlatform
-platform_guess_from_uuid(const char *uuid)
-{
-  if (uuid == NULL || *uuid == '\0') {
-    return PLAYER_PLATFORM_UNKNOWN;
-  }
-  g_autofree char *lower = g_ascii_strdown(uuid, -1);
-  if (g_str_has_prefix(lower, "00000000-0000-0000-")) {
-    return PLAYER_PLATFORM_BEDROCK;
-  }
-  return PLAYER_PLATFORM_UNKNOWN;
-}
-
-static char *
-extract_ip_from_socket_text(const char *text)
-{
-  if (text == NULL || *text == '\0') {
-    return NULL;
-  }
-
-  while (*text == ' ' || *text == '\t') {
-    text++;
-  }
-  if (*text == '\0') {
-    return NULL;
-  }
-
-  g_autofree char *tmp = g_strdup(text);
-  g_strstrip(tmp);
-  gsize len = strlen(tmp);
-  while (len > 0 && (tmp[len - 1] == ',' || tmp[len - 1] == ')' || tmp[len - 1] == ']')) {
-    tmp[--len] = '\0';
-  }
-
-  if (tmp[0] == '[') {
-    const char *end = strchr(tmp, ']');
-    if (end != NULL && end > tmp + 1) {
-      return g_strndup(tmp + 1, (gsize)(end - (tmp + 1)));
-    }
-  }
-
-  const char *last_colon = strrchr(tmp, ':');
-  if (last_colon != NULL) {
-    gboolean has_other_colon = FALSE;
-    for (const char *p = tmp; p < last_colon; p++) {
-      if (*p == ':') {
-        has_other_colon = TRUE;
-        break;
-      }
-    }
-    if (!has_other_colon) {
-      return g_strndup(tmp, (gsize)(last_colon - tmp));
-    }
-  }
-
-  return g_strdup(tmp);
 }
 
 static void
@@ -3950,54 +2494,6 @@ send_pardon_ip_for_player(PumpkinWindow *self, const char *raw_ip, const char *s
   return sent_any;
 }
 
-static void
-remember_platform_hint_for_ip(PumpkinWindow *self, const char *ip, PlayerPlatform platform)
-{
-  if (self == NULL || self->platform_hint_by_ip == NULL || ip == NULL || *ip == '\0' ||
-      platform == PLAYER_PLATFORM_UNKNOWN) {
-    return;
-  }
-  g_autofree char *ip_key = normalized_key(ip);
-  if (ip_key == NULL || *ip_key == '\0') {
-    return;
-  }
-  g_hash_table_replace(self->platform_hint_by_ip, g_strdup(ip_key), GINT_TO_POINTER((int)platform));
-}
-
-static PlayerPlatform
-platform_hint_for_ip(PumpkinWindow *self, const char *ip)
-{
-  if (self == NULL || self->platform_hint_by_ip == NULL || ip == NULL || *ip == '\0') {
-    return PLAYER_PLATFORM_UNKNOWN;
-  }
-  g_autofree char *ip_key = normalized_key(ip);
-  if (ip_key == NULL || *ip_key == '\0') {
-    return PLAYER_PLATFORM_UNKNOWN;
-  }
-  gpointer raw = g_hash_table_lookup(self->platform_hint_by_ip, ip_key);
-  int value = GPOINTER_TO_INT(raw);
-  if (value < PLAYER_PLATFORM_UNKNOWN || value > PLAYER_PLATFORM_BEDROCK) {
-    return PLAYER_PLATFORM_UNKNOWN;
-  }
-  return (PlayerPlatform)value;
-}
-
-static PlayerPlatform
-take_pending_platform_hint(PumpkinWindow *self)
-{
-  if (self == NULL) {
-    return PLAYER_PLATFORM_UNKNOWN;
-  }
-  if (self->pending_bedrock_platform_hints > 0) {
-    self->pending_bedrock_platform_hints--;
-    return PLAYER_PLATFORM_BEDROCK;
-  }
-  if (self->pending_java_platform_hints > 0) {
-    self->pending_java_platform_hints--;
-    return PLAYER_PLATFORM_JAVA;
-  }
-  return PLAYER_PLATFORM_UNKNOWN;
-}
 
 static const char *
 date_time_pattern_for_config(PumpkinWindow *self)
@@ -4295,6 +2791,12 @@ update_check_updates_badge(PumpkinWindow *self)
   gtk_widget_remove_css_class(button, "update-badge-current");
   gtk_widget_remove_css_class(button, "update-badge-available");
 
+  if (self->latest_resolve_in_flight) {
+    gtk_button_set_label(self->btn_details_check_updates, "Checking...");
+    gtk_widget_add_css_class(button, "update-badge-current");
+    return;
+  }
+
   gboolean update_available = FALSE;
   if (self->current != NULL) {
     g_autofree char *bin = pumpkin_server_get_bin_path(self->current);
@@ -4348,7 +2850,7 @@ send_server_chat(PumpkinServer *server, const char *message)
   pumpkin_server_send_command(server, cmd, NULL);
 }
 
-static void
+void
 clear_auto_update_countdown(PumpkinWindow *self)
 {
   if (self == NULL) {
@@ -4380,7 +2882,7 @@ start_auto_update_countdown(PumpkinWindow *self, PumpkinServer *server)
   self->auto_update_server = g_object_ref(server);
   self->auto_update_countdown_remaining = 10;
   send_server_chat(server,
-                   "Der Server wird in 10 Sekunden neu gestartet, um auf die neueste Version zu aktualisieren.");
+                   "The server will restart in 10 seconds to update to the latest version.");
   set_details_status_for_server(self, server, "Auto-update countdown started (10s)", 4);
   self->auto_update_countdown_id = g_timeout_add_seconds(1, auto_update_countdown_tick, self);
 }
@@ -4588,6 +3090,88 @@ binary_file_is_valid(const char *path)
 }
 
 static char *
+describe_invalid_binary_file(const char *path)
+{
+  if (path == NULL || *path == '\0') {
+    return g_strdup("Invalid download: missing file path");
+  }
+
+  GStatBuf st;
+  if (g_stat(path, &st) != 0) {
+    return g_strdup_printf("Invalid download: could not stat file (%s)", g_strerror(errno));
+  }
+
+  guint8 buf[32] = { 0 };
+  FILE *fp = fopen(path, "rb");
+  if (fp == NULL) {
+    return g_strdup_printf("Invalid download: could not open file (%s)", g_strerror(errno));
+  }
+
+  gsize read = fread(buf, 1, sizeof(buf), fp);
+  fclose(fp);
+
+  GString *hex = g_string_new(NULL);
+  GString *ascii = g_string_new(NULL);
+  for (gsize i = 0; i < read; i++) {
+    if (i > 0) {
+      g_string_append_c(hex, ' ');
+    }
+    g_string_append_printf(hex, "%02X", buf[i]);
+
+    gunichar c = (gunichar)buf[i];
+    g_string_append_c(ascii, g_ascii_isprint((gchar)c) ? (gchar)c : '.');
+  }
+
+  const char *hint = NULL;
+  if (read >= 5 && g_ascii_strncasecmp((const char *)buf, "<html", 5) == 0) {
+    hint = "looks like HTML";
+  } else if (read >= 9 && g_ascii_strncasecmp((const char *)buf, "<!doctype", 9) == 0) {
+    hint = "looks like HTML";
+  } else if (read >= 5 && g_ascii_strncasecmp((const char *)buf, "<?xml", 5) == 0) {
+    hint = "looks like XML";
+  } else if (read >= 1 && (buf[0] == '{' || buf[0] == '[')) {
+    hint = "looks like JSON/text";
+  } else if (st.st_size < MIN_VALID_PUMPKIN_BINARY_BYTES) {
+    hint = "file is much smaller than an expected Pumpkin binary";
+  } else {
+    hint = "unknown file signature";
+  }
+
+  char *message = g_strdup_printf("Invalid download diagnostics: size=%" G_GINT64_FORMAT
+                                  " bytes, first-bytes=[%s], preview=\"%s\", %s",
+                                  (gint64)st.st_size, hex->str, ascii->str, hint);
+  g_string_free(hex, TRUE);
+  g_string_free(ascii, TRUE);
+  return message;
+}
+
+static char *
+describe_replace_paths(const char *src, const char *dest)
+{
+  g_autofree char *src_dir = src != NULL ? g_path_get_dirname(src) : NULL;
+  g_autofree char *dest_dir = dest != NULL ? g_path_get_dirname(dest) : NULL;
+
+  gboolean src_exists = src != NULL && g_file_test(src, G_FILE_TEST_EXISTS);
+  gboolean src_dir_exists = src_dir != NULL && g_file_test(src_dir, G_FILE_TEST_IS_DIR);
+  gboolean dest_exists = dest != NULL && g_file_test(dest, G_FILE_TEST_EXISTS);
+  gboolean dest_dir_exists = dest_dir != NULL && g_file_test(dest_dir, G_FILE_TEST_IS_DIR);
+
+  GStatBuf src_st;
+  gboolean src_stat_ok = src != NULL && g_stat(src, &src_st) == 0;
+
+  return g_strdup_printf("Replace diagnostics: src=\"%s\" exists=%s dir-exists=%s size=%" G_GINT64_FORMAT
+                         ", dest=\"%s\" exists=%s dest-dir=\"%s\" dest-dir-exists=%s",
+                         src != NULL ? src : "(null)",
+                         src_exists ? "yes" : "no",
+                         src_dir_exists ? "yes" : "no",
+                         src_stat_ok ? (gint64)src_st.st_size : (gint64)-1,
+                         dest != NULL ? dest : "(null)",
+                         dest_exists ? "yes" : "no",
+                         dest_dir != NULL ? dest_dir : "(null)",
+                         dest_dir_exists ? "yes" : "no");
+}
+
+static char *
 get_server_size(PumpkinServer *server)
 {
   const char *root = pumpkin_server_get_root_dir(server);
@@ -4631,259 +3215,6 @@ preferred_max_players(PumpkinWindow *self, PumpkinServer *server)
     configured = 20;
   }
   return configured;
-}
-
-static void
-slp_varint_append(GByteArray *array, guint32 value)
-{
-  do {
-    guint8 temp = (guint8)(value & 0x7F);
-    value >>= 7;
-    if (value != 0) {
-      temp |= 0x80;
-    }
-    g_byte_array_append(array, &temp, 1);
-  } while (value != 0);
-}
-
-static gboolean
-slp_read_exact(GInputStream *stream, guint8 *buffer, gsize length)
-{
-  if (stream == NULL || buffer == NULL || length == 0) {
-    return FALSE;
-  }
-  gsize bytes_read = 0;
-  return g_input_stream_read_all(stream, buffer, length, &bytes_read, NULL, NULL) && bytes_read == length;
-}
-
-static gboolean
-slp_read_varint_stream(GInputStream *stream, guint32 *out_value)
-{
-  if (stream == NULL || out_value == NULL) {
-    return FALSE;
-  }
-  guint32 value = 0;
-  int position = 0;
-  while (position < 35) {
-    guint8 byte = 0;
-    if (!slp_read_exact(stream, &byte, 1)) {
-      return FALSE;
-    }
-    value |= (guint32)(byte & 0x7F) << position;
-    if ((byte & 0x80) == 0) {
-      *out_value = value;
-      return TRUE;
-    }
-    position += 7;
-  }
-  return FALSE;
-}
-
-static gboolean
-slp_read_varint_buffer(const guint8 *data, gsize length, gsize *offset, guint32 *out_value)
-{
-  if (data == NULL || offset == NULL || out_value == NULL) {
-    return FALSE;
-  }
-  guint32 value = 0;
-  int position = 0;
-  while (position < 35 && *offset < length) {
-    guint8 byte = data[*offset];
-    (*offset)++;
-    value |= (guint32)(byte & 0x7F) << position;
-    if ((byte & 0x80) == 0) {
-      *out_value = value;
-      return TRUE;
-    }
-    position += 7;
-  }
-  return FALSE;
-}
-
-static gboolean
-parse_slp_players_json(const char *json, int *out_players, int *out_max_players)
-{
-  if (json == NULL || out_players == NULL || out_max_players == NULL) {
-    return FALSE;
-  }
-
-  g_autoptr(GRegex) players_re = g_regex_new("\"players\"\\s*:\\s*\\{([^}]*)\\}",
-                                              G_REGEX_CASELESS | G_REGEX_DOTALL, 0, NULL);
-  g_autoptr(GMatchInfo) players_match = NULL;
-  if (!g_regex_match(players_re, json, 0, &players_match)) {
-    return FALSE;
-  }
-
-  g_autofree char *players_blob = g_match_info_fetch(players_match, 1);
-  if (players_blob == NULL) {
-    return FALSE;
-  }
-
-  g_autoptr(GRegex) online_re = g_regex_new("\"online\"\\s*:\\s*([0-9]+)", G_REGEX_CASELESS, 0, NULL);
-  g_autoptr(GRegex) max_re = g_regex_new("\"max\"\\s*:\\s*([0-9]+)", G_REGEX_CASELESS, 0, NULL);
-  g_autoptr(GMatchInfo) online_match = NULL;
-  g_autoptr(GMatchInfo) max_match = NULL;
-  if (!g_regex_match(online_re, players_blob, 0, &online_match)) {
-    return FALSE;
-  }
-  if (!g_regex_match(max_re, players_blob, 0, &max_match)) {
-    return FALSE;
-  }
-
-  g_autofree char *online_txt = g_match_info_fetch(online_match, 1);
-  g_autofree char *max_txt = g_match_info_fetch(max_match, 1);
-  if (online_txt == NULL || max_txt == NULL) {
-    return FALSE;
-  }
-
-  *out_players = (int)strtol(online_txt, NULL, 10);
-  *out_max_players = (int)strtol(max_txt, NULL, 10);
-  if (*out_players < 0) {
-    *out_players = 0;
-  }
-  if (*out_max_players < 0) {
-    *out_max_players = 0;
-  }
-  return TRUE;
-}
-
-static gboolean
-query_minecraft_players(const char *host, int port, int *out_players, int *out_max_players)
-{
-  if (host == NULL || port <= 0 || out_players == NULL || out_max_players == NULL) {
-    return FALSE;
-  }
-
-  g_autoptr(GError) error = NULL;
-  g_autoptr(GSocketClient) client = g_socket_client_new();
-  g_socket_client_set_timeout(client, 1);
-  g_autofree char *target = g_strdup(host);
-  if (target == NULL || *target == '\0') {
-    target = g_strdup("127.0.0.1");
-  }
-
-  g_autoptr(GSocketConnection) connection = g_socket_client_connect_to_host(client, target, port, NULL, &error);
-  if (connection == NULL) {
-    return FALSE;
-  }
-  GSocket *socket = g_socket_connection_get_socket(connection);
-  if (socket != NULL) {
-    g_socket_set_timeout(socket, 1);
-  }
-
-  GOutputStream *output = g_io_stream_get_output_stream(G_IO_STREAM(connection));
-  GInputStream *input = g_io_stream_get_input_stream(G_IO_STREAM(connection));
-  if (output == NULL || input == NULL) {
-    return FALSE;
-  }
-
-  g_autoptr(GByteArray) handshake_payload = g_byte_array_new();
-  slp_varint_append(handshake_payload, 0x00);
-  slp_varint_append(handshake_payload, 0);
-  slp_varint_append(handshake_payload, (guint32)strlen(target));
-  g_byte_array_append(handshake_payload, (const guint8 *)target, strlen(target));
-  guint8 port_bytes[2] = {
-    (guint8)((port >> 8) & 0xFF),
-    (guint8)(port & 0xFF)
-  };
-  g_byte_array_append(handshake_payload, port_bytes, 2);
-  slp_varint_append(handshake_payload, 1);
-
-  g_autoptr(GByteArray) handshake_packet = g_byte_array_new();
-  slp_varint_append(handshake_packet, handshake_payload->len);
-  g_byte_array_append(handshake_packet, handshake_payload->data, handshake_payload->len);
-
-  gsize written = 0;
-  if (!g_output_stream_write_all(output, handshake_packet->data, handshake_packet->len, &written, NULL, NULL) ||
-      written != handshake_packet->len) {
-    return FALSE;
-  }
-
-  static const guint8 status_request[] = {0x01, 0x00};
-  written = 0;
-  if (!g_output_stream_write_all(output, status_request, sizeof(status_request), &written, NULL, NULL) ||
-      written != sizeof(status_request)) {
-    return FALSE;
-  }
-  if (!g_output_stream_flush(output, NULL, NULL)) {
-    return FALSE;
-  }
-
-  guint32 packet_len = 0;
-  if (!slp_read_varint_stream(input, &packet_len) || packet_len == 0 || packet_len > 32768) {
-    return FALSE;
-  }
-
-  g_autofree guint8 *packet_data = g_malloc0(packet_len);
-  if (!slp_read_exact(input, packet_data, packet_len)) {
-    return FALSE;
-  }
-
-  gsize offset = 0;
-  guint32 packet_id = 0;
-  if (!slp_read_varint_buffer(packet_data, packet_len, &offset, &packet_id) || packet_id != 0x00) {
-    return FALSE;
-  }
-
-  guint32 json_len = 0;
-  if (!slp_read_varint_buffer(packet_data, packet_len, &offset, &json_len) || json_len == 0) {
-    return FALSE;
-  }
-
-  if (offset + json_len > packet_len) {
-    return FALSE;
-  }
-
-  g_autofree char *json = g_strndup((const char *)(packet_data + offset), (gsize)json_len);
-  return parse_slp_players_json(json, out_players, out_max_players);
-}
-
-static gboolean
-is_player_list_snapshot_line(const char *line)
-{
-  if (line == NULL) {
-    return FALSE;
-  }
-  g_autofree char *lower = g_ascii_strdown(line, -1);
-  return strstr(lower, "players online") != NULL || strstr(lower, "of a max of") != NULL;
-}
-
-static gboolean
-parse_player_list_snapshot_line(const char *line, int *out_count, char **out_names_csv)
-{
-  if (line == NULL) {
-    return FALSE;
-  }
-  if (out_count != NULL) {
-    *out_count = -1;
-  }
-  if (out_names_csv != NULL) {
-    *out_names_csv = NULL;
-  }
-
-  g_autoptr(GRegex) list_re =
-    g_regex_new("there\\s+are\\s+([0-9]+)\\s+of\\s+a\\s+max\\s+of\\s+[0-9]+\\s+players\\s+online\\s*:?\\s*(.*)$",
-                G_REGEX_CASELESS, 0, NULL);
-  g_autoptr(GMatchInfo) match = NULL;
-  if (!g_regex_match(list_re, line, 0, &match)) {
-    return FALSE;
-  }
-
-  g_autofree char *count_txt = g_match_info_fetch(match, 1);
-  g_autofree char *names_txt = g_match_info_fetch(match, 2);
-  if (count_txt != NULL && out_count != NULL) {
-    *out_count = (int)strtol(count_txt, NULL, 10);
-    if (*out_count < 0) {
-      *out_count = 0;
-    }
-  }
-  if (out_names_csv != NULL && names_txt != NULL) {
-    g_strstrip(names_txt);
-    if (names_txt[0] != '\0') {
-      *out_names_csv = g_strdup(names_txt);
-    }
-  }
-  return TRUE;
 }
 
 static char *
@@ -4969,235 +3300,6 @@ is_uuid_string(const char *text)
     }
   }
   return TRUE;
-}
-
-static void
-add_name_uuid_pairs(GHashTable *map, const char *contents)
-{
-  if (contents == NULL) {
-    return;
-  }
-
-  g_autoptr(GRegex) regex = g_regex_new(
-    "\"uuid\"\\s*:\\s*\"([^\"]+)\"\\s*,\\s*\"name\"\\s*:\\s*\"([^\"]+)\"|\"name\"\\s*:\\s*\"([^\"]+)\"\\s*,\\s*\"uuid\"\\s*:\\s*\"([^\"]+)\"",
-    G_REGEX_CASELESS | G_REGEX_DOTALL, 0, NULL);
-  g_autoptr(GMatchInfo) match = NULL;
-
-  if (!g_regex_match(regex, contents, 0, &match)) {
-    return;
-  }
-
-  while (g_match_info_matches(match)) {
-    g_autofree char *uuid1 = g_match_info_fetch(match, 1);
-    g_autofree char *name1 = g_match_info_fetch(match, 2);
-    g_autofree char *name2 = g_match_info_fetch(match, 3);
-    g_autofree char *uuid2 = g_match_info_fetch(match, 4);
-
-    if (uuid1 != NULL && name1 != NULL) {
-      g_hash_table_replace(map, g_strdup(uuid1), g_strdup(name1));
-    } else if (uuid2 != NULL && name2 != NULL) {
-      g_hash_table_replace(map, g_strdup(uuid2), g_strdup(name2));
-    }
-
-    g_match_info_next(match, NULL);
-  }
-}
-
-typedef struct {
-  char *name;
-  char *uuid;
-  char *ip;
-  char *reason;
-  char *created;
-  char *source;
-  char *expires;
-  int op_level;
-  gboolean bypasses_player_limit;
-} PlayerEntry;
-
-static void
-player_entry_free(PlayerEntry *entry)
-{
-  if (entry == NULL) {
-    return;
-  }
-  g_clear_pointer(&entry->name, g_free);
-  g_clear_pointer(&entry->uuid, g_free);
-  g_clear_pointer(&entry->ip, g_free);
-  g_clear_pointer(&entry->reason, g_free);
-  g_clear_pointer(&entry->created, g_free);
-  g_clear_pointer(&entry->source, g_free);
-  g_clear_pointer(&entry->expires, g_free);
-  g_free(entry);
-}
-
-static char *
-extract_json_string_field(const char *object_text, const char *field)
-{
-  if (object_text == NULL || field == NULL || *field == '\0') {
-    return NULL;
-  }
-  g_autofree char *pattern = g_strdup_printf("\"%s\"\\s*:\\s*\"((?:\\\\.|[^\"\\\\])*)\"", field);
-  g_autoptr(GRegex) regex = g_regex_new(pattern, G_REGEX_CASELESS | G_REGEX_DOTALL, 0, NULL);
-  if (regex == NULL) {
-    return NULL;
-  }
-  g_autoptr(GMatchInfo) match = NULL;
-  if (!g_regex_match(regex, object_text, 0, &match) || !g_match_info_matches(match)) {
-    return NULL;
-  }
-  return g_match_info_fetch(match, 1);
-}
-
-static int
-extract_json_int_field(const char *object_text, const char *field, int default_value)
-{
-  if (object_text == NULL || field == NULL || *field == '\0') {
-    return default_value;
-  }
-  g_autofree char *pattern = g_strdup_printf("\"%s\"\\s*:\\s*(-?[0-9]+)", field);
-  g_autoptr(GRegex) regex = g_regex_new(pattern, G_REGEX_CASELESS | G_REGEX_DOTALL, 0, NULL);
-  if (regex == NULL) {
-    return default_value;
-  }
-  g_autoptr(GMatchInfo) match = NULL;
-  if (!g_regex_match(regex, object_text, 0, &match) || !g_match_info_matches(match)) {
-    return default_value;
-  }
-  g_autofree char *value_txt = g_match_info_fetch(match, 1);
-  if (value_txt == NULL || *value_txt == '\0') {
-    return default_value;
-  }
-  return (int)strtol(value_txt, NULL, 10);
-}
-
-static gboolean
-extract_json_bool_field(const char *object_text, const char *field, gboolean default_value)
-{
-  if (object_text == NULL || field == NULL || *field == '\0') {
-    return default_value;
-  }
-  g_autofree char *pattern = g_strdup_printf("\"%s\"\\s*:\\s*(true|false)", field);
-  g_autoptr(GRegex) regex = g_regex_new(pattern, G_REGEX_CASELESS | G_REGEX_DOTALL, 0, NULL);
-  if (regex == NULL) {
-    return default_value;
-  }
-  g_autoptr(GMatchInfo) match = NULL;
-  if (!g_regex_match(regex, object_text, 0, &match) || !g_match_info_matches(match)) {
-    return default_value;
-  }
-  g_autofree char *value_txt = g_match_info_fetch(match, 1);
-  if (value_txt == NULL) {
-    return default_value;
-  }
-  return g_ascii_strcasecmp(value_txt, "true") == 0;
-}
-
-static char *
-resolve_data_file(PumpkinServer *server, const char *filename)
-{
-  g_autofree char *data_dir = pumpkin_server_get_data_dir(server);
-  g_autofree char *path = g_build_filename(data_dir, "data", filename, NULL);
-  if (g_file_test(path, G_FILE_TEST_EXISTS)) {
-    return g_strdup(path);
-  }
-  g_autofree char *fallback = g_build_filename(data_dir, filename, NULL);
-  if (g_file_test(fallback, G_FILE_TEST_EXISTS)) {
-    return g_strdup(fallback);
-  }
-  return g_strdup(path);
-}
-
-static GPtrArray *
-load_player_entries_from_file(const char *path)
-{
-  if (path == NULL) {
-    return NULL;
-  }
-
-  g_autofree char *contents = NULL;
-  if (!g_file_get_contents(path, &contents, NULL, NULL)) {
-    return NULL;
-  }
-
-  g_autoptr(GPtrArray) entries = g_ptr_array_new_with_free_func((GDestroyNotify)player_entry_free);
-  g_autoptr(GRegex) regex = g_regex_new("\\{[^\\{\\}]*\\}", G_REGEX_CASELESS | G_REGEX_DOTALL, 0, NULL);
-  g_autoptr(GMatchInfo) match = NULL;
-
-  if (!g_regex_match(regex, contents, 0, &match)) {
-    return g_steal_pointer(&entries);
-  }
-
-  while (g_match_info_matches(match)) {
-    g_autofree char *object_text = g_match_info_fetch(match, 0);
-    g_autofree char *name = extract_json_string_field(object_text, "name");
-    g_autofree char *uuid = extract_json_string_field(object_text, "uuid");
-    g_autofree char *ip = extract_json_string_field(object_text, "ip");
-    g_autofree char *reason = extract_json_string_field(object_text, "reason");
-    g_autofree char *created = extract_json_string_field(object_text, "created");
-    g_autofree char *source = extract_json_string_field(object_text, "source");
-    g_autofree char *expires = extract_json_string_field(object_text, "expires");
-    int op_level = extract_json_int_field(object_text, "level", -1);
-    gboolean bypasses_limit = extract_json_bool_field(object_text, "bypasses_player_limit", FALSE);
-    if (!bypasses_limit) {
-      bypasses_limit = extract_json_bool_field(object_text, "bypassesPlayerLimit", FALSE);
-    }
-
-    if ((name != NULL && *name != '\0') || (ip != NULL && *ip != '\0')) {
-      PlayerEntry *entry = g_new0(PlayerEntry, 1);
-      entry->name = (name != NULL && *name != '\0') ? g_strdup(name) : NULL;
-      entry->uuid = (uuid != NULL && *uuid != '\0') ? g_strdup(uuid) : NULL;
-      entry->ip = (ip != NULL && *ip != '\0') ? g_strdup(ip) : NULL;
-      entry->reason = (reason != NULL && *reason != '\0') ? g_strdup(reason) : NULL;
-      entry->created = (created != NULL && *created != '\0') ? g_strdup(created) : NULL;
-      entry->source = (source != NULL && *source != '\0') ? g_strdup(source) : NULL;
-      entry->expires = (expires != NULL && *expires != '\0') ? g_strdup(expires) : NULL;
-      entry->op_level = op_level;
-      entry->bypasses_player_limit = bypasses_limit;
-      g_ptr_array_add(entries, entry);
-    }
-
-    g_match_info_next(match, NULL);
-  }
-
-  return g_steal_pointer(&entries);
-}
-
-static char *
-pick_latest_banned_ip(PumpkinWindow *self)
-{
-  if (self == NULL || self->current == NULL) {
-    return NULL;
-  }
-
-  g_autofree char *banned_ips_path = resolve_data_file(self->current, "banned-ips.json");
-  g_autoptr(GPtrArray) banned_ip_entries = load_player_entries_from_file(banned_ips_path);
-  if (banned_ip_entries == NULL || banned_ip_entries->len == 0) {
-    return NULL;
-  }
-
-  const char *best_ip = NULL;
-  const char *best_created = NULL;
-  for (guint i = 0; i < banned_ip_entries->len; i++) {
-    PlayerEntry *entry = g_ptr_array_index(banned_ip_entries, i);
-    if (entry == NULL || entry->ip == NULL || *entry->ip == '\0') {
-      continue;
-    }
-    if (best_ip == NULL) {
-      best_ip = entry->ip;
-      best_created = entry->created;
-      continue;
-    }
-
-    if (entry->created != NULL && *entry->created != '\0') {
-      if (best_created == NULL || *best_created == '\0' || g_strcmp0(entry->created, best_created) > 0) {
-        best_ip = entry->ip;
-        best_created = entry->created;
-      }
-    }
-  }
-
-  return best_ip != NULL ? g_strdup(best_ip) : NULL;
 }
 
 static void
@@ -5321,6 +3423,10 @@ try_create_server(PumpkinWindow *self, const char *name)
     return FALSE;
   }
 
+  int java_port = NETWORK_PROXY_JAVA_PORT;
+  int bedrock_port = NETWORK_PROXY_BEDROCK_PORT;
+  get_next_standalone_server_ports(self, &java_port, &bedrock_port);
+
   g_autoptr(GError) error = NULL;
   PumpkinServer *server = pumpkin_server_store_add(self->store, trimmed, &error);
   if (server == NULL) {
@@ -5328,12 +3434,26 @@ try_create_server(PumpkinWindow *self, const char *name)
     return FALSE;
   }
 
+  gboolean needs_save = FALSE;
+  if (pumpkin_server_get_port(server) != java_port) {
+    pumpkin_server_set_port(server, java_port);
+    needs_save = TRUE;
+  }
+  if (pumpkin_server_get_bedrock_port(server) != bedrock_port) {
+    pumpkin_server_set_bedrock_port(server, bedrock_port);
+    needs_save = TRUE;
+  }
+
   if (self->config != NULL) {
     const char *url = pumpkin_config_get_default_download_url(self->config);
     if (url != NULL && *url != '\0') {
       pumpkin_server_set_download_url(server, url);
-      pumpkin_server_save(server, NULL);
+      needs_save = TRUE;
     }
+  }
+
+  if (needs_save) {
+    pumpkin_server_save(server, NULL);
   }
 
   ensure_server_log_handler(self, server);
@@ -5362,21 +3482,100 @@ on_overview_update_clicked(GtkButton *button, gpointer user_data)
 }
 
 static void
-on_overview_settings_clicked(GtkButton *button, gpointer user_data)
+open_overview_server_details(PumpkinWindow *self, PumpkinServer *server, AdwDialog *dialog)
 {
-  PumpkinWindow *self = PUMPKIN_WINDOW(user_data);
-  PumpkinServer *server = g_object_get_data(G_OBJECT(button), "server");
-  if (server == NULL) {
+  if (self == NULL || server == NULL) {
     return;
   }
 
-  AdwDialog *dialog = g_object_get_data(G_OBJECT(button), "network-dialog");
   if (dialog != NULL) {
     adw_dialog_close(dialog);
   }
 
   select_server(self, server);
   adw_view_stack_set_visible_child_name(self->view_stack, "details");
+}
+
+static void
+on_overview_embedded_server_pressed(GtkGestureClick *gesture,
+                                    int n_press,
+                                    double x,
+                                    double y,
+                                    PumpkinWindow *self)
+{
+  if (self == NULL || n_press != 1) {
+    return;
+  }
+
+  GtkWidget *card = gtk_event_controller_get_widget(GTK_EVENT_CONTROLLER(gesture));
+  if (card == NULL) {
+    return;
+  }
+
+  GtkWidget *target = gtk_widget_pick(card, x, y, GTK_PICK_DEFAULT);
+  for (GtkWidget *widget = target; widget != NULL && widget != card; widget = gtk_widget_get_parent(widget)) {
+    if (GTK_IS_BUTTON(widget)) {
+      return;
+    }
+  }
+
+  PumpkinServer *server = g_object_get_data(G_OBJECT(card), "server");
+  AdwDialog *dialog = g_object_get_data(G_OBJECT(card), "network-dialog");
+  if (server == NULL) {
+    return;
+  }
+
+  open_overview_server_details(self, server, dialog);
+}
+
+static void
+on_overview_row_activated(GtkListBox *box, GtkListBoxRow *row, PumpkinWindow *self)
+{
+  (void)box;
+  if (self == NULL || row == NULL) {
+    return;
+  }
+  PumpkinServer *server = g_object_get_data(G_OBJECT(row), "server");
+  if (server == NULL) {
+    return;
+  }
+  open_overview_server_details(self, server, NULL);
+}
+
+static void
+on_sponsor_button_enter(GtkEventControllerMotion *controller, double x, double y, PumpkinWindow *self)
+{
+  (void)controller;
+  (void)x;
+  (void)y;
+  if (self != NULL && self->label_sponsor_heart != NULL) {
+    gtk_label_set_markup(self->label_sponsor_heart, "<span foreground=\"#ff4fa3\">♥</span>");
+  }
+}
+
+static void
+on_sponsor_button_leave(GtkEventControllerMotion *controller, PumpkinWindow *self)
+{
+  (void)controller;
+  if (self != NULL && self->label_sponsor_heart != NULL) {
+    gtk_label_set_markup(self->label_sponsor_heart, "<span foreground=\"#ff4fa3\">♡</span>");
+  }
+}
+
+static gboolean
+remove_widget_on_idle(gpointer data)
+{
+  GtkWidget *widget = GTK_WIDGET(data);
+  if (widget != NULL) {
+    GtkWidget *parent = gtk_widget_get_parent(widget);
+    if (GTK_IS_LIST_BOX(parent)) {
+      gtk_list_box_remove(GTK_LIST_BOX(parent), widget);
+    } else {
+      gtk_widget_set_visible(widget, FALSE);
+    }
+  }
+  g_object_unref(widget);
+  return G_SOURCE_REMOVE;
 }
 
 static void
@@ -5451,7 +3650,7 @@ recover_server_binary_from_cache(PumpkinWindow *self, PumpkinServer *server, con
   return FALSE;
 }
 
-static gboolean
+gboolean
 server_has_installation(PumpkinWindow *self, PumpkinServer *server)
 {
   if (server == NULL) {
@@ -5521,6 +3720,13 @@ on_sponsor_pumpkin_clicked(GtkButton *button, PumpkinWindow *self)
 {
   (void)button;
   open_uri_external(self, "https://github.com/sponsors/Snowiiii");
+}
+
+static void
+on_plugins_marketplace_clicked(GtkButton *button, PumpkinWindow *self)
+{
+  (void)button;
+  open_uri_external(self, "https://market.pumpkinmc.org");
 }
 
 static void
@@ -5717,7 +3923,7 @@ refresh_overview_list_idle(gpointer user_data)
   return G_SOURCE_REMOVE;
 }
 
-static void
+void
 queue_overview_refresh(PumpkinWindow *self, gboolean include_details)
 {
   if (self == NULL) {
@@ -5928,37 +4134,7 @@ refresh_network_details_dialog(PumpkinWindow *self)
 static gboolean
 start_server_from_network(PumpkinWindow *self, PumpkinServer *server)
 {
-  if (self == NULL || server == NULL) {
-    return FALSE;
-  }
-  ensure_server_log_handler(self, server);
-  if (server_is_running_ui(self, server)) {
-    return FALSE;
-  }
-  if (!server_has_installation(self, server)) {
-    append_log_for_server(self, server, "[SMPK] Cannot start: Pumpkin is not installed.");
-    return FALSE;
-  }
-  DownloadProgressState *state = get_download_progress_state(self, server, FALSE);
-  if (state != NULL && state->active) {
-    /* Treat stale "updating" flags as non-blocking for manual network starts. */
-    state->active = FALSE;
-  }
-
-  g_autoptr(GError) error = NULL;
-  if (!pumpkin_server_start(server, &error)) {
-    if (error != NULL) {
-      append_log_for_server(self, server, error->message);
-    }
-    return FALSE;
-  }
-
-  append_log_for_server(self, server, "[SMPK] Started by network action.");
-  set_server_running_hint(self, server, TRUE);
-  if (self->current == server) {
-    self->ui_state = UI_STATE_RUNNING;
-  }
-  return TRUE;
+  return start_server_internal(self, server, TRUE, FALSE);
 }
 
 static void
@@ -6039,27 +4215,13 @@ on_overview_network_stop_all_clicked(GtkButton *button, gpointer user_data)
     if (proxy_server != NULL && server == proxy_server) {
       continue;
     }
-    if (server_is_running_ui(self, server)) {
-      if (server == self->current) {
-        self->user_stop_requested = TRUE;
-      }
-      if (pumpkin_server_get_running(server)) {
-        pumpkin_server_stop(server);
-      }
-      set_server_running_hint(self, server, FALSE);
+    if (stop_server_internal(self, server, TRUE)) {
       stopped++;
     }
   }
 
   if (proxy_server != NULL) {
-    if (server_is_running_ui(self, proxy_server)) {
-      if (proxy_server == self->current) {
-        self->user_stop_requested = TRUE;
-      }
-      if (pumpkin_server_get_running(proxy_server)) {
-        pumpkin_server_stop(proxy_server);
-      }
-      set_server_running_hint(self, proxy_server, FALSE);
+    if (stop_server_internal(self, proxy_server, TRUE)) {
       stopped++;
     }
     g_object_unref(proxy_server);
@@ -6214,12 +4376,18 @@ on_overview_network_details_clicked(GtkButton *button, gpointer user_data)
   GtkWidget *btn_update = gtk_button_new_with_label("Update all");
   GtkWidget *btn_set_proxy = gtk_button_new_with_label("Set proxy");
   GtkWidget *btn_clear_proxy = gtk_button_new_with_label("Clear proxy");
+  GtkWidget *btn_set_icon = gtk_button_new_with_label("Set icon");
+  GtkWidget *btn_reset_icon = gtk_button_new_with_label("Reset icon");
   gtk_widget_add_css_class(btn_update, "card-button");
   gtk_widget_add_css_class(btn_set_proxy, "card-button");
   gtk_widget_add_css_class(btn_clear_proxy, "card-button");
+  gtk_widget_add_css_class(btn_set_icon, "card-button");
+  gtk_widget_add_css_class(btn_reset_icon, "card-button");
   g_object_set_data_full(G_OBJECT(btn_update), "network-id", g_strdup(network->id), g_free);
   g_object_set_data_full(G_OBJECT(btn_set_proxy), "network-id", g_strdup(network->id), g_free);
   g_object_set_data_full(G_OBJECT(btn_clear_proxy), "network-id", g_strdup(network->id), g_free);
+  g_object_set_data_full(G_OBJECT(btn_set_icon), "network-id", g_strdup(network->id), g_free);
+  g_object_set_data_full(G_OBJECT(btn_reset_icon), "network-id", g_strdup(network->id), g_free);
   g_object_set_data(G_OBJECT(btn_update), "network-dialog", dialog);
   g_object_set_data(G_OBJECT(btn_set_proxy), "network-dialog", dialog);
   g_object_set_data(G_OBJECT(btn_clear_proxy), "network-dialog", dialog);
@@ -6227,12 +4395,16 @@ on_overview_network_details_clicked(GtkButton *button, gpointer user_data)
   g_signal_connect(btn_update, "clicked", G_CALLBACK(on_overview_network_update_all_clicked), self);
   g_signal_connect(btn_set_proxy, "clicked", G_CALLBACK(on_overview_network_set_proxy_clicked), self);
   g_signal_connect(btn_clear_proxy, "clicked", G_CALLBACK(on_overview_network_clear_proxy_clicked), self);
+  g_signal_connect(btn_set_icon, "clicked", G_CALLBACK(on_choose_network_icon_clicked), self);
+  g_signal_connect(btn_reset_icon, "clicked", G_CALLBACK(on_reset_network_icon_clicked), self);
   gtk_widget_set_sensitive(btn_update, network_update_actionable_count(self, network) > 0);
   gtk_widget_set_sensitive(btn_set_proxy, network->member_server_ids->len > 0);
   gtk_widget_set_sensitive(btn_clear_proxy, network->proxy_server_id != NULL && *network->proxy_server_id != '\0');
   gtk_box_append(GTK_BOX(actions), btn_update);
   gtk_box_append(GTK_BOX(actions), btn_set_proxy);
   gtk_box_append(GTK_BOX(actions), btn_clear_proxy);
+  gtk_box_append(GTK_BOX(actions), btn_set_icon);
+  gtk_box_append(GTK_BOX(actions), btn_reset_icon);
   gtk_box_append(GTK_BOX(content), actions);
 
   GtkWidget *shared_progress = gtk_progress_bar_new();
@@ -6260,6 +4432,99 @@ on_overview_network_details_clicked(GtkButton *button, gpointer user_data)
 
   adw_alert_dialog_set_extra_child(alert, content);
   adw_dialog_present(dialog, GTK_WIDGET(self));
+}
+
+static void
+on_overview_network_toggle_expanded(GtkToggleButton *button, PumpkinWindow *self)
+{
+  if (self == NULL || self->expanded_network_ids == NULL) {
+    return;
+  }
+  const char *network_id = g_object_get_data(G_OBJECT(button), "network-id");
+  if (network_id == NULL || *network_id == '\0') {
+    return;
+  }
+  if (gtk_toggle_button_get_active(button)) {
+    g_hash_table_add(self->expanded_network_ids, g_strdup(network_id));
+  } else {
+    g_hash_table_remove(self->expanded_network_ids, network_id);
+  }
+  refresh_overview_list(self);
+}
+
+static void
+on_choose_network_icon_done(GObject *source, GAsyncResult *res, gpointer user_data)
+{
+  (void)source;
+  PumpkinWindow *self = PUMPKIN_WINDOW(user_data);
+  g_autoptr(GError) error = NULL;
+  GFile *file = gtk_file_dialog_open_finish(GTK_FILE_DIALOG(source), res, &error);
+  if (file == NULL || self == NULL) {
+    return;
+  }
+
+  const char *network_id = g_object_get_data(G_OBJECT(source), "network-id");
+  if (network_id == NULL || *network_id == '\0') {
+    return;
+  }
+
+  g_autofree char *path = g_file_get_path(file);
+  g_object_unref(file);
+  if (path == NULL) {
+    return;
+  }
+
+  g_autofree char *icon_path = network_icon_path(self, network_id);
+  g_autofree char *icon_dir = g_path_get_dirname(icon_path);
+  g_mkdir_with_parents(icon_dir, 0755);
+  g_autoptr(GFile) src = g_file_new_for_path(path);
+  g_autoptr(GFile) dst = g_file_new_for_path(icon_path);
+  if (!g_file_copy(src, dst, G_FILE_COPY_OVERWRITE, NULL, NULL, NULL, &error)) {
+    if (error != NULL) {
+      append_log(self, error->message);
+    }
+    return;
+  }
+
+  networks_save(self);
+  refresh_overview_list(self);
+  refresh_network_details_dialog(self);
+}
+
+static void
+on_choose_network_icon_clicked(GtkButton *button, PumpkinWindow *self)
+{
+  if (self == NULL) {
+    return;
+  }
+  const char *network_id = g_object_get_data(G_OBJECT(button), "network-id");
+  if (network_id == NULL || *network_id == '\0') {
+    return;
+  }
+
+  GtkFileDialog *dialog = gtk_file_dialog_new();
+  g_object_set_data_full(G_OBJECT(dialog), "network-id", g_strdup(network_id), g_free);
+  gtk_file_dialog_open(dialog, GTK_WINDOW(self), NULL, on_choose_network_icon_done, self);
+  g_object_unref(dialog);
+}
+
+static void
+on_reset_network_icon_clicked(GtkButton *button, PumpkinWindow *self)
+{
+  if (self == NULL) {
+    return;
+  }
+  const char *network_id = g_object_get_data(G_OBJECT(button), "network-id");
+  if (network_id == NULL || *network_id == '\0') {
+    return;
+  }
+  g_autofree char *icon_path = network_icon_path(self, network_id);
+  if (icon_path != NULL) {
+    g_remove(icon_path);
+  }
+  networks_save(self);
+  refresh_overview_list(self);
+  refresh_network_details_dialog(self);
 }
 
 static void
@@ -6373,12 +4638,12 @@ on_overview_network_add_server_clicked(GtkButton *button, gpointer user_data)
   network_add_member(network, server_id);
   apply_network_auto_ports(self, network);
   networks_save(self);
-  refresh_overview_list(self);
-  update_details(self);
   GtkWidget *row = g_object_get_data(G_OBJECT(button), "network-add-row");
   if (row != NULL) {
-    gtk_widget_set_visible(row, FALSE);
+    g_idle_add(remove_widget_on_idle, g_object_ref(row));
   }
+  refresh_overview_list(self);
+  update_details(self);
   g_autofree char *msg = g_strdup_printf("%s added to network.", server_id);
   set_details_status(self, msg, 3);
 }
@@ -6405,14 +4670,15 @@ on_overview_network_remove_member_clicked(GtkButton *button, gpointer user_data)
   if (g_strcmp0(network->proxy_server_id, server_id) == 0) {
     g_clear_pointer(&network->proxy_server_id, g_free);
   }
+  g_autoptr(PumpkinServer) removed_server = find_server_by_id(self, server_id);
+  gboolean removed_server_running = server_is_running_ui(self, removed_server);
   apply_network_auto_ports(self, network);
   networks_save(self);
+  if (removed_server != NULL && self->current == removed_server && removed_server_running) {
+    self->ui_state = UI_STATE_RUNNING;
+  }
   refresh_overview_list(self);
   update_details(self);
-  GtkWidget *member_card = g_object_get_data(G_OBJECT(button), "network-member-card");
-  if (member_card != NULL) {
-    gtk_widget_set_visible(member_card, FALSE);
-  }
   set_details_status(self, "Server removed from network.", 2);
 }
 
@@ -6572,9 +4838,42 @@ on_overview_network_delete_clicked(GtkButton *button, gpointer user_data)
   if (network_id == NULL || *network_id == '\0') {
     return;
   }
+  ServerNetwork *network = find_network_by_id(self, network_id);
+  if (network == NULL) {
+    return;
+  }
+  g_autofree char *title = g_strdup_printf("Delete \"%s\"?", network->name != NULL ? network->name : network_id);
+  AdwDialog *dialog = adw_alert_dialog_new(title, "This permanently deletes the network.");
+  AdwAlertDialog *alert = ADW_ALERT_DIALOG(dialog);
+  adw_alert_dialog_add_response(alert, "cancel", "Cancel");
+  adw_alert_dialog_add_response(alert, "delete", "Delete");
+  adw_alert_dialog_set_default_response(alert, "cancel");
+  adw_alert_dialog_set_close_response(alert, "cancel");
+  adw_alert_dialog_set_response_appearance(alert, "delete", ADW_RESPONSE_DESTRUCTIVE);
+  g_object_set_data_full(G_OBJECT(dialog), "network-id", g_strdup(network_id), g_free);
+  adw_alert_dialog_choose(alert, GTK_WIDGET(self), NULL, on_overview_network_delete_confirmed, self);
+}
+
+static void
+on_overview_network_delete_confirmed(GObject *dialog, GAsyncResult *res, gpointer user_data)
+{
+  PumpkinWindow *self = PUMPKIN_WINDOW(user_data);
+  const char *response = adw_alert_dialog_choose_finish(ADW_ALERT_DIALOG(dialog), res);
+  if (response == NULL || g_strcmp0(response, "delete") != 0) {
+    return;
+  }
+  const char *network_id = g_object_get_data(G_OBJECT(dialog), "network-id");
+  if (self == NULL || self->networks == NULL || network_id == NULL || *network_id == '\0') {
+    return;
+  }
   for (guint i = 0; i < self->networks->len; i++) {
     ServerNetwork *network = g_ptr_array_index(self->networks, i);
     if (network != NULL && g_strcmp0(network->id, network_id) == 0) {
+      g_hash_table_remove(self->expanded_network_ids, network_id);
+      g_autofree char *icon_path = network_icon_path(self, network_id);
+      if (icon_path != NULL) {
+        g_remove(icon_path);
+      }
       g_ptr_array_remove_index(self->networks, i);
       networks_save(self);
       refresh_overview_list(self);
@@ -6632,24 +4931,6 @@ on_add_network_confirmed(GObject *dialog, GAsyncResult *res, gpointer user_data)
     self->networks = g_ptr_array_new_with_free_func((GDestroyNotify)server_network_free);
   }
   ServerNetwork *network = server_network_new(network_id, name);
-  if (self->current != NULL) {
-    const char *server_id = pumpkin_server_get_id(self->current);
-    if (server_id != NULL && *server_id != '\0') {
-      if (self->networks != NULL) {
-        for (guint i = 0; i < self->networks->len; i++) {
-          ServerNetwork *other = g_ptr_array_index(self->networks, i);
-          if (other == NULL || !network_has_member(other, server_id)) {
-            continue;
-          }
-          network_remove_member(other, server_id);
-          if (g_strcmp0(other->proxy_server_id, server_id) == 0) {
-            g_clear_pointer(&other->proxy_server_id, g_free);
-          }
-        }
-      }
-      network_add_member(network, server_id);
-    }
-  }
   g_ptr_array_add(self->networks, network);
   apply_network_auto_ports(self, network);
   networks_save(self);
@@ -6701,11 +4982,16 @@ create_overview_server_card(PumpkinWindow *self,
   gtk_widget_set_margin_start(box, 10);
   gtk_widget_set_margin_end(box, 10);
 
+  gboolean detailed_card = (self->config != NULL) &&
+                           pumpkin_config_get_detailed_overview_cards(self->config);
+
   GtkWidget *icon = create_server_icon_widget(server);
+  gtk_widget_set_valign(icon, GTK_ALIGN_CENTER);
   GtkWidget *vbox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 4);
+  gtk_widget_set_valign(vbox, GTK_ALIGN_CENTER);
   GtkWidget *title = gtk_label_new(pumpkin_server_get_name(server));
   gtk_label_set_xalign(GTK_LABEL(title), 0.0);
-  gtk_widget_add_css_class(title, "title-4");
+  gtk_widget_add_css_class(title, detailed_card ? "title-4" : "overview-compact-title");
 
   g_autofree char *subtitle = g_strdup_printf("Build: %s · Players: %d · Size: %s",
                                                version_text,
@@ -6730,21 +5016,37 @@ create_overview_server_card(PumpkinWindow *self,
   gtk_label_set_xalign(GTK_LABEL(ports_label), 0.0);
   gtk_widget_add_css_class(ports_label, "dim-label");
   gtk_widget_set_hexpand(ports_label, TRUE);
-  gtk_box_append(GTK_BOX(meta_row), status_dot);
-  gtk_box_append(GTK_BOX(meta_row), status_label);
-  gtk_box_append(GTK_BOX(meta_row), ports_label);
 
-  gtk_box_append(GTK_BOX(vbox), title);
-  gtk_box_append(GTK_BOX(vbox), sub);
-  gtk_box_append(GTK_BOX(vbox), meta_row);
+  if (detailed_card) {
+    gtk_box_append(GTK_BOX(meta_row), status_dot);
+    gtk_box_append(GTK_BOX(meta_row), status_label);
+    gtk_box_append(GTK_BOX(meta_row), ports_label);
+    gtk_box_append(GTK_BOX(vbox), title);
+    gtk_box_append(GTK_BOX(vbox), sub);
+    gtk_box_append(GTK_BOX(vbox), meta_row);
+  } else {
+    GtkWidget *title_row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
+    gtk_widget_set_halign(title_row, GTK_ALIGN_START);
+    gtk_widget_set_valign(title_row, GTK_ALIGN_CENTER);
+    gtk_widget_set_hexpand(title_row, TRUE);
+    gtk_widget_set_hexpand(title, TRUE);
+    gtk_widget_set_valign(title, GTK_ALIGN_CENTER);
+    gtk_box_append(GTK_BOX(title_row), title);
+    gtk_box_prepend(GTK_BOX(title_row), status_dot);
+    gtk_box_append(GTK_BOX(vbox), title_row);
+  }
   gtk_widget_set_hexpand(vbox, TRUE);
 
   GtkWidget *btn_box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
+  gtk_widget_set_valign(btn_box, GTK_ALIGN_CENTER);
+  gtk_widget_set_vexpand(btn_box, FALSE);
 
   if (update_available) {
     GtkWidget *btn_update = gtk_button_new_with_label("Update");
     gtk_widget_add_css_class(btn_update, "card-button");
     gtk_widget_add_css_class(btn_update, "update-button");
+    gtk_widget_set_valign(btn_update, GTK_ALIGN_CENTER);
+    gtk_widget_set_vexpand(btn_update, FALSE);
     g_object_set_data_full(G_OBJECT(btn_update), "server", g_object_ref(server), g_object_unref);
     g_signal_connect(btn_update, "clicked", G_CALLBACK(on_overview_update_clicked), self);
     gtk_widget_set_sensitive(btn_update, !download_active);
@@ -6754,23 +5056,23 @@ create_overview_server_card(PumpkinWindow *self,
     gtk_box_append(GTK_BOX(btn_box), btn_update);
   }
 
-  GtkWidget *btn_settings = gtk_button_new_with_label("Details");
-  gtk_widget_add_css_class(btn_settings, "card-button");
-  g_object_set_data_full(G_OBJECT(btn_settings), "server", g_object_ref(server), g_object_unref);
-  if (network_dialog != NULL) {
-    g_object_set_data(G_OBJECT(btn_settings), "network-dialog", network_dialog);
-  }
-  g_signal_connect(btn_settings, "clicked", G_CALLBACK(on_overview_settings_clicked), self);
-  gtk_box_append(GTK_BOX(btn_box), btn_settings);
-
   if (network_id == NULL || *network_id == '\0') {
-    GtkWidget *btn_remove = gtk_button_new_with_label("Delete");
+    GtkWidget *btn_remove = gtk_button_new();
+    gtk_button_set_icon_name(GTK_BUTTON(btn_remove), "user-trash-symbolic");
+    gtk_widget_set_tooltip_text(btn_remove, "Delete server");
     gtk_widget_add_css_class(btn_remove, "card-button");
+    gtk_widget_add_css_class(btn_remove, "overview-square-button");
     gtk_widget_add_css_class(btn_remove, "destructive-action");
+    gtk_widget_add_css_class(btn_remove, "flat");
+    gtk_widget_set_valign(btn_remove, GTK_ALIGN_CENTER);
+    gtk_widget_set_vexpand(btn_remove, FALSE);
+    gtk_widget_set_size_request(btn_remove, 32, 32);
     g_object_set_data_full(G_OBJECT(btn_remove), "server", g_object_ref(server), g_object_unref);
     g_signal_connect(btn_remove, "clicked", G_CALLBACK(on_overview_remove_clicked), self);
     gtk_box_append(GTK_BOX(btn_box), btn_remove);
+    attach_hover_delete_button(card, btn_remove);
   } else {
+    gtk_widget_add_css_class(card, "network-member-card");
     GtkWidget *btn_remove_member = gtk_button_new_with_label("Remove from network");
     gtk_widget_add_css_class(btn_remove_member, "card-button");
     gtk_widget_add_css_class(btn_remove_member, "destructive-action");
@@ -6785,6 +5087,15 @@ create_overview_server_card(PumpkinWindow *self,
     }
     g_signal_connect(btn_remove_member, "clicked", G_CALLBACK(on_overview_network_remove_member_clicked), self);
     gtk_box_append(GTK_BOX(btn_box), btn_remove_member);
+
+    g_object_set_data_full(G_OBJECT(card), "server", g_object_ref(server), g_object_unref);
+    if (network_dialog != NULL) {
+      g_object_set_data(G_OBJECT(card), "network-dialog", network_dialog);
+    }
+    GtkGesture *click = gtk_gesture_click_new();
+    gtk_gesture_single_set_button(GTK_GESTURE_SINGLE(click), GDK_BUTTON_PRIMARY);
+    g_signal_connect(click, "pressed", G_CALLBACK(on_overview_embedded_server_pressed), self);
+    gtk_widget_add_controller(card, GTK_EVENT_CONTROLLER(click));
   }
 
   gtk_box_append(GTK_BOX(box), icon);
@@ -6852,7 +5163,25 @@ refresh_overview_network_list(PumpkinWindow *self)
     gtk_widget_set_margin_start(content, 10);
     gtk_widget_set_margin_end(content, 10);
 
+    gboolean expanded = network_is_expanded(self, network->id);
+
     GtkWidget *header = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 12);
+    GtkWidget *identity = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
+    gtk_widget_set_hexpand(identity, TRUE);
+    gtk_widget_set_valign(identity, GTK_ALIGN_CENTER);
+
+    GtkWidget *btn_expand = gtk_toggle_button_new();
+    gtk_button_set_icon_name(GTK_BUTTON(btn_expand),
+                             expanded ? "pan-down-symbolic" : "pan-end-symbolic");
+    gtk_widget_add_css_class(btn_expand, "flat");
+    gtk_widget_add_css_class(btn_expand, "overview-square-button");
+    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(btn_expand), expanded);
+    g_object_set_data_full(G_OBJECT(btn_expand), "network-id", g_strdup(network->id), g_free);
+    g_signal_connect(btn_expand, "toggled", G_CALLBACK(on_overview_network_toggle_expanded), self);
+
+    GtkWidget *icon = create_network_icon_widget(self, network, 40);
+    gtk_widget_set_valign(icon, GTK_ALIGN_CENTER);
+
     GtkWidget *vbox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 4);
     GtkWidget *title = gtk_label_new(network->name != NULL ? network->name : network->id);
     GtkWidget *sub = gtk_label_new(subtitle);
@@ -6863,20 +5192,31 @@ refresh_overview_network_list(PumpkinWindow *self)
     gtk_box_append(GTK_BOX(vbox), title);
     gtk_box_append(GTK_BOX(vbox), sub);
 
+    gtk_box_append(GTK_BOX(identity), btn_expand);
+    gtk_box_append(GTK_BOX(identity), icon);
+    gtk_box_append(GTK_BOX(identity), vbox);
+
     GtkWidget *btn_box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
+    GtkWidget *btn_group = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
+    gtk_widget_set_valign(btn_box, GTK_ALIGN_CENTER);
+    gtk_widget_add_css_class(btn_group, "linked");
     GtkWidget *btn_start_all = gtk_button_new_with_label("Start all");
     GtkWidget *btn_stop_all = gtk_button_new_with_label("Stop all");
     GtkWidget *btn_add_current = gtk_button_new_with_label("Add server");
     GtkWidget *btn_details = gtk_button_new_with_label("Details");
-    GtkWidget *btn_delete = gtk_button_new_with_label("Delete");
+    GtkWidget *btn_delete = gtk_button_new();
     GtkWidget *btn_install = NULL;
 
+    gtk_button_set_icon_name(GTK_BUTTON(btn_delete), "user-trash-symbolic");
+    gtk_widget_set_tooltip_text(btn_delete, "Delete network");
     gtk_widget_add_css_class(btn_start_all, "card-button");
     gtk_widget_add_css_class(btn_stop_all, "card-button");
     gtk_widget_add_css_class(btn_add_current, "card-button");
     gtk_widget_add_css_class(btn_details, "card-button");
     gtk_widget_add_css_class(btn_delete, "card-button");
+    gtk_widget_add_css_class(btn_delete, "overview-square-button");
     gtk_widget_add_css_class(btn_delete, "destructive-action");
+    gtk_widget_add_css_class(btn_delete, "flat");
     if (missing_install > 0) {
       btn_install = gtk_button_new_with_label("Install all");
       gtk_widget_add_css_class(btn_install, "card-button");
@@ -6928,25 +5268,53 @@ refresh_overview_network_list(PumpkinWindow *self)
       gtk_widget_set_sensitive(btn_install, network->member_server_ids->len > 0);
     }
 
-    gtk_box_append(GTK_BOX(btn_box), btn_start_all);
-    gtk_box_append(GTK_BOX(btn_box), btn_stop_all);
+    gtk_box_append(GTK_BOX(btn_group), btn_start_all);
+    gtk_box_append(GTK_BOX(btn_group), btn_stop_all);
+    gtk_box_append(GTK_BOX(btn_group), btn_add_current);
+    gtk_box_append(GTK_BOX(btn_group), btn_details);
     if (btn_install != NULL) {
       gtk_box_append(GTK_BOX(btn_box), btn_install);
     }
-    gtk_box_append(GTK_BOX(btn_box), btn_add_current);
-    gtk_box_append(GTK_BOX(btn_box), btn_details);
+    gtk_box_append(GTK_BOX(btn_box), btn_group);
     gtk_box_append(GTK_BOX(btn_box), btn_delete);
 
-    gtk_box_append(GTK_BOX(header), vbox);
+    gtk_box_append(GTK_BOX(header), identity);
     gtk_box_append(GTK_BOX(header), btn_box);
     gtk_box_append(GTK_BOX(content), header);
 
-    GtkWidget *hint = gtk_label_new("Use Details for server list, proxy, updates and per-server actions.");
-    gtk_widget_add_css_class(hint, "dim-label");
-    gtk_label_set_xalign(GTK_LABEL(hint), 0.0);
-    gtk_box_append(GTK_BOX(content), hint);
+    GtkWidget *members_revealer = gtk_revealer_new();
+    gtk_revealer_set_transition_type(GTK_REVEALER(members_revealer), GTK_REVEALER_TRANSITION_TYPE_SLIDE_DOWN);
+    gtk_revealer_set_reveal_child(GTK_REVEALER(members_revealer), expanded);
+
+    GtkWidget *members_shell = gtk_box_new(GTK_ORIENTATION_VERTICAL, 8);
+    gtk_widget_add_css_class(members_shell, "network-members-shell");
+    gtk_widget_set_margin_start(members_shell, 18);
+
+    if (network->member_server_ids == NULL || network->member_server_ids->len == 0) {
+      GtkWidget *empty = gtk_label_new("No servers in this network yet.");
+      gtk_widget_add_css_class(empty, "dim-label");
+      gtk_label_set_xalign(GTK_LABEL(empty), 0.0);
+      gtk_box_append(GTK_BOX(members_shell), empty);
+    } else {
+      for (guint j = 0; j < network->member_server_ids->len; j++) {
+        const char *member_id = g_ptr_array_index(network->member_server_ids, j);
+        if (member_id == NULL || *member_id == '\0') {
+          continue;
+        }
+        g_autoptr(PumpkinServer) member = find_server_by_id(self, member_id);
+        if (member == NULL) {
+          continue;
+        }
+        GtkWidget *member_card = create_overview_server_card(self, member, network->id, self->network_details_dialog);
+        gtk_box_append(GTK_BOX(members_shell), member_card);
+      }
+    }
+
+    gtk_revealer_set_child(GTK_REVEALER(members_revealer), members_shell);
+    gtk_box_append(GTK_BOX(content), members_revealer);
 
     gtk_frame_set_child(GTK_FRAME(card), content);
+    attach_hover_delete_button(card, btn_delete);
     gtk_list_box_row_set_child(GTK_LIST_BOX_ROW(row), card);
     gtk_list_box_append(self->overview_network_list, row);
   }
@@ -6981,6 +5349,7 @@ refresh_overview_list(PumpkinWindow *self)
     GtkWidget *row = gtk_list_box_row_new();
     GtkWidget *card = create_overview_server_card(self, server, NULL, NULL);
     gtk_list_box_row_set_child(GTK_LIST_BOX_ROW(row), card);
+    gtk_list_box_row_set_activatable(GTK_LIST_BOX_ROW(row), TRUE);
     g_object_set_data_full(G_OBJECT(row), "server", g_object_ref(server), g_object_unref);
     gtk_list_box_append(self->overview_list, row);
     shown++;
@@ -7068,6 +5437,34 @@ on_plugin_delete_clicked(GtkButton *button, PumpkinWindow *self)
   const char *file = g_object_get_data(G_OBJECT(button), "plugin-file");
   const char *dir_path = g_object_get_data(G_OBJECT(button), "plugin-dir");
   if (file == NULL || dir_path == NULL) {
+    return;
+  }
+
+  g_autofree char *title = g_strdup_printf("Delete plugin \"%s\"?", file);
+  AdwDialog *dialog = adw_alert_dialog_new(title, "This permanently removes the plugin file.");
+  AdwAlertDialog *alert = ADW_ALERT_DIALOG(dialog);
+  adw_alert_dialog_add_response(alert, "cancel", "Cancel");
+  adw_alert_dialog_add_response(alert, "delete", "Delete");
+  adw_alert_dialog_set_default_response(alert, "cancel");
+  adw_alert_dialog_set_close_response(alert, "cancel");
+  adw_alert_dialog_set_response_appearance(alert, "delete", ADW_RESPONSE_DESTRUCTIVE);
+  g_object_set_data_full(G_OBJECT(dialog), "plugin-file", g_strdup(file), g_free);
+  g_object_set_data_full(G_OBJECT(dialog), "plugin-dir", g_strdup(dir_path), g_free);
+  adw_alert_dialog_choose(alert, GTK_WIDGET(self), NULL, on_plugin_delete_confirmed, self);
+}
+
+static void
+on_plugin_delete_confirmed(GObject *dialog, GAsyncResult *res, gpointer user_data)
+{
+  PumpkinWindow *self = PUMPKIN_WINDOW(user_data);
+  const char *response = adw_alert_dialog_choose_finish(ADW_ALERT_DIALOG(dialog), res);
+  if (response == NULL || g_strcmp0(response, "delete") != 0) {
+    return;
+  }
+
+  const char *file = g_object_get_data(G_OBJECT(dialog), "plugin-file");
+  const char *dir_path = g_object_get_data(G_OBJECT(dialog), "plugin-dir");
+  if (self == NULL || self->current == NULL || file == NULL || dir_path == NULL) {
     return;
   }
 
@@ -7221,485 +5618,55 @@ update_overview(PumpkinWindow *self)
   refresh_overview_list(self);
 }
 
-static ServerNetwork *
-server_network_new(const char *id, const char *name)
+static char *
+network_icons_dir(PumpkinWindow *self)
 {
-  ServerNetwork *network = g_new0(ServerNetwork, 1);
-  network->id = g_strdup(id != NULL ? id : "");
-  network->name = g_strdup((name != NULL && *name != '\0') ? name : network->id);
-  network->member_server_ids = g_ptr_array_new_with_free_func(g_free);
-  return network;
-}
-
-static void
-server_network_free(ServerNetwork *network)
-{
-  if (network == NULL) {
-    return;
+  if (self == NULL || self->config == NULL) {
+    return NULL;
   }
-  g_clear_pointer(&network->id, g_free);
-  g_clear_pointer(&network->name, g_free);
-  g_clear_pointer(&network->proxy_server_id, g_free);
-  if (network->member_server_ids != NULL) {
-    g_ptr_array_unref(network->member_server_ids);
-    network->member_server_ids = NULL;
-  }
-  g_free(network);
+  g_autofree char *config_path = g_build_filename(g_get_user_config_dir(), "smashed-pumpkin", NULL);
+  return g_build_filename(config_path, "network-icons", NULL);
 }
 
 static char *
-sanitize_network_id(const char *name)
+network_icon_path(PumpkinWindow *self, const char *network_id)
 {
-  GString *out = g_string_new(NULL);
-  gboolean last_dash = FALSE;
-
-  for (const char *p = name; p != NULL && *p != '\0'; p++) {
-    gunichar ch = g_utf8_get_char(p);
-    if (g_unichar_isalnum(ch)) {
-      g_string_append_unichar(out, g_unichar_tolower(ch));
-      last_dash = FALSE;
-    } else if (!last_dash) {
-      g_string_append_c(out, '-');
-      last_dash = TRUE;
-    }
-    if ((guchar)*p >= 0x80) {
-      p = g_utf8_next_char(p) - 1;
-    }
-  }
-
-  while (out->len > 0 && out->str[out->len - 1] == '-') {
-    g_string_truncate(out, out->len - 1);
-  }
-  if (out->len == 0) {
-    g_string_assign(out, "network");
-  }
-  return g_string_free(out, FALSE);
-}
-
-static char *
-network_config_path(PumpkinWindow *self)
-{
-  if (self == NULL || self->store == NULL) {
+  if (self == NULL || network_id == NULL || *network_id == '\0') {
     return NULL;
   }
-  const char *base = pumpkin_server_store_get_base_dir(self->store);
-  if (base == NULL || *base == '\0') {
+  g_autofree char *dir = network_icons_dir(self);
+  if (dir == NULL) {
     return NULL;
   }
-  return g_build_filename(base, "networks.ini", NULL);
+  return g_build_filename(dir, network_id, "icon.png", NULL);
 }
 
-static ServerNetwork *
-find_network_by_id(PumpkinWindow *self, const char *id)
+static GtkWidget *
+create_network_icon_widget(PumpkinWindow *self, ServerNetwork *network, int pixel_size)
 {
-  if (self == NULL || self->networks == NULL || id == NULL || *id == '\0') {
-    return NULL;
+  g_autofree char *icon_path = network_icon_path(self, network != NULL ? network->id : NULL);
+  g_autoptr(GdkTexture) texture = NULL;
+  if (icon_path != NULL && g_file_test(icon_path, G_FILE_TEST_EXISTS)) {
+    g_autoptr(GFile) file = g_file_new_for_path(icon_path);
+    texture = gdk_texture_new_from_file(file, NULL);
   }
-  for (guint i = 0; i < self->networks->len; i++) {
-    ServerNetwork *network = g_ptr_array_index(self->networks, i);
-    if (network != NULL && g_strcmp0(network->id, id) == 0) {
-      return network;
-    }
+  if (texture == NULL) {
+    texture = gdk_texture_new_from_resource(
+      "/dev/rotstein/SmashedPumpkin/icons/hicolor/512x512/apps/dev.rotstein.SmashedPumpkin.png");
   }
-  return NULL;
-}
 
-static gboolean
-network_has_member(ServerNetwork *network, const char *server_id)
-{
-  if (network == NULL || network->member_server_ids == NULL || server_id == NULL || *server_id == '\0') {
-    return FALSE;
-  }
-  for (guint i = 0; i < network->member_server_ids->len; i++) {
-    const char *member = g_ptr_array_index(network->member_server_ids, i);
-    if (g_strcmp0(member, server_id) == 0) {
-      return TRUE;
-    }
-  }
-  return FALSE;
+  GtkWidget *image = gtk_image_new_from_paintable(GDK_PAINTABLE(texture));
+  gtk_image_set_pixel_size(GTK_IMAGE(image), pixel_size);
+  return image;
 }
 
 static gboolean
-network_member_token_matches_server(const char *token, PumpkinServer *server)
+network_is_expanded(PumpkinWindow *self, const char *network_id)
 {
-  if (token == NULL || *token == '\0' || server == NULL) {
+  if (self == NULL || self->expanded_network_ids == NULL || network_id == NULL) {
     return FALSE;
   }
-  const char *server_id = pumpkin_server_get_id(server);
-  const char *server_name = pumpkin_server_get_name(server);
-  if ((server_id != NULL && g_strcmp0(token, server_id) == 0) ||
-      (server_name != NULL && g_strcmp0(token, server_name) == 0)) {
-    return TRUE;
-  }
-
-  g_autofree char *token_key = normalized_key(token);
-  if (token_key == NULL || *token_key == '\0') {
-    return FALSE;
-  }
-  g_autofree char *id_key = normalized_key(server_id);
-  g_autofree char *name_key = normalized_key(server_name);
-  return (id_key != NULL && g_strcmp0(token_key, id_key) == 0) ||
-         (name_key != NULL && g_strcmp0(token_key, name_key) == 0);
-}
-
-static gboolean
-network_includes_server(ServerNetwork *network, PumpkinServer *server)
-{
-  if (network == NULL || network->member_server_ids == NULL || server == NULL) {
-    return FALSE;
-  }
-  for (guint i = 0; i < network->member_server_ids->len; i++) {
-    const char *member = g_ptr_array_index(network->member_server_ids, i);
-    if (network_member_token_matches_server(member, server)) {
-      return TRUE;
-    }
-  }
-  return FALSE;
-}
-
-static gboolean
-server_in_any_network(PumpkinWindow *self, const char *server_id)
-{
-  if (self == NULL || self->networks == NULL || server_id == NULL || *server_id == '\0') {
-    return FALSE;
-  }
-  for (guint i = 0; i < self->networks->len; i++) {
-    ServerNetwork *network = g_ptr_array_index(self->networks, i);
-    if (network != NULL && network_has_member(network, server_id)) {
-      return TRUE;
-    }
-  }
-  return FALSE;
-}
-
-static void
-network_add_member(ServerNetwork *network, const char *server_id)
-{
-  if (network == NULL || network->member_server_ids == NULL || server_id == NULL || *server_id == '\0') {
-    return;
-  }
-  if (!network_has_member(network, server_id)) {
-    g_ptr_array_add(network->member_server_ids, g_strdup(server_id));
-  }
-}
-
-static void
-network_remove_member(ServerNetwork *network, const char *server_id)
-{
-  if (network == NULL || network->member_server_ids == NULL || server_id == NULL || *server_id == '\0') {
-    return;
-  }
-  for (guint i = 0; i < network->member_server_ids->len; i++) {
-    const char *member = g_ptr_array_index(network->member_server_ids, i);
-    if (g_strcmp0(member, server_id) == 0) {
-      g_ptr_array_remove_index(network->member_server_ids, i);
-      return;
-    }
-  }
-}
-
-static PumpkinServer *
-find_server_by_id(PumpkinWindow *self, const char *server_id)
-{
-  if (self == NULL || self->store == NULL || server_id == NULL || *server_id == '\0') {
-    return NULL;
-  }
-  g_autofree char *target_key = normalized_key(server_id);
-  GListModel *model = get_server_model(self);
-  if (model == NULL) {
-    return NULL;
-  }
-  guint n = g_list_model_get_n_items(model);
-  for (guint i = 0; i < n; i++) {
-    PumpkinServer *server = g_list_model_get_item(model, i);
-    if (server == NULL) {
-      continue;
-    }
-    const char *candidate_id = pumpkin_server_get_id(server);
-    const char *candidate_name = pumpkin_server_get_name(server);
-    gboolean match =
-      (candidate_id != NULL && g_strcmp0(candidate_id, server_id) == 0) ||
-      (candidate_name != NULL && g_strcmp0(candidate_name, server_id) == 0);
-    if (!match && target_key != NULL) {
-      g_autofree char *id_key = normalized_key(candidate_id);
-      g_autofree char *name_key = normalized_key(candidate_name);
-      if ((id_key != NULL && g_strcmp0(id_key, target_key) == 0) ||
-          (name_key != NULL && g_strcmp0(name_key, target_key) == 0)) {
-        match = TRUE;
-      }
-    }
-    if (match) {
-      return server;
-    }
-    g_object_unref(server);
-  }
-  return NULL;
-}
-
-static void
-reserve_port_if_valid(GHashTable *set, int port)
-{
-  if (set == NULL || port <= 0 || port > 65535) {
-    return;
-  }
-  g_hash_table_add(set, GINT_TO_POINTER(port));
-}
-
-static int
-reserve_next_port(GHashTable *used, int start)
-{
-  int port = start < 1 ? 1 : start;
-  for (; port <= 65535; port++) {
-    gpointer key = GINT_TO_POINTER(port);
-    if (!g_hash_table_contains(used, key)) {
-      g_hash_table_add(used, key);
-      return port;
-    }
-  }
-  return CLAMP(start, 1, 65535);
-}
-
-static gboolean
-apply_network_auto_ports(PumpkinWindow *self, ServerNetwork *network)
-{
-  if (self == NULL || network == NULL || network->member_server_ids == NULL || network->member_server_ids->len == 0) {
-    return FALSE;
-  }
-
-  GListModel *model = get_server_model(self);
-  if (model == NULL) {
-    return FALSE;
-  }
-
-  g_autoptr(GHashTable) used_java = g_hash_table_new(g_direct_hash, g_direct_equal);
-  g_autoptr(GHashTable) used_bedrock = g_hash_table_new(g_direct_hash, g_direct_equal);
-  g_autoptr(GHashTable) used_rcon = g_hash_table_new(g_direct_hash, g_direct_equal);
-
-  guint n = g_list_model_get_n_items(model);
-  for (guint i = 0; i < n; i++) {
-    g_autoptr(PumpkinServer) server = g_list_model_get_item(model, i);
-    if (server == NULL) {
-      continue;
-    }
-    const char *server_id = pumpkin_server_get_id(server);
-    if (server_id == NULL || *server_id == '\0' || network_has_member(network, server_id)) {
-      continue;
-    }
-    reserve_port_if_valid(used_java, pumpkin_server_get_port(server));
-    reserve_port_if_valid(used_bedrock, pumpkin_server_get_bedrock_port(server));
-    reserve_port_if_valid(used_rcon, pumpkin_server_get_rcon_port(server));
-  }
-
-  gboolean changed_any = FALSE;
-  gboolean current_changed = FALSE;
-  gboolean has_explicit_proxy = network->proxy_server_id != NULL && *network->proxy_server_id != '\0';
-  gboolean implicit_primary_assigned = FALSE;
-  int next_java = NETWORK_PROXY_JAVA_PORT + 1;
-  int next_bedrock = NETWORK_PROXY_BEDROCK_PORT + 1;
-  int next_rcon = NETWORK_PROXY_RCON_PORT + 1;
-
-  for (guint i = 0; i < network->member_server_ids->len; i++) {
-    const char *member_id = g_ptr_array_index(network->member_server_ids, i);
-    if (member_id == NULL || *member_id == '\0') {
-      continue;
-    }
-
-    g_autoptr(PumpkinServer) server = find_server_by_id(self, member_id);
-    if (server == NULL) {
-      continue;
-    }
-
-    gboolean is_primary = FALSE;
-    if (has_explicit_proxy) {
-      is_primary = g_strcmp0(member_id, network->proxy_server_id) == 0;
-    } else if (!implicit_primary_assigned) {
-      is_primary = TRUE;
-      implicit_primary_assigned = TRUE;
-    }
-
-    int desired_java;
-    int desired_bedrock;
-    int desired_rcon;
-    if (is_primary) {
-      desired_java = NETWORK_PROXY_JAVA_PORT;
-      desired_bedrock = NETWORK_PROXY_BEDROCK_PORT;
-      desired_rcon = NETWORK_PROXY_RCON_PORT;
-      reserve_port_if_valid(used_java, desired_java);
-      reserve_port_if_valid(used_bedrock, desired_bedrock);
-      reserve_port_if_valid(used_rcon, desired_rcon);
-    } else {
-      desired_java = reserve_next_port(used_java, next_java);
-      desired_bedrock = reserve_next_port(used_bedrock, next_bedrock);
-      desired_rcon = reserve_next_port(used_rcon, next_rcon);
-    }
-    next_java = desired_java + 1;
-    next_bedrock = desired_bedrock + 1;
-    next_rcon = desired_rcon + 1;
-
-    gboolean server_changed = FALSE;
-    if (pumpkin_server_get_port(server) != desired_java) {
-      pumpkin_server_set_port(server, desired_java);
-      server_changed = TRUE;
-    }
-    if (pumpkin_server_get_bedrock_port(server) != desired_bedrock) {
-      pumpkin_server_set_bedrock_port(server, desired_bedrock);
-      server_changed = TRUE;
-    }
-    if (pumpkin_server_get_rcon_port(server) != desired_rcon) {
-      pumpkin_server_set_rcon_port(server, desired_rcon);
-      server_changed = TRUE;
-    }
-
-    if (server_changed) {
-      pumpkin_server_save(server, NULL);
-      changed_any = TRUE;
-      if (self->current == server) {
-        current_changed = TRUE;
-      }
-    }
-  }
-
-  if (current_changed) {
-    update_settings_form(self);
-  }
-
-  return changed_any;
-}
-
-static void
-networks_load(PumpkinWindow *self)
-{
-  if (self == NULL) {
-    return;
-  }
-  if (self->networks == NULL) {
-    self->networks = g_ptr_array_new_with_free_func((GDestroyNotify)server_network_free);
-  } else {
-    g_ptr_array_set_size(self->networks, 0);
-  }
-
-  g_autofree char *path = network_config_path(self);
-  if (path == NULL || !g_file_test(path, G_FILE_TEST_EXISTS)) {
-    return;
-  }
-
-  g_autoptr(GKeyFile) key = g_key_file_new();
-  if (!g_key_file_load_from_file(key, path, G_KEY_FILE_NONE, NULL)) {
-    return;
-  }
-
-  gsize groups_len = 0;
-  g_auto(GStrv) groups = g_key_file_get_groups(key, &groups_len);
-  for (gsize i = 0; i < groups_len; i++) {
-    const char *group = groups[i];
-    if (group == NULL || !g_str_has_prefix(group, "network:")) {
-      continue;
-    }
-
-    const char *id = group + strlen("network:");
-    if (id == NULL || *id == '\0') {
-      continue;
-    }
-    g_autofree char *name = g_key_file_get_string(key, group, "name", NULL);
-    ServerNetwork *network = server_network_new(id, name);
-
-    g_autofree char *proxy = g_key_file_get_string(key, group, "proxy_server_id", NULL);
-    if (proxy != NULL && *proxy != '\0') {
-      network->proxy_server_id = g_strdup(proxy);
-    }
-
-    g_autofree char *members = g_key_file_get_string(key, group, "members", NULL);
-    if (members != NULL && *members != '\0') {
-      g_auto(GStrv) split = g_strsplit(members, ",", -1);
-      for (guint j = 0; split[j] != NULL; j++) {
-        g_autofree char *id_txt = g_strdup(split[j]);
-        g_strstrip(id_txt);
-        if (id_txt[0] != '\0') {
-          network_add_member(network, id_txt);
-        }
-      }
-    }
-    if (network->proxy_server_id != NULL && *network->proxy_server_id != '\0') {
-      network_add_member(network, network->proxy_server_id);
-    }
-    g_ptr_array_add(self->networks, network);
-  }
-}
-
-static gboolean
-networks_save(PumpkinWindow *self)
-{
-  if (self == NULL) {
-    return FALSE;
-  }
-
-  g_autofree char *path = network_config_path(self);
-  if (path == NULL) {
-    return FALSE;
-  }
-
-  g_autoptr(GKeyFile) key = g_key_file_new();
-  if (self->networks != NULL) {
-    for (guint i = 0; i < self->networks->len; i++) {
-      ServerNetwork *network = g_ptr_array_index(self->networks, i);
-      if (network == NULL || network->id == NULL || *network->id == '\0') {
-        continue;
-      }
-      g_autofree char *group = g_strdup_printf("network:%s", network->id);
-      g_key_file_set_string(key, group, "name", network->name != NULL ? network->name : network->id);
-      g_key_file_set_string(key, group, "proxy_server_id",
-                            network->proxy_server_id != NULL ? network->proxy_server_id : "");
-
-      g_autoptr(GString) members = g_string_new(NULL);
-      for (guint j = 0; j < network->member_server_ids->len; j++) {
-        const char *member = g_ptr_array_index(network->member_server_ids, j);
-        if (member == NULL || *member == '\0') {
-          continue;
-        }
-        if (members->len > 0) {
-          g_string_append_c(members, ',');
-        }
-        g_string_append(members, member);
-      }
-      g_key_file_set_string(key, group, "members", members->str);
-    }
-  }
-
-  gsize len = 0;
-  g_autofree char *data = g_key_file_to_data(key, &len, NULL);
-  return g_file_set_contents(path, data, (gssize)len, NULL);
-}
-
-static void
-networks_prune_server(PumpkinWindow *self, const char *server_id)
-{
-  if (self == NULL || self->networks == NULL || server_id == NULL || *server_id == '\0') {
-    return;
-  }
-  gboolean changed = FALSE;
-  for (gint i = (gint)self->networks->len - 1; i >= 0; i--) {
-    ServerNetwork *network = g_ptr_array_index(self->networks, (guint)i);
-    if (network == NULL) {
-      continue;
-    }
-    guint before = network->member_server_ids->len;
-    network_remove_member(network, server_id);
-    if (before != network->member_server_ids->len) {
-      changed = TRUE;
-    }
-    if (g_strcmp0(network->proxy_server_id, server_id) == 0) {
-      g_clear_pointer(&network->proxy_server_id, g_free);
-      changed = TRUE;
-    }
-    if (network->member_server_ids->len == 0) {
-      g_ptr_array_remove_index(self->networks, (guint)i);
-      changed = TRUE;
-    }
-  }
-  if (changed) {
-    networks_save(self);
-    refresh_overview_network_list(self);
-  }
+  return g_hash_table_contains(self->expanded_network_ids, network_id);
 }
 
 static gboolean
@@ -7789,7 +5756,6 @@ update_details(PumpkinWindow *self)
     return;
   }
 
-  gboolean managed_running = pumpkin_server_get_running(self->current);
   gboolean running = server_is_running_ui(self, self->current);
   g_autofree char *bin = pumpkin_server_get_bin_path(self->current);
   gboolean installed = g_file_test(bin, G_FILE_TEST_EXISTS);
@@ -7830,16 +5796,16 @@ update_details(PumpkinWindow *self)
                    self->ui_state == UI_STATE_RESTARTING);
   gboolean download_busy = server_download_active(self, self->current);
   busy = busy || download_busy;
-  gboolean can_start = installed && !managed_running && !busy;
-  gboolean can_stop = managed_running && !busy;
-  gboolean can_restart = managed_running && !busy &&
+  gboolean can_start = installed && !running && !busy;
+  gboolean can_stop = running && !busy;
+  gboolean can_restart = running && !busy &&
                          self->restart_delay_id == 0;
 
   gtk_widget_set_sensitive(GTK_WIDGET(self->btn_details_start), can_start);
   gtk_widget_set_sensitive(GTK_WIDGET(self->btn_details_stop), can_stop);
   gtk_widget_set_sensitive(GTK_WIDGET(self->btn_details_restart), can_restart);
-  gtk_widget_set_sensitive(GTK_WIDGET(self->btn_details_install), !managed_running && !busy);
-  gtk_widget_set_sensitive(GTK_WIDGET(self->btn_details_update), update_available && !managed_running && !busy);
+  gtk_widget_set_sensitive(GTK_WIDGET(self->btn_details_install), !running && !busy);
+  gtk_widget_set_sensitive(GTK_WIDGET(self->btn_details_update), update_available && !running && !busy);
   gtk_widget_set_visible(GTK_WIDGET(self->btn_details_update), TRUE);
   gtk_widget_set_sensitive(GTK_WIDGET(self->btn_details_check_updates), self->current != NULL && !download_busy);
   update_check_updates_badge(self);
@@ -7866,48 +5832,7 @@ update_details(PumpkinWindow *self)
   update_domains_form(self);
 }
 
-static gboolean
-restart_after_delay(gpointer data)
-{
-  RestartContext *ctx = data;
-  PumpkinWindow *self = ctx->self;
-  PumpkinServer *server = ctx->server;
-  self->restart_delay_id = 0;
-  self->restart_requested = FALSE;
-  g_autoptr(GError) error = NULL;
-  if (!pumpkin_server_start(server, &error)) {
-    append_log(self, error->message);
-    if (self->current == server) {
-      set_details_error(self, error->message);
-      self->ui_state = UI_STATE_ERROR;
-    }
-  } else {
-    set_server_running_hint(self, server, TRUE);
-    if (self->current == server) {
-      self->ui_state = UI_STATE_RUNNING;
-      self->user_stop_requested = FALSE;
-      set_console_warning(self, NULL, FALSE);
-    }
-  }
-
-  if (self->current == server) {
-    update_details(self);
-  }
-  refresh_overview_list(self);
-  if (self->current == server) {
-    refresh_plugin_list(self);
-    refresh_world_list(self);
-    refresh_player_list(self);
-    refresh_log_files(self);
-  }
-
-  g_object_unref(ctx->server);
-  g_object_unref(ctx->self);
-  g_free(ctx);
-  return G_SOURCE_REMOVE;
-}
-
-static gboolean
+gboolean
 start_after_delay(gpointer data)
 {
   PumpkinWindow *self = PUMPKIN_WINDOW(data);
@@ -7916,9 +5841,7 @@ start_after_delay(gpointer data)
       self->ui_state == UI_STATE_STARTING) {
     self->ui_state = UI_STATE_RUNNING;
   }
-  update_details(self);
-  refresh_plugin_list(self);
-  refresh_world_list(self);
+  queue_overview_refresh(self, TRUE);
   g_object_unref(self);
   return G_SOURCE_REMOVE;
 }
@@ -8095,6 +6018,22 @@ stats_get_smoothed(PumpkinWindow *self, double *series, int offset, int window)
 }
 
 static void
+set_cairo_source_rgba(cairo_t *cr, const GdkRGBA *color)
+{
+  if (cr == NULL || color == NULL) {
+    return;
+  }
+  cairo_set_source_rgba(cr, color->red, color->green, color->blue, color->alpha);
+}
+
+static GdkRGBA
+stats_color_with_alpha(GdkRGBA color, double alpha)
+{
+  color.alpha = alpha;
+  return color;
+}
+
+static void
 draw_stats_series(PumpkinWindow *self, cairo_t *cr, double *series, int total_samples, int valid_count,
                   double max_value, int smoothing_window, double r, double g, double b,
                   double left, double top, double right, double bottom,
@@ -8139,12 +6078,12 @@ draw_stats_series(PumpkinWindow *self, cairo_t *cr, double *series, int total_sa
 
 static void
 draw_stats_grid(cairo_t *cr, double left, double top, double right, double bottom,
-                int width, int height, int rows)
+                int width, int height, int rows, const GdkRGBA *color)
 {
   double graph_w = width - left - right;
   double graph_h = height - top - bottom;
 
-  cairo_set_source_rgb(cr, 0.2, 0.2, 0.2);
+  set_cairo_source_rgba(cr, color);
   cairo_set_line_width(cr, 1.0);
   for (int i = 1; i < rows; i++) {
     double y = top + (graph_h / (double)rows) * i;
@@ -8180,58 +6119,16 @@ usage_scale_percent(PumpkinWindow *self)
   return scale;
 }
 
-static gboolean
-parse_tps_from_line(const char *line, double *out)
-{
-  if (line == NULL || out == NULL) {
-    return FALSE;
-  }
-  g_autofree char *clean = strip_ansi(line);
-  const char *check = clean != NULL ? clean : line;
-
-  static GRegex *primary = NULL;
-  static GRegex *fallback = NULL;
-  if (primary == NULL) {
-    primary = g_regex_new("TPS\\s*:\\s*([0-9]+(\\.[0-9]+)?)", G_REGEX_CASELESS, 0, NULL);
-  }
-  if (fallback == NULL) {
-    fallback = g_regex_new("tps[^0-9]*([0-9]+(\\.[0-9]+)?)", G_REGEX_CASELESS, 0, NULL);
-  }
-  if (primary == NULL || fallback == NULL) {
-    return FALSE;
-  }
-
-  g_autoptr(GMatchInfo) match_info = NULL;
-  if (!g_regex_match(primary, check, 0, &match_info) || !g_match_info_matches(match_info)) {
-    g_clear_pointer(&match_info, g_match_info_free);
-    if (!g_regex_match(fallback, check, 0, &match_info) || !g_match_info_matches(match_info)) {
-      return FALSE;
-    }
-  }
-
-  g_autofree char *num = g_match_info_fetch(match_info, 1);
-  if (num == NULL || *num == '\0') {
-    return FALSE;
-  }
-
-  char *endptr = NULL;
-  double value = g_ascii_strtod(num, &endptr);
-  if (endptr == num) {
-    return FALSE;
-  }
-  *out = value;
-  return TRUE;
-}
-
 static void
 draw_stats_axis_labels(cairo_t *cr, double left, double top, double right, double bottom,
                        int width, int height, int rows, const char *top_label,
-                       const char *mid_label, const char *bottom_label)
+                       const char *mid_label, const char *bottom_label,
+                       const GdkRGBA *color)
 {
   (void)right;
   (void)width;
   double graph_h = height - top - bottom;
-  cairo_set_source_rgb(cr, 0.75, 0.75, 0.75);
+  set_cairo_source_rgba(cr, color);
   cairo_select_font_face(cr, "Sans", CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_NORMAL);
   cairo_set_font_size(cr, 11.0);
 
@@ -8249,14 +6146,14 @@ draw_stats_axis_labels(cairo_t *cr, double left, double top, double right, doubl
 
 static void
 draw_time_axis_labels(PumpkinWindow *self, cairo_t *cr, double left, double top, double right, double bottom,
-                      int width, int height)
+                      int width, int height, const GdkRGBA *color)
 {
   double graph_h = height - top - bottom;
   double y = top + graph_h + 14.0;
   double graph_w = width - left - right;
   double history_seconds = (double)STATS_SAMPLES * (double)current_stats_sample_msec(self) / 1000.0;
   const int segments = 6;
-  cairo_set_source_rgb(cr, 0.7, 0.7, 0.7);
+  set_cairo_source_rgba(cr, color);
   cairo_select_font_face(cr, "Sans", CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_NORMAL);
   cairo_set_font_size(cr, 11.0);
 
@@ -8287,12 +6184,20 @@ stats_graph_draw_usage(GtkDrawingArea *area, cairo_t *cr, int width, int height,
   PumpkinWindow *self = PUMPKIN_WINDOW(data);
   (void)area;
 
-  cairo_set_source_rgb(cr, 0.11, 0.11, 0.12);
+  GdkRGBA fg = { .red = 0.45, .green = 0.45, .blue = 0.48, .alpha = 1.0 };
+  GdkRGBA border = { .red = 0.45, .green = 0.45, .blue = 0.48, .alpha = 1.0 };
+  GdkRGBA muted_fg = stats_color_with_alpha(fg, 0.78);
+  GdkRGBA muted_border = stats_color_with_alpha(border, 0.28);
+
+  cairo_save(cr);
+  cairo_set_operator(cr, CAIRO_OPERATOR_SOURCE);
+  cairo_set_source_rgba(cr, 0.0, 0.0, 0.0, 0.0);
   cairo_rectangle(cr, 0, 0, width, height);
   cairo_fill(cr);
+  cairo_restore(cr);
 
   if (self->stats_count < 2) {
-    cairo_set_source_rgb(cr, 0.7, 0.7, 0.7);
+    set_cairo_source_rgba(cr, &muted_fg);
     cairo_select_font_face(cr, "Sans", CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_NORMAL);
     cairo_set_font_size(cr, 13.0);
     cairo_move_to(cr, 12.0, 20.0);
@@ -8309,10 +6214,10 @@ stats_graph_draw_usage(GtkDrawingArea *area, cairo_t *cr, int width, int height,
   int rows = scale == 5 ? 1 : scale / 10;
   g_autofree char *top_label = g_strdup_printf("%d%%", scale);
   g_autofree char *mid_label = g_strdup_printf("%d%%", scale == 5 ? 0 : scale / 2);
-  draw_stats_grid(cr, left, top, right, bottom, width, height, rows);
+  draw_stats_grid(cr, left, top, right, bottom, width, height, rows, &muted_border);
   draw_stats_axis_labels(cr, left, top, right, bottom, width, height, rows,
-                         top_label, mid_label, "0%");
-  draw_time_axis_labels(self, cr, left, top, right, bottom, width, height);
+                         top_label, mid_label, "0%", &muted_fg);
+  draw_time_axis_labels(self, cr, left, top, right, bottom, width, height, &muted_fg);
 
   draw_stats_series(self, cr, self->stats_cpu, STATS_SAMPLES, self->stats_count, (double)scale,
                     5, 0.93, 0.33, 0.33, left, top, right, bottom, width, height);
@@ -8326,12 +6231,20 @@ stats_graph_draw_players(GtkDrawingArea *area, cairo_t *cr, int width, int heigh
   PumpkinWindow *self = PUMPKIN_WINDOW(data);
   (void)area;
 
-  cairo_set_source_rgb(cr, 0.11, 0.11, 0.12);
+  GdkRGBA fg = { .red = 0.45, .green = 0.45, .blue = 0.48, .alpha = 1.0 };
+  GdkRGBA border = { .red = 0.45, .green = 0.45, .blue = 0.48, .alpha = 1.0 };
+  GdkRGBA muted_fg = stats_color_with_alpha(fg, 0.78);
+  GdkRGBA muted_border = stats_color_with_alpha(border, 0.28);
+
+  cairo_save(cr);
+  cairo_set_operator(cr, CAIRO_OPERATOR_SOURCE);
+  cairo_set_source_rgba(cr, 0.0, 0.0, 0.0, 0.0);
   cairo_rectangle(cr, 0, 0, width, height);
   cairo_fill(cr);
+  cairo_restore(cr);
 
   if (self->stats_count < 2) {
-    cairo_set_source_rgb(cr, 0.7, 0.7, 0.7);
+    set_cairo_source_rgba(cr, &muted_fg);
     cairo_select_font_face(cr, "Sans", CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_NORMAL);
     cairo_set_font_size(cr, 13.0);
     cairo_move_to(cr, 12.0, 20.0);
@@ -8344,7 +6257,7 @@ stats_graph_draw_players(GtkDrawingArea *area, cairo_t *cr, int width, int heigh
   double right = 12.0;
   double bottom = 16.0;
 
-  draw_stats_grid(cr, left, top, right, bottom, width, height, 4);
+  draw_stats_grid(cr, left, top, right, bottom, width, height, 4, &muted_border);
 
   double players_max = 1.0;
   if (self->current != NULL) {
@@ -8364,8 +6277,8 @@ stats_graph_draw_players(GtkDrawingArea *area, cairo_t *cr, int width, int heigh
   g_autofree char *top_label = g_strdup_printf("%d", (int)players_max);
   g_autofree char *mid_label = g_strdup_printf("%d", (int)(players_max / 2.0));
   draw_stats_axis_labels(cr, left, top, right, bottom, width, height, 4,
-                         top_label, mid_label, "0");
-  draw_time_axis_labels(self, cr, left, top, right, bottom, width, height);
+                         top_label, mid_label, "0", &muted_fg);
+  draw_time_axis_labels(self, cr, left, top, right, bottom, width, height, &muted_fg);
 
   draw_stats_series(self, cr, self->stats_players, STATS_SAMPLES, self->stats_count, players_max,
                     3, 0.95, 0.66, 0.26, left, top, right, bottom, width, height);
@@ -8377,12 +6290,20 @@ stats_graph_draw_disk(GtkDrawingArea *area, cairo_t *cr, int width, int height, 
   PumpkinWindow *self = PUMPKIN_WINDOW(data);
   (void)area;
 
-  cairo_set_source_rgb(cr, 0.11, 0.11, 0.12);
+  GdkRGBA fg = { .red = 0.45, .green = 0.45, .blue = 0.48, .alpha = 1.0 };
+  GdkRGBA border = { .red = 0.45, .green = 0.45, .blue = 0.48, .alpha = 1.0 };
+  GdkRGBA muted_fg = stats_color_with_alpha(fg, 0.78);
+  GdkRGBA muted_border = stats_color_with_alpha(border, 0.28);
+
+  cairo_save(cr);
+  cairo_set_operator(cr, CAIRO_OPERATOR_SOURCE);
+  cairo_set_source_rgba(cr, 0.0, 0.0, 0.0, 0.0);
   cairo_rectangle(cr, 0, 0, width, height);
   cairo_fill(cr);
+  cairo_restore(cr);
 
   if (self->stats_count < 2) {
-    cairo_set_source_rgb(cr, 0.7, 0.7, 0.7);
+    set_cairo_source_rgba(cr, &muted_fg);
     cairo_select_font_face(cr, "Sans", CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_NORMAL);
     cairo_set_font_size(cr, 13.0);
     cairo_move_to(cr, 12.0, 20.0);
@@ -8395,9 +6316,9 @@ stats_graph_draw_disk(GtkDrawingArea *area, cairo_t *cr, int width, int height, 
   double right = 12.0;
   double bottom = 16.0;
 
-  draw_stats_grid(cr, left, top, right, bottom, width, height, 4);
-  draw_stats_axis_labels(cr, left, top, right, bottom, width, height, 4, "20", "10", "0");
-  draw_time_axis_labels(self, cr, left, top, right, bottom, width, height);
+  draw_stats_grid(cr, left, top, right, bottom, width, height, 4, &muted_border);
+  draw_stats_axis_labels(cr, left, top, right, bottom, width, height, 4, "20", "10", "0", &muted_fg);
+  draw_time_axis_labels(self, cr, left, top, right, bottom, width, height, &muted_fg);
 
   draw_stats_series(self, cr, self->stats_disk_mb, STATS_SAMPLES, self->stats_count, 20.0,
                     1, 0.35, 0.77, 0.45, left, top, right, bottom, width, height);
@@ -8912,7 +6833,10 @@ refresh_plugin_list(PumpkinWindow *self)
     gboolean is_so = g_str_has_suffix(entry, ".so") ||
                      g_str_has_suffix(entry, ".so.disabled") ||
                      g_str_has_suffix(entry, ".so.deactivated");
-    if (!is_so) {
+    gboolean is_wasm = g_str_has_suffix(entry, ".wasm") ||
+                       g_str_has_suffix(entry, ".wasm.disabled") ||
+                       g_str_has_suffix(entry, ".wasm.deactivated");
+    if (!is_so && !is_wasm) {
       continue;
     }
     g_autofree char *display = g_strdup(entry);
@@ -8925,6 +6849,9 @@ refresh_plugin_list(PumpkinWindow *self)
     GtkWidget *row = gtk_list_box_row_new();
     GtkWidget *box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
     GtkWidget *label = gtk_label_new(display);
+    g_autofree char *plugin_path = g_build_filename(plugins_dir, entry, NULL);
+    struct stat plugin_st;
+    gboolean has_size = (g_stat(plugin_path, &plugin_st) == 0);
     GtkWidget *toggle = gtk_switch_new();
     GtkWidget *btn_delete = gtk_button_new_with_label("Delete");
 
@@ -8946,8 +6873,17 @@ refresh_plugin_list(PumpkinWindow *self)
       gtk_widget_add_css_class(ver_label, "dim-label");
       gtk_box_append(GTK_BOX(box), ver_label);
     }
+    if (has_size) {
+      g_autofree char *size = g_format_size_full((guint64)plugin_st.st_size, G_FORMAT_SIZE_IEC_UNITS);
+      GtkWidget *size_label = gtk_label_new(size);
+      gtk_widget_add_css_class(size_label, "dim-label");
+      gtk_box_append(GTK_BOX(box), size_label);
+    }
     gtk_box_append(GTK_BOX(box), toggle);
+    gtk_button_set_icon_name(GTK_BUTTON(btn_delete), "user-trash-symbolic");
+    gtk_widget_set_tooltip_text(btn_delete, "Delete plugin");
     gtk_widget_add_css_class(btn_delete, "destructive-action");
+    gtk_widget_add_css_class(btn_delete, "flat");
     gtk_widget_add_css_class(btn_delete, "small");
     gtk_widget_add_css_class(btn_delete, "compact-button");
     gtk_widget_add_css_class(btn_delete, "plugin-delete-button");
@@ -8959,6 +6895,7 @@ refresh_plugin_list(PumpkinWindow *self)
     g_signal_connect(btn_delete, "clicked", G_CALLBACK(on_plugin_delete_clicked), self);
     gtk_box_append(GTK_BOX(box), btn_delete);
     gtk_list_box_row_set_child(GTK_LIST_BOX_ROW(row), box);
+    attach_hover_delete_button(row, btn_delete);
 
     g_object_set_data_full(G_OBJECT(row), "plugin-file", g_strdup(entry), g_free);
     g_object_set_data_full(G_OBJECT(toggle), "plugin-file", g_strdup(entry), g_free);
@@ -9012,14 +6949,18 @@ refresh_world_list(PumpkinWindow *self)
       gtk_box_append(GTK_BOX(box), label);
       gtk_box_append(GTK_BOX(box), size_label);
 
-      GtkWidget *btn_delete = gtk_button_new_with_label("Delete");
+      GtkWidget *btn_delete = gtk_button_new();
+      gtk_button_set_icon_name(GTK_BUTTON(btn_delete), "user-trash-symbolic");
+      gtk_widget_set_tooltip_text(btn_delete, "Delete world");
       gtk_widget_add_css_class(btn_delete, "destructive-action");
+      gtk_widget_add_css_class(btn_delete, "flat");
       gtk_widget_set_sensitive(btn_delete, !running && !busy);
       g_object_set_data_full(G_OBJECT(btn_delete), "world-path", g_strdup(child), g_free);
       g_signal_connect(btn_delete, "clicked", G_CALLBACK(on_world_delete_clicked), self);
       gtk_box_append(GTK_BOX(box), btn_delete);
 
       gtk_list_box_row_set_child(GTK_LIST_BOX_ROW(row), box);
+      attach_hover_delete_button(row, btn_delete);
       gtk_list_box_append(self->world_list, row);
     }
     g_dir_close(dir);
@@ -9042,14 +6983,18 @@ refresh_world_list(PumpkinWindow *self)
     gtk_box_append(GTK_BOX(box), label);
     gtk_box_append(GTK_BOX(box), size_label);
 
-    GtkWidget *btn_delete = gtk_button_new_with_label("Delete");
+    GtkWidget *btn_delete = gtk_button_new();
+    gtk_button_set_icon_name(GTK_BUTTON(btn_delete), "user-trash-symbolic");
+    gtk_widget_set_tooltip_text(btn_delete, "Delete world");
     gtk_widget_add_css_class(btn_delete, "destructive-action");
+    gtk_widget_add_css_class(btn_delete, "flat");
     gtk_widget_set_sensitive(btn_delete, !running && !busy);
     g_object_set_data_full(G_OBJECT(btn_delete), "world-path", g_strdup(default_world), g_free);
     g_signal_connect(btn_delete, "clicked", G_CALLBACK(on_world_delete_clicked), self);
     gtk_box_append(GTK_BOX(box), btn_delete);
 
     gtk_list_box_row_set_child(GTK_LIST_BOX_ROW(row), box);
+    attach_hover_delete_button(row, btn_delete);
     gtk_list_box_append(self->world_list, row);
   }
 
@@ -9125,69 +7070,9 @@ player_lookup_add_op_level(GHashTable *map, const char *name, const char *uuid, 
 }
 
 static gboolean
-player_lookup_contains_state(GHashTable *set, const PlayerState *state)
-{
-  if (set == NULL || state == NULL) {
-    return FALSE;
-  }
-  g_autofree char *uuid_key = normalized_key(state->uuid);
-  if (uuid_key != NULL && g_hash_table_contains(set, uuid_key)) {
-    return TRUE;
-  }
-  g_autofree char *name_key = normalized_key(state->name);
-  if (name_key != NULL && g_hash_table_contains(set, name_key)) {
-    return TRUE;
-  }
-  return FALSE;
-}
-
-static int
-player_lookup_op_level_for_state(GHashTable *map, const PlayerState *state)
-{
-  if (map == NULL || state == NULL) {
-    return -1;
-  }
-  g_autofree char *uuid_key = normalized_key(state->uuid);
-  if (uuid_key != NULL) {
-    gpointer raw = g_hash_table_lookup(map, uuid_key);
-    if (raw != NULL) {
-      return GPOINTER_TO_INT(raw) - 1;
-    }
-  }
-  g_autofree char *name_key = normalized_key(state->name);
-  if (name_key != NULL) {
-    gpointer raw = g_hash_table_lookup(map, name_key);
-    if (raw != NULL) {
-      return GPOINTER_TO_INT(raw) - 1;
-    }
-  }
-  return -1;
-}
-
-static gboolean
 player_is_admin_from_op_level(int op_level)
 {
   return op_level >= 4;
-}
-
-static const char *
-player_lookup_reason_for_state(GHashTable *map, const PlayerState *state)
-{
-  if (map == NULL || state == NULL) {
-    return NULL;
-  }
-  g_autofree char *uuid_key = normalized_key(state->uuid);
-  if (uuid_key != NULL) {
-    const char *reason = g_hash_table_lookup(map, uuid_key);
-    if (reason != NULL) {
-      return reason;
-    }
-  }
-  g_autofree char *name_key = normalized_key(state->name);
-  if (name_key != NULL) {
-    return g_hash_table_lookup(map, name_key);
-  }
-  return NULL;
 }
 
 static const char *
@@ -9418,7 +7303,7 @@ player_state_sort_cmp(gconstpointer a, gconstpointer b, gpointer user_data)
   return cmp;
 }
 
-static void
+void
 invalidate_player_list_signature(PumpkinWindow *self)
 {
   if (self == NULL) {
@@ -9749,8 +7634,8 @@ refresh_whitelist_list(PumpkinWindow *self)
     return;
   }
   ingest_players_from_disk(self);
-  const char *query = self->whitelist_search != NULL
-                        ? gtk_editable_get_text(GTK_EDITABLE(self->whitelist_search))
+  const char *query = self->player_search != NULL
+                        ? gtk_editable_get_text(GTK_EDITABLE(self->player_search))
                         : NULL;
   g_autofree char *query_key = normalized_key(query);
 
@@ -9799,6 +7684,13 @@ refresh_whitelist_list(PumpkinWindow *self)
     }
   }
 
+  PlayerSortSettings sort = {0};
+  sort.field = self->player_sort_field;
+  sort.ascending = self->player_sort_ascending;
+  sort.op_level_map = op_level_map;
+  sort.now_unix = (gint64)time(NULL);
+
+  g_autoptr(GPtrArray) states = g_ptr_array_new();
   for (guint i = 0; i < whitelist_entries->len; i++) {
     PlayerEntry *entry = g_ptr_array_index(whitelist_entries, i);
     if (entry == NULL) {
@@ -9811,11 +7703,7 @@ refresh_whitelist_list(PumpkinWindow *self)
     }
 
     const char *ban_reason = player_lookup_reason_for_state(banned_reason_map, state);
-    gboolean banned = (ban_reason != NULL);
     const char *ip_ban_reason = player_lookup_reason_for_ip_variants(banned_ip_reason_map, state->last_ip);
-    gboolean ip_banned = (ip_ban_reason != NULL) ||
-                         (state->ip_banned_hint && (state->last_ip == NULL || state->last_ip[0] == '\0'));
-    int op_level = player_lookup_op_level_for_state(op_level_map, state);
 
     if (query_key != NULL && *query_key != '\0') {
       g_autofree char *name_key = normalized_key(state->name);
@@ -9843,6 +7731,24 @@ refresh_whitelist_list(PumpkinWindow *self)
         continue;
       }
     }
+    g_ptr_array_add(states, state);
+  }
+
+  g_ptr_array_sort_with_data(states, player_state_sort_cmp, &sort);
+
+  for (guint i = 0; i < states->len; i++) {
+    PlayerState *state = g_ptr_array_index(states, i);
+    if (state == NULL) {
+      continue;
+    }
+
+    const char *ban_reason = player_lookup_reason_for_state(banned_reason_map, state);
+    gboolean banned = (ban_reason != NULL);
+    const char *ip_ban_reason = player_lookup_reason_for_ip_variants(banned_ip_reason_map, state->last_ip);
+    gboolean ip_banned = (ip_ban_reason != NULL) ||
+                         (state->ip_banned_hint && (state->last_ip == NULL || state->last_ip[0] == '\0'));
+    int op_level = player_lookup_op_level_for_state(op_level_map, state);
+
     append_player_state_row(self, self->whitelist_list, state, TRUE, banned, ban_reason,
                             ip_banned, ip_ban_reason, op_level, FALSE);
   }
@@ -9856,8 +7762,8 @@ refresh_banned_list(PumpkinWindow *self)
     return;
   }
   ingest_players_from_disk(self);
-  const char *query = self->banned_search != NULL
-                        ? gtk_editable_get_text(GTK_EDITABLE(self->banned_search))
+  const char *query = self->player_search != NULL
+                        ? gtk_editable_get_text(GTK_EDITABLE(self->player_search))
                         : NULL;
   g_autofree char *query_key = normalized_key(query);
 
@@ -9906,6 +7812,13 @@ refresh_banned_list(PumpkinWindow *self)
     }
   }
 
+  PlayerSortSettings sort = {0};
+  sort.field = self->player_sort_field;
+  sort.ascending = self->player_sort_ascending;
+  sort.op_level_map = op_level_map;
+  sort.now_unix = (gint64)time(NULL);
+
+  g_autoptr(GPtrArray) states = g_ptr_array_new();
   for (guint i = 0; i < banned_entries->len; i++) {
     PlayerEntry *entry = g_ptr_array_index(banned_entries, i);
     if (entry == NULL) {
@@ -9916,11 +7829,7 @@ refresh_banned_list(PumpkinWindow *self)
     if (state == NULL) {
       continue;
     }
-    gboolean whitelisted = player_lookup_contains_state(whitelist_set, state);
-    int op_level = player_lookup_op_level_for_state(op_level_map, state);
     const char *ip_ban_reason = player_lookup_reason_for_ip_variants(banned_ip_reason_map, state->last_ip);
-    gboolean ip_banned = (ip_ban_reason != NULL) ||
-                         (state->ip_banned_hint && (state->last_ip == NULL || state->last_ip[0] == '\0'));
 
     if (query_key != NULL && *query_key != '\0') {
       g_autofree char *name_key = normalized_key(state->name);
@@ -9948,7 +7857,38 @@ refresh_banned_list(PumpkinWindow *self)
         continue;
       }
     }
-    append_player_state_row(self, self->banned_list, state, whitelisted, TRUE, entry->reason,
+    g_ptr_array_add(states, state);
+  }
+
+  g_ptr_array_sort_with_data(states, player_state_sort_cmp, &sort);
+
+  for (guint i = 0; i < states->len; i++) {
+    PlayerState *state = g_ptr_array_index(states, i);
+    if (state == NULL) {
+      continue;
+    }
+
+    gboolean whitelisted = player_lookup_contains_state(whitelist_set, state);
+    int op_level = player_lookup_op_level_for_state(op_level_map, state);
+    const char *ban_reason = NULL;
+    const char *ip_ban_reason = player_lookup_reason_for_ip_variants(banned_ip_reason_map, state->last_ip);
+    gboolean ip_banned = (ip_ban_reason != NULL) ||
+                         (state->ip_banned_hint && (state->last_ip == NULL || state->last_ip[0] == '\0'));
+
+    for (guint j = 0; j < banned_entries->len; j++) {
+      PlayerEntry *entry = g_ptr_array_index(banned_entries, j);
+      if (entry == NULL) {
+        continue;
+      }
+      gboolean same_uuid = (entry->uuid != NULL && state->uuid != NULL && g_strcmp0(entry->uuid, state->uuid) == 0);
+      gboolean same_name = (entry->name != NULL && state->name != NULL && g_strcmp0(entry->name, state->name) == 0);
+      if (same_uuid || same_name) {
+        ban_reason = entry->reason;
+        break;
+      }
+    }
+
+    append_player_state_row(self, self->banned_list, state, whitelisted, TRUE, ban_reason,
                             ip_banned, ip_ban_reason, op_level, FALSE);
   }
 }
@@ -10014,70 +7954,101 @@ on_player_search_changed(GtkEditable *editable, PumpkinWindow *self)
 {
   (void)editable;
   self->player_list_interaction_until = 0;
-  refresh_player_list(self);
+  refresh_active_player_section(self);
 }
 
 static void
-update_player_sort_buttons(PumpkinWindow *self)
+refresh_active_player_section(PumpkinWindow *self)
 {
   if (self == NULL) {
     return;
   }
-
-  struct {
-    GtkButton *button;
-    int field;
-    const char *label;
-  } items[] = {
-    { self->btn_player_sort_last_online, 0, "Last Online" },
-    { self->btn_player_sort_playtime, 1, "Playtime" },
-    { self->btn_player_sort_first_joined, 2, "First Joined" },
-    { self->btn_player_sort_name, 3, "Name" }
-  };
-
-  for (guint i = 0; i < G_N_ELEMENTS(items); i++) {
-    if (items[i].button == NULL) {
-      continue;
-    }
-    if (self->player_sort_field == items[i].field) {
-      const char *arrow = self->player_sort_ascending ? "^" : "v";
-      g_autofree char *label = g_strdup_printf("%s %s", items[i].label, arrow);
-      gtk_button_set_label(items[i].button, label);
-      gtk_widget_add_css_class(GTK_WIDGET(items[i].button), "suggested-action");
-    } else {
-      gtk_button_set_label(items[i].button, items[i].label);
-      gtk_widget_remove_css_class(GTK_WIDGET(items[i].button), "suggested-action");
-    }
-  }
-}
-
-static void
-on_whitelist_search_changed(GtkEditable *editable, PumpkinWindow *self)
-{
-  (void)editable;
-  refresh_whitelist_list(self);
-}
-
-static void
-on_banned_search_changed(GtkEditable *editable, PumpkinWindow *self)
-{
-  (void)editable;
-  refresh_banned_list(self);
-}
-
-static void
-on_player_sort_button_clicked(GtkButton *button, PumpkinWindow *self)
-{
-  int field = GPOINTER_TO_INT(g_object_get_data(G_OBJECT(button), "sort-field"));
-  if (self->player_sort_field == field) {
-    self->player_sort_ascending = !self->player_sort_ascending;
+  const char *page = self->players_stack != NULL
+                       ? adw_view_stack_get_visible_child_name(self->players_stack)
+                       : NULL;
+  if (g_strcmp0(page, "whitelisted") == 0) {
+    refresh_whitelist_list(self);
+  } else if (g_strcmp0(page, "bans") == 0) {
+    refresh_banned_list(self);
   } else {
-    self->player_sort_field = field;
-    self->player_sort_ascending = (field == 3);
+    refresh_player_list(self);
   }
+}
+
+static void
+update_player_sort_controls(PumpkinWindow *self)
+{
+  if (self == NULL) {
+    return;
+  }
+  if (self->player_sort_dropdown != NULL &&
+      gtk_drop_down_get_selected(self->player_sort_dropdown) != (guint)self->player_sort_field) {
+    gtk_drop_down_set_selected(self->player_sort_dropdown, (guint)self->player_sort_field);
+  }
+  if (self->btn_player_sort_order != NULL) {
+    gtk_toggle_button_set_active(self->btn_player_sort_order, self->player_sort_ascending);
+    gtk_button_set_icon_name(GTK_BUTTON(self->btn_player_sort_order),
+                             self->player_sort_ascending
+                               ? "view-sort-ascending-symbolic"
+                               : "view-sort-descending-symbolic");
+    gtk_widget_set_tooltip_text(GTK_WIDGET(self->btn_player_sort_order),
+                                self->player_sort_ascending
+                                  ? "Sort ascending"
+                                  : "Sort descending");
+  }
+}
+
+static void
+update_player_search_placeholder(PumpkinWindow *self)
+{
+  if (self == NULL || self->player_search == NULL) {
+    return;
+  }
+
+  const char *page = self->players_stack != NULL
+                       ? adw_view_stack_get_visible_child_name(self->players_stack)
+                       : NULL;
+  const char *placeholder = "Search players";
+  if (g_strcmp0(page, "whitelisted") == 0) {
+    placeholder = "Search whitelisted players";
+  } else if (g_strcmp0(page, "bans") == 0) {
+    placeholder = "Search banned players";
+  }
+  gtk_search_entry_set_placeholder_text(self->player_search, placeholder);
+}
+
+static void
+on_player_sort_dropdown_changed(GObject *object, GParamSpec *pspec, PumpkinWindow *self)
+{
+  (void)object;
+  (void)pspec;
+  if (self == NULL || self->player_sort_dropdown == NULL) {
+    return;
+  }
+  self->player_sort_field = (int)gtk_drop_down_get_selected(self->player_sort_dropdown);
   self->player_list_interaction_until = 0;
-  update_player_sort_buttons(self);
-  refresh_player_list(self);
+  refresh_active_player_section(self);
+}
+
+static void
+on_player_sort_order_toggled(GtkToggleButton *button, PumpkinWindow *self)
+{
+  if (self == NULL) {
+    return;
+  }
+  self->player_sort_ascending = gtk_toggle_button_get_active(button);
+  self->player_list_interaction_until = 0;
+  update_player_sort_controls(self);
+  refresh_active_player_section(self);
+}
+
+static void
+on_players_stack_visible_child_changed(GObject *object, GParamSpec *pspec, PumpkinWindow *self)
+{
+  (void)object;
+  (void)pspec;
+  update_player_search_placeholder(self);
+  refresh_active_player_section(self);
 }
 
 static void
@@ -11320,7 +9291,7 @@ on_save_domains(GtkButton *button, PumpkinWindow *self)
   int ddns_interval = DDNS_INTERVAL_SECONDS_DEFAULT;
   gboolean interval_has = FALSE;
   if (self->entry_ddns_interval_seconds != NULL) {
-    if (!parse_optional_positive_int(self->entry_ddns_interval_seconds, &ddns_interval, &interval_has)) {
+    if (!pumpkin_parse_optional_positive_int(self->entry_ddns_interval_seconds, &ddns_interval, &interval_has)) {
       set_details_status(self, "DDNS interval must be a valid number.", 4);
       return;
     }
@@ -11381,7 +9352,7 @@ on_save_domains(GtkButton *button, PumpkinWindow *self)
   }
 }
 
-static void
+void
 update_settings_form(PumpkinWindow *self)
 {
   if (self->entry_server_name == NULL || self->entry_download_url == NULL ||
@@ -11636,7 +9607,7 @@ create_server_icon_widget(PumpkinServer *server)
   }
 
   GtkWidget *image = gtk_image_new_from_paintable(GDK_PAINTABLE(texture));
-  gtk_image_set_pixel_size(GTK_IMAGE(image), 48);
+  gtk_image_set_pixel_size(GTK_IMAGE(image), 64);
   return image;
 }
 
@@ -12060,11 +10031,11 @@ import_plugin_files_to_dir(PumpkinWindow *self, GPtrArray *files, const char *de
       continue;
     }
     if (g_file_test(path, G_FILE_TEST_IS_DIR)) {
-      append_log(self, "Plugins must be .so files.");
+      append_log(self, "Plugins must be .so or .wasm files.");
       continue;
     }
-    if (!g_str_has_suffix(path, ".so")) {
-      append_log(self, "Only .so files can be imported as plugins.");
+    if (!g_str_has_suffix(path, ".so") && !g_str_has_suffix(path, ".wasm")) {
+      append_log(self, "Only .so or .wasm files can be imported as plugins.");
       continue;
     }
 
@@ -12116,479 +10087,6 @@ set_drop_highlight(GtkWidget *widget, gboolean active)
   } else {
     gtk_widget_remove_css_class(widget, "drop-active");
   }
-}
-
-static void
-set_console_warning(PumpkinWindow *self, const char *message, gboolean visible)
-{
-  if (self == NULL || self->console_warning_revealer == NULL ||
-      self->console_warning_label == NULL) {
-    return;
-  }
-  gtk_label_set_text(self->console_warning_label, message != NULL ? message : "");
-  gtk_revealer_set_reveal_child(self->console_warning_revealer, visible);
-  if (visible) {
-    gint64 now = g_get_monotonic_time();
-    if (self->suppress_warning_beep_until > now) {
-      return;
-    }
-    GdkDisplay *display = gdk_display_get_default();
-    if (display != NULL) {
-      gdk_display_beep(display);
-    }
-  }
-}
-
-static char *
-strip_ansi(const char *line)
-{
-  if (line == NULL) {
-    return NULL;
-  }
-
-  GString *out = g_string_new(NULL);
-  const unsigned char *p = (const unsigned char *)line;
-  while (*p != '\0') {
-    if (*p == 0x1B) {
-      p++;
-      if (*p == '[') {
-        p++;
-        while (*p != '\0' && (*p < 0x40 || *p > 0x7E)) {
-          p++;
-        }
-        if (*p != '\0') {
-          p++;
-        }
-        continue;
-      }
-      if (*p == ']') {
-        p++;
-        while (*p != '\0') {
-          if (*p == '\a') {
-            p++;
-            break;
-          }
-          if (*p == 0x1B && p[1] == '\\') {
-            p += 2;
-            break;
-          }
-          p++;
-        }
-        continue;
-      }
-      continue;
-    }
-    g_string_append_c(out, (char)*p);
-    p++;
-  }
-  return g_string_free(out, FALSE);
-}
-
-static const char *
-console_timestamp_pattern_for_config(PumpkinWindow *self)
-{
-  PumpkinDateFormat format = PUMPKIN_DATE_FORMAT_DMY;
-  PumpkinTimeFormat time_format = PUMPKIN_TIME_FORMAT_24H;
-  if (self != NULL && self->config != NULL) {
-    format = pumpkin_config_get_date_format(self->config);
-    time_format = pumpkin_config_get_time_format(self->config);
-  }
-  if (format == PUMPKIN_DATE_FORMAT_YMD) {
-    return time_format == PUMPKIN_TIME_FORMAT_12H
-             ? "%Y-%m-%d %I:%M:%S %p"
-             : "%Y-%m-%d %H:%M:%S";
-  }
-  if (format == PUMPKIN_DATE_FORMAT_MDY) {
-    return time_format == PUMPKIN_TIME_FORMAT_12H
-             ? "%m/%d/%Y %I:%M:%S %p"
-             : "%m/%d/%Y %H:%M:%S";
-  }
-  return time_format == PUMPKIN_TIME_FORMAT_12H
-           ? "%d.%m.%Y %I:%M:%S %p"
-           : "%d.%m.%Y %H:%M:%S";
-}
-
-static ConsoleLevel
-console_level_from_text(const char *level_text)
-{
-  if (level_text == NULL || *level_text == '\0') {
-    return CONSOLE_LEVEL_OTHER;
-  }
-  g_autofree char *lower = g_ascii_strdown(level_text, -1);
-  if (g_str_has_prefix(lower, "trace")) {
-    return CONSOLE_LEVEL_TRACE;
-  }
-  if (g_str_has_prefix(lower, "debug")) {
-    return CONSOLE_LEVEL_DEBUG;
-  }
-  if (g_str_has_prefix(lower, "info")) {
-    return CONSOLE_LEVEL_INFO;
-  }
-  if (g_str_has_prefix(lower, "warn")) {
-    return CONSOLE_LEVEL_WARN;
-  }
-  if (g_str_has_prefix(lower, "error")) {
-    return CONSOLE_LEVEL_ERROR;
-  }
-  if (g_str_has_prefix(lower, "smpk")) {
-    return CONSOLE_LEVEL_SMPK;
-  }
-  return CONSOLE_LEVEL_OTHER;
-}
-
-static const char *
-console_level_tag_name(ConsoleLevel level)
-{
-  switch (level) {
-    case CONSOLE_LEVEL_TRACE:
-      return "console-level-trace";
-    case CONSOLE_LEVEL_DEBUG:
-      return "console-level-debug";
-    case CONSOLE_LEVEL_INFO:
-      return "console-level-info";
-    case CONSOLE_LEVEL_WARN:
-      return "console-level-warn";
-    case CONSOLE_LEVEL_ERROR:
-      return "console-level-error";
-    case CONSOLE_LEVEL_SMPK:
-      return "console-level-smpk";
-    case CONSOLE_LEVEL_OTHER:
-    default:
-      return "console-level-other";
-  }
-}
-
-static gboolean
-console_level_enabled(PumpkinWindow *self, ConsoleLevel level)
-{
-  if (self == NULL) {
-    return TRUE;
-  }
-  switch (level) {
-    case CONSOLE_LEVEL_TRACE:
-      return self->check_console_trace == NULL ||
-             gtk_check_button_get_active(self->check_console_trace);
-    case CONSOLE_LEVEL_DEBUG:
-      return self->check_console_debug == NULL ||
-             gtk_check_button_get_active(self->check_console_debug);
-    case CONSOLE_LEVEL_INFO:
-      return self->check_console_info == NULL ||
-             gtk_check_button_get_active(self->check_console_info);
-    case CONSOLE_LEVEL_WARN:
-      return self->check_console_warn == NULL ||
-             gtk_check_button_get_active(self->check_console_warn);
-    case CONSOLE_LEVEL_ERROR:
-      return self->check_console_error == NULL ||
-             gtk_check_button_get_active(self->check_console_error);
-    case CONSOLE_LEVEL_SMPK:
-      return self->check_console_smpk == NULL ||
-             gtk_check_button_get_active(self->check_console_smpk);
-    case CONSOLE_LEVEL_OTHER:
-    default:
-      return self->check_console_other == NULL ||
-             gtk_check_button_get_active(self->check_console_other);
-  }
-}
-
-static void
-apply_console_filters_to_buffer(PumpkinWindow *self, GtkTextBuffer *buffer)
-{
-  if (self == NULL || buffer == NULL) {
-    return;
-  }
-  GtkTextTagTable *table = gtk_text_buffer_get_tag_table(buffer);
-  if (table == NULL) {
-    return;
-  }
-  ConsoleLevel levels[] = {
-    CONSOLE_LEVEL_TRACE,
-    CONSOLE_LEVEL_DEBUG,
-    CONSOLE_LEVEL_INFO,
-    CONSOLE_LEVEL_WARN,
-    CONSOLE_LEVEL_ERROR,
-    CONSOLE_LEVEL_SMPK,
-    CONSOLE_LEVEL_OTHER
-  };
-  for (guint i = 0; i < G_N_ELEMENTS(levels); i++) {
-    const char *tag_name = console_level_tag_name(levels[i]);
-    GtkTextTag *tag = gtk_text_tag_table_lookup(table, tag_name);
-    if (tag != NULL) {
-      gboolean visible = console_level_enabled(self, levels[i]);
-      g_object_set(tag, "invisible", visible ? FALSE : TRUE, NULL);
-    }
-  }
-}
-
-static void
-ensure_console_buffer_tags(PumpkinWindow *self, GtkTextBuffer *buffer)
-{
-  if (buffer == NULL) {
-    return;
-  }
-  ConsoleLevel levels[] = {
-    CONSOLE_LEVEL_TRACE,
-    CONSOLE_LEVEL_DEBUG,
-    CONSOLE_LEVEL_INFO,
-    CONSOLE_LEVEL_WARN,
-    CONSOLE_LEVEL_ERROR,
-    CONSOLE_LEVEL_SMPK,
-    CONSOLE_LEVEL_OTHER
-  };
-  GtkTextTagTable *table = gtk_text_buffer_get_tag_table(buffer);
-  if (table == NULL) {
-    return;
-  }
-  for (guint i = 0; i < G_N_ELEMENTS(levels); i++) {
-    const char *tag_name = console_level_tag_name(levels[i]);
-    GtkTextTag *tag = gtk_text_tag_table_lookup(table, tag_name);
-    if (tag == NULL) {
-      tag = gtk_text_buffer_create_tag(buffer, tag_name, NULL);
-    }
-    if (tag == NULL) {
-      continue;
-    }
-    /* Keep level tags neutral; they are used for filtering visibility only. */
-    g_object_set(tag, "foreground-set", FALSE, "weight-set", FALSE, NULL);
-  }
-
-  struct {
-    const char *name;
-    const char *color;
-    int weight;
-  } token_tags[] = {
-    {"console-token-trace", "#7a828a", PANGO_WEIGHT_BOLD},
-    {"console-token-debug", "#6f767e", PANGO_WEIGHT_BOLD},
-    {"console-token-info", "#2f8f46", PANGO_WEIGHT_BOLD},
-    {"console-token-warn", "#b7791f", PANGO_WEIGHT_BOLD},
-    {"console-token-error", "#c93434", PANGO_WEIGHT_BOLD},
-    {"console-token-smpk", "#4b6cb7", PANGO_WEIGHT_BOLD},
-    {"console-token-startup-ms", NULL, PANGO_WEIGHT_BOLD}
-  };
-  for (guint i = 0; i < G_N_ELEMENTS(token_tags); i++) {
-    GtkTextTag *tag = gtk_text_tag_table_lookup(table, token_tags[i].name);
-    if (tag == NULL) {
-      tag = gtk_text_buffer_create_tag(buffer, token_tags[i].name, NULL);
-    }
-    if (tag == NULL) {
-      continue;
-    }
-    if (token_tags[i].color != NULL) {
-      g_object_set(tag, "foreground", token_tags[i].color, "weight", token_tags[i].weight, NULL);
-    } else {
-      g_object_set(tag, "weight", token_tags[i].weight, NULL);
-    }
-  }
-  apply_console_filters_to_buffer(self, buffer);
-}
-
-static void
-apply_console_filters(PumpkinWindow *self)
-{
-  if (self == NULL || self->console_buffers == NULL) {
-    return;
-  }
-  GHashTableIter iter;
-  gpointer key = NULL;
-  gpointer value = NULL;
-  g_hash_table_iter_init(&iter, self->console_buffers);
-  while (g_hash_table_iter_next(&iter, &key, &value)) {
-    GtkTextBuffer *buffer = GTK_TEXT_BUFFER(value);
-    ensure_console_buffer_tags(self, buffer);
-    apply_console_filters_to_buffer(self, buffer);
-  }
-}
-
-static void
-on_console_filter_toggled(GtkCheckButton *button, PumpkinWindow *self)
-{
-  (void)button;
-  apply_console_filters(self);
-}
-
-static void
-on_console_filter_all_clicked(GtkButton *button, PumpkinWindow *self)
-{
-  (void)button;
-  if (self == NULL) {
-    return;
-  }
-
-  GtkCheckButton *checks[] = {
-    self->check_console_trace,
-    self->check_console_debug,
-    self->check_console_info,
-    self->check_console_warn,
-    self->check_console_error,
-    self->check_console_smpk,
-    self->check_console_other
-  };
-
-  gboolean all_enabled = TRUE;
-  for (guint i = 0; i < G_N_ELEMENTS(checks); i++) {
-    if (checks[i] == NULL) {
-      continue;
-    }
-    if (!gtk_check_button_get_active(checks[i])) {
-      all_enabled = FALSE;
-      break;
-    }
-  }
-
-  gboolean next_state = !all_enabled;
-  for (guint i = 0; i < G_N_ELEMENTS(checks); i++) {
-    if (checks[i] == NULL) {
-      continue;
-    }
-    gtk_check_button_set_active(checks[i], next_state);
-  }
-  apply_console_filters(self);
-}
-
-static char *
-sanitize_console_text(const char *line)
-{
-  if (line == NULL) {
-    return NULL;
-  }
-  g_autofree char *without_ansi = strip_ansi(line);
-  const char *src = without_ansi != NULL ? without_ansi : line;
-  GString *out = g_string_sized_new(strlen(src) + 8);
-  for (const unsigned char *p = (const unsigned char *)src; *p != '\0'; p++) {
-    unsigned char c = *p;
-    if (c == '\r' || c == '\n') {
-      continue;
-    }
-    if (c == '\t') {
-      g_string_append_c(out, ' ');
-      continue;
-    }
-    if (c < 0x20 || c == 0x7F) {
-      continue;
-    }
-    g_string_append_c(out, (char)c);
-  }
-  char *text = g_string_free(out, FALSE);
-  g_strstrip(text);
-  return text;
-}
-
-static char *
-format_console_line(PumpkinWindow *self, const char *line, ConsoleLevel *out_level)
-{
-  if (out_level != NULL) {
-    *out_level = CONSOLE_LEVEL_OTHER;
-  }
-  g_autofree char *clean = sanitize_console_text(line);
-  if (clean == NULL || *clean == '\0') {
-    return NULL;
-  }
-
-  static GRegex *prefix_re = NULL;
-  if (prefix_re == NULL) {
-    prefix_re = g_regex_new(
-      "^([0-9]{4})-([0-9]{2})-([0-9]{2})[ T]([0-9]{2}):([0-9]{2}):([0-9]{2})\\s+([A-Za-z]+)\\s+(.+)$",
-      G_REGEX_OPTIMIZE, 0, NULL);
-  }
-
-  g_autofree char *timestamp_text = NULL;
-  g_autofree char *message = NULL;
-  g_autofree char *level = NULL;
-  g_autofree char *target = NULL;
-
-  if (g_str_has_prefix(clean, "[SMPK]")) {
-    const char *rest = clean + strlen("[SMPK]");
-    while (*rest == ' ') {
-      rest++;
-    }
-    level = g_strdup("SMPK");
-    message = g_strdup(rest);
-    if (out_level != NULL) {
-      *out_level = CONSOLE_LEVEL_SMPK;
-    }
-  } else if (g_str_has_prefix(clean, "SMPK:")) {
-    const char *rest = clean + strlen("SMPK:");
-    while (*rest == ' ') {
-      rest++;
-    }
-    level = g_strdup("SMPK");
-    message = g_strdup(rest);
-    if (out_level != NULL) {
-      *out_level = CONSOLE_LEVEL_SMPK;
-    }
-  }
-
-  if (prefix_re != NULL && level == NULL) {
-    g_autoptr(GMatchInfo) match = NULL;
-    if (g_regex_match(prefix_re, clean, 0, &match) && g_match_info_matches(match)) {
-      g_autofree char *year_txt = g_match_info_fetch(match, 1);
-      g_autofree char *month_txt = g_match_info_fetch(match, 2);
-      g_autofree char *day_txt = g_match_info_fetch(match, 3);
-      g_autofree char *hour_txt = g_match_info_fetch(match, 4);
-      g_autofree char *minute_txt = g_match_info_fetch(match, 5);
-      g_autofree char *second_txt = g_match_info_fetch(match, 6);
-      level = g_match_info_fetch(match, 7);
-      g_autofree char *rest = g_match_info_fetch(match, 8);
-
-      int year = year_txt != NULL ? (int)strtol(year_txt, NULL, 10) : 0;
-      int month = month_txt != NULL ? (int)strtol(month_txt, NULL, 10) : 0;
-      int day = day_txt != NULL ? (int)strtol(day_txt, NULL, 10) : 0;
-      int hour = hour_txt != NULL ? (int)strtol(hour_txt, NULL, 10) : 0;
-      int minute = minute_txt != NULL ? (int)strtol(minute_txt, NULL, 10) : 0;
-      int second = second_txt != NULL ? (int)strtol(second_txt, NULL, 10) : 0;
-      g_autoptr(GDateTime) dt_utc = g_date_time_new_utc(year, month, day, hour, minute, (gdouble)second);
-      if (dt_utc != NULL) {
-        g_autoptr(GDateTime) dt_local = g_date_time_to_local(dt_utc);
-        if (dt_local != NULL) {
-          timestamp_text = g_date_time_format(dt_local, console_timestamp_pattern_for_config(self));
-        }
-      }
-      if (out_level != NULL) {
-        *out_level = console_level_from_text(level);
-      }
-
-      if (rest != NULL) {
-        const char *split = strstr(rest, ": ");
-        if (split != NULL) {
-          g_autofree char *prefix = g_strndup(rest, (gsize)(split - rest));
-          message = g_strdup(split + 2);
-          g_strstrip(prefix);
-          if (prefix[0] != '\0') {
-            const char *last_space = strrchr(prefix, ' ');
-            target = (last_space != NULL && last_space[1] != '\0')
-                       ? g_strdup(last_space + 1)
-                       : g_strdup(prefix);
-          }
-        } else {
-          message = g_strdup(rest);
-        }
-      }
-    }
-  }
-
-  if (timestamp_text == NULL) {
-    g_autoptr(GDateTime) now = g_date_time_new_now_local();
-    if (now != NULL) {
-      timestamp_text = g_date_time_format(now, console_timestamp_pattern_for_config(self));
-    }
-  }
-  if (timestamp_text == NULL) {
-    timestamp_text = g_strdup("--");
-  }
-
-  if (message == NULL || *message == '\0') {
-    message = g_strdup(clean);
-  }
-  g_strstrip(message);
-
-  if (level != NULL && *level != '\0') {
-    g_autofree char *level_upper = g_ascii_strup(level, -1);
-    if (target != NULL && *target != '\0') {
-      return g_strdup_printf("[%s] [%s] [%s] %s", timestamp_text, level_upper, target, message);
-    }
-    return g_strdup_printf("[%s] [%s] %s", timestamp_text, level_upper, message);
-  }
-
-  return g_strdup_printf("[%s] %s", timestamp_text, message);
 }
 
 static void
@@ -12749,6 +10247,45 @@ on_worlds_drop_leave(GtkDropTarget *target, PumpkinWindow *self)
 }
 
 static void
+set_hover_delete_button_visible(GtkWidget *button, gboolean visible)
+{
+  if (button == NULL) {
+    return;
+  }
+  gtk_widget_set_opacity(button, visible ? 1.0 : 0.0);
+  gtk_widget_set_can_target(button, visible);
+}
+
+static void
+on_hover_delete_row_enter(GtkEventControllerMotion *controller, double x, double y, GtkWidget *button)
+{
+  (void)controller;
+  (void)x;
+  (void)y;
+  set_hover_delete_button_visible(button, TRUE);
+}
+
+static void
+on_hover_delete_row_leave(GtkEventControllerMotion *controller, GtkWidget *button)
+{
+  (void)controller;
+  set_hover_delete_button_visible(button, FALSE);
+}
+
+static void
+attach_hover_delete_button(GtkWidget *row, GtkWidget *button)
+{
+  if (row == NULL || button == NULL) {
+    return;
+  }
+  set_hover_delete_button_visible(button, FALSE);
+  GtkEventController *motion = gtk_event_controller_motion_new();
+  g_signal_connect(motion, "enter", G_CALLBACK(on_hover_delete_row_enter), button);
+  g_signal_connect(motion, "leave", G_CALLBACK(on_hover_delete_row_leave), button);
+  gtk_widget_add_controller(row, motion);
+}
+
+static void
 on_choose_icon_done(GObject *source, GAsyncResult *res, gpointer user_data)
 {
   (void)source;
@@ -12815,7 +10352,9 @@ on_remove_server(GtkButton *button, PumpkinWindow *self)
   g_autofree char *removed_id = g_strdup(pumpkin_server_get_id(self->current));
   pumpkin_server_store_remove_selected(self->store);
   if (removed_id != NULL && *removed_id != '\0') {
-    networks_prune_server(self, removed_id);
+    if (networks_prune_server(self, removed_id)) {
+      refresh_overview_network_list(self);
+    }
   }
   clear_list_box(self->server_list);
   load_server_list(self);
@@ -13112,7 +10651,11 @@ on_download_done(GObject *source, GAsyncResult *res, gpointer user_data)
     g_chmod(ctx->tmp_path, 0755);
     if (g_rename(ctx->tmp_path, ctx->dest_path) != 0) {
       g_autofree char *msg = g_strdup_printf("Failed to replace binary: %s", g_strerror(errno));
+      g_autofree char *diag = describe_replace_paths(ctx->tmp_path, ctx->dest_path);
       append_log_for_server(self, server, msg);
+      if (diag != NULL) {
+        append_log_for_server(self, server, diag);
+      }
       set_details_status_for_server(self, server, "Download failed", 5);
       g_remove(ctx->tmp_path);
       DownloadProgressState *state = get_download_progress_state(self, server, FALSE);
@@ -13129,6 +10672,10 @@ on_download_done(GObject *source, GAsyncResult *res, gpointer user_data)
 
   if (ctx->dest_path != NULL && !binary_file_is_valid(ctx->dest_path)) {
     append_log_for_server(self, server, "Downloaded binary is invalid");
+    g_autofree char *diag = describe_invalid_binary_file(ctx->dest_path);
+    if (diag != NULL) {
+      append_log_for_server(self, server, diag);
+    }
     set_details_status_for_server(self, server, "Download failed", 5);
     g_remove(ctx->dest_path);
     DownloadProgressState *state = get_download_progress_state(self, server, FALSE);
@@ -13249,16 +10796,17 @@ on_latest_only_resolve_done(GObject *source, GAsyncResult *res, gpointer user_da
   PumpkinDownloadResult result_code = PUMPKIN_DOWNLOAD_OK;
   PumpkinResolvedDownload *resolved = pumpkin_resolve_latest_finish(res, &result_code, &error);
   if (resolved == NULL || resolved->url == NULL) {
-    if (self->current != NULL) {
-      set_details_status(self, "Update check failed", 4);
+    if (error != NULL) {
+      g_autofree char *msg = g_strdup_printf("Update check failed: %s", error->message);
+      append_log(self, msg);
+    } else {
+      append_log(self, "Update check failed: resolver returned no URL.");
     }
     update_check_updates_badge(self);
     update_details(self);
     return;
   }
-  if (result_code == PUMPKIN_DOWNLOAD_FALLBACK_USED) {
-    set_details_status(self, "Using fallback download URL", 4);
-  }
+  (void)result_code;
 
   g_clear_pointer(&self->latest_url, g_free);
   self->latest_url = g_strdup(resolved->url);
@@ -13348,7 +10896,9 @@ on_overview_remove_confirmed(GObject *dialog, GAsyncResult *res, gpointer user_d
   pumpkin_server_store_set_selected(self->store, server);
   pumpkin_server_store_remove_selected(self->store);
   if (removed_id != NULL && *removed_id != '\0') {
-    networks_prune_server(self, removed_id);
+    if (networks_prune_server(self, removed_id)) {
+      refresh_overview_network_list(self);
+    }
   }
   if (self->console_buffers != NULL) {
     g_hash_table_remove(self->console_buffers, server);
@@ -13377,126 +10927,6 @@ on_details_back(GtkButton *button, PumpkinWindow *self)
 }
 
 static void
-on_details_start(GtkButton *button, PumpkinWindow *self)
-{
-  (void)button;
-  if (self->current == NULL) {
-    return;
-  }
-  if (self->ui_state == UI_STATE_STARTING || self->ui_state == UI_STATE_STOPPING ||
-      self->ui_state == UI_STATE_RESTARTING || self->ui_state == UI_STATE_RUNNING) {
-    return;
-  }
-  self->ui_state = UI_STATE_STARTING;
-  update_details(self);
-  refresh_plugin_list(self);
-  refresh_world_list(self);
-
-  int port = pumpkin_server_get_port(self->current);
-  if (port <= 0) {
-    set_details_error(self, "Invalid server port.");
-    self->ui_state = UI_STATE_ERROR;
-    return;
-  }
-
-  g_autoptr(GSocketListener) listener = g_socket_listener_new();
-  g_autoptr(GError) port_error = NULL;
-  gboolean port_ok = g_socket_listener_add_inet_port(listener, port, NULL, &port_error);
-  if (!port_ok) {
-    if (port_error != NULL) {
-      g_autofree char *msg = g_strdup_printf("Port %d may already be in use (%s). Trying to start anyway.",
-                                             port, port_error->message);
-      append_log(self, msg);
-    } else {
-      g_autofree char *msg = g_strdup_printf("Port %d may already be in use. Trying to start anyway.", port);
-      append_log(self, msg);
-    }
-  }
-
-  g_autoptr(GError) error = NULL;
-  if (!pumpkin_server_start(self->current, &error)) {
-    append_log(self, error->message);
-    set_details_error(self, error->message);
-    self->ui_state = UI_STATE_ERROR;
-  } else {
-    set_server_running_hint(self, self->current, TRUE);
-    self->user_stop_requested = FALSE;
-    set_console_warning(self, NULL, FALSE);
-    if (self->start_delay_id != 0) {
-      g_source_remove(self->start_delay_id);
-      self->start_delay_id = 0;
-    }
-    self->start_delay_id = g_timeout_add_seconds(2, start_after_delay, g_object_ref(self));
-  }
-  update_details(self);
-  refresh_overview_list(self);
-  refresh_world_list(self);
-  refresh_player_list(self);
-  refresh_log_files(self);
-}
-
-static void
-on_details_stop(GtkButton *button, PumpkinWindow *self)
-{
-  (void)button;
-  if (self->current == NULL) {
-    return;
-  }
-  if (self->ui_state == UI_STATE_STOPPING || self->ui_state == UI_STATE_RESTARTING ||
-      self->ui_state == UI_STATE_STARTING) {
-    return;
-  }
-
-  self->ui_state = UI_STATE_STOPPING;
-  self->user_stop_requested = TRUE;
-  if (self->auto_update_server == self->current) {
-    clear_auto_update_countdown(self);
-  }
-  pumpkin_server_stop(self->current);
-  update_details(self);
-  refresh_plugin_list(self);
-  refresh_overview_list(self);
-  refresh_world_list(self);
-  refresh_player_list(self);
-  refresh_log_files(self);
-}
-
-static void
-on_details_restart(GtkButton *button, PumpkinWindow *self)
-{
-  (void)button;
-  if (self->current == NULL) {
-    return;
-  }
-
-  if (self->restart_delay_id != 0) {
-    g_source_remove(self->restart_delay_id);
-    self->restart_delay_id = 0;
-  }
-
-  self->restart_requested = TRUE;
-  self->restart_pending = TRUE;
-  self->ui_state = UI_STATE_RESTARTING;
-  self->user_stop_requested = TRUE;
-  if (self->auto_update_server == self->current) {
-    clear_auto_update_countdown(self);
-  }
-  refresh_plugin_list(self);
-  refresh_world_list(self);
-
-  if (pumpkin_server_get_running(self->current)) {
-    pumpkin_server_stop(self->current);
-  } else {
-    self->restart_pending = FALSE;
-    RestartContext *ctx = g_new0(RestartContext, 1);
-    ctx->self = g_object_ref(self);
-    ctx->server = g_object_ref(self->current);
-    self->restart_delay_id = g_timeout_add(0, restart_after_delay, ctx);
-  }
-  update_details(self);
-}
-
-static void
 on_world_delete_clicked(GtkButton *button, PumpkinWindow *self)
 {
   if (self->current == NULL || pumpkin_server_get_running(self->current)) {
@@ -13509,6 +10939,33 @@ on_world_delete_clicked(GtkButton *button, PumpkinWindow *self)
 
   const char *path = g_object_get_data(G_OBJECT(button), "world-path");
   if (path == NULL) {
+    return;
+  }
+
+  g_autofree char *name = g_path_get_basename(path);
+  g_autofree char *title = g_strdup_printf("Delete world \"%s\"?", name != NULL ? name : "world");
+  AdwDialog *dialog = adw_alert_dialog_new(title, "This permanently removes the world folder.");
+  AdwAlertDialog *alert = ADW_ALERT_DIALOG(dialog);
+  adw_alert_dialog_add_response(alert, "cancel", "Cancel");
+  adw_alert_dialog_add_response(alert, "delete", "Delete");
+  adw_alert_dialog_set_default_response(alert, "cancel");
+  adw_alert_dialog_set_close_response(alert, "cancel");
+  adw_alert_dialog_set_response_appearance(alert, "delete", ADW_RESPONSE_DESTRUCTIVE);
+  g_object_set_data_full(G_OBJECT(dialog), "world-path", g_strdup(path), g_free);
+  adw_alert_dialog_choose(alert, GTK_WIDGET(self), NULL, on_world_delete_confirmed, self);
+}
+
+static void
+on_world_delete_confirmed(GObject *dialog, GAsyncResult *res, gpointer user_data)
+{
+  PumpkinWindow *self = PUMPKIN_WINDOW(user_data);
+  const char *response = adw_alert_dialog_choose_finish(ADW_ALERT_DIALOG(dialog), res);
+  if (response == NULL || g_strcmp0(response, "delete") != 0) {
+    return;
+  }
+
+  const char *path = g_object_get_data(G_OBJECT(dialog), "world-path");
+  if (self == NULL || self->current == NULL || path == NULL) {
     return;
   }
 
@@ -13580,7 +11037,6 @@ on_details_update(GtkButton *button, PumpkinWindow *self)
   }
 
   if (!is_update_available_for_server(self, self->current, TRUE)) {
-    set_details_status(self, "Up to date", 3);
     return;
   }
 
@@ -13607,14 +11063,10 @@ on_details_check_updates(GtkButton *button, PumpkinWindow *self)
   if (self->current == NULL) {
     return;
   }
-
-  g_autofree char *bin = pumpkin_server_get_bin_path(self->current);
-  gboolean installed = g_file_test(bin, G_FILE_TEST_EXISTS);
-  if (installed && is_update_available_for_server(self, self->current, TRUE)) {
-    on_details_update(NULL, self);
+  if (self->latest_resolve_in_flight) {
     return;
   }
-  set_details_status(self, "Up to date", 3);
+  trigger_latest_resolve(self);
 }
 
 static void
@@ -13625,122 +11077,6 @@ command_history_reset_navigation(PumpkinWindow *self)
   }
   self->command_history_index = -1;
   g_clear_pointer(&self->command_history_draft, g_free);
-}
-
-static void
-command_history_push(PumpkinWindow *self, const char *command)
-{
-  if (self == NULL || self->command_history == NULL || command == NULL || *command == '\0') {
-    return;
-  }
-
-  g_ptr_array_add(self->command_history, g_strdup(command));
-
-  if (self->current != NULL) {
-    g_autofree char *path = command_history_file(self->current);
-    if (path != NULL) {
-      g_autofree char *clean = g_strdup(command);
-      if (clean != NULL) {
-        for (char *p = clean; *p != '\0'; p++) {
-          if (*p == '\r' || *p == '\n') {
-            *p = ' ';
-          }
-        }
-      }
-      FILE *fp = fopen(path, "a");
-      if (fp != NULL) {
-        fputs(clean != NULL ? clean : command, fp);
-        fputc('\n', fp);
-        fclose(fp);
-      }
-    }
-  }
-
-  command_history_reset_navigation(self);
-}
-
-static gboolean
-on_command_entry_key_pressed(GtkEventControllerKey *controller,
-                             guint keyval,
-                             guint keycode,
-                             GdkModifierType state,
-                             PumpkinWindow *self)
-{
-  (void)controller;
-  (void)keycode;
-  if (self == NULL || self->entry_command == NULL || self->command_history == NULL ||
-      self->command_history->len == 0) {
-    return FALSE;
-  }
-
-  if ((state & (GDK_CONTROL_MASK | GDK_ALT_MASK | GDK_SUPER_MASK | GDK_META_MASK)) != 0) {
-    return FALSE;
-  }
-
-  gboolean up = (keyval == GDK_KEY_Up || keyval == GDK_KEY_KP_Up);
-  gboolean down = (keyval == GDK_KEY_Down || keyval == GDK_KEY_KP_Down);
-  if (!up && !down) {
-    return FALSE;
-  }
-
-  const char *current_text = gtk_editable_get_text(GTK_EDITABLE(self->entry_command));
-  if (up) {
-    if (self->command_history_index < 0) {
-      self->command_history_index = (int)self->command_history->len - 1;
-      g_clear_pointer(&self->command_history_draft, g_free);
-      self->command_history_draft = g_strdup(current_text != NULL ? current_text : "");
-    } else if (self->command_history_index > 0) {
-      self->command_history_index--;
-    }
-  } else {
-    if (self->command_history_index < 0) {
-      return FALSE;
-    }
-    if (self->command_history_index < (int)self->command_history->len - 1) {
-      self->command_history_index++;
-    } else {
-      self->command_history_index = -1;
-    }
-  }
-
-  const char *replacement = "";
-  if (self->command_history_index >= 0 &&
-      self->command_history_index < (int)self->command_history->len) {
-    replacement = g_ptr_array_index(self->command_history, self->command_history_index);
-  } else if (self->command_history_draft != NULL) {
-    replacement = self->command_history_draft;
-  }
-  gtk_editable_set_text(GTK_EDITABLE(self->entry_command), replacement);
-  gtk_editable_set_position(GTK_EDITABLE(self->entry_command), -1);
-  if (self->command_history_index < 0) {
-    g_clear_pointer(&self->command_history_draft, g_free);
-  }
-  return TRUE;
-}
-
-static void
-on_send_command(GtkWidget *widget, PumpkinWindow *self)
-{
-  (void)widget;
-  if (self->current == NULL) {
-    return;
-  }
-
-  const char *cmd = gtk_editable_get_text(GTK_EDITABLE(self->entry_command));
-  g_autofree char *command = g_strdup(cmd != NULL ? cmd : "");
-  g_strstrip(command);
-  if (command[0] == '\0') {
-    return;
-  }
-
-  g_autoptr(GError) error = NULL;
-  if (!pumpkin_server_send_command(self->current, command, &error)) {
-    append_log(self, error->message);
-    return;
-  }
-
-  command_history_push(self, command);
-  gtk_editable_set_text(GTK_EDITABLE(self->entry_command), "");
 }
 
 static gboolean
@@ -13945,7 +11281,36 @@ on_log_file_activated(GtkListBox *box, GtkListBoxRow *row, PumpkinWindow *self)
   } else {
     gtk_text_buffer_move_mark(buffer, mark, &end);
   }
-  gtk_text_view_scroll_to_mark(self->log_file_view, mark, 0.0, TRUE, 0.0, 1.0);
+  queue_log_file_scroll_to_end(self);
+}
+
+static gboolean
+scroll_log_file_to_end_idle(gpointer user_data)
+{
+  PumpkinWindow *self = PUMPKIN_WINDOW(user_data);
+  self->log_file_scroll_idle_id = 0;
+  if (self == NULL || self->log_file_view == NULL) {
+    return G_SOURCE_REMOVE;
+  }
+  GtkTextBuffer *buffer = gtk_text_view_get_buffer(self->log_file_view);
+  if (buffer == NULL) {
+    return G_SOURCE_REMOVE;
+  }
+  GtkTextMark *mark = gtk_text_buffer_get_mark(buffer, "file-end");
+  if (mark != NULL) {
+    gtk_text_view_scroll_to_mark(self->log_file_view, mark, 0.0, TRUE, 0.0, 1.0);
+  }
+  return G_SOURCE_REMOVE;
+}
+
+static void
+queue_log_file_scroll_to_end(PumpkinWindow *self)
+{
+  if (self == NULL || self->log_file_view == NULL || self->log_file_scroll_idle_id != 0) {
+    return;
+  }
+  self->log_file_scroll_idle_id =
+    g_idle_add_full(G_PRIORITY_DEFAULT_IDLE, scroll_log_file_to_end_idle, g_object_ref(self), g_object_unref);
 }
 
 static void
@@ -14084,26 +11449,6 @@ on_open_worlds(GtkButton *button, PumpkinWindow *self)
   open_folder(self, dir);
 }
 
-static int
-parse_limit_entry(GtkEntry *entry, int max_value)
-{
-  if (entry == NULL) {
-    return 0;
-  }
-  const char *text = gtk_editable_get_text(GTK_EDITABLE(entry));
-  if (text == NULL || *text == '\0') {
-    return 0;
-  }
-  int value = atoi(text);
-  if (value <= 0) {
-    return 0;
-  }
-  if (max_value > 0 && value > max_value) {
-    return max_value;
-  }
-  return value;
-}
-
 static void
 save_settings_impl(PumpkinWindow *self, gboolean restart_server)
 {
@@ -14161,26 +11506,39 @@ save_settings_impl(PumpkinWindow *self, gboolean restart_server)
     return;
   }
 
+  int server_port = pumpkin_server_get_port(self->current);
+  int bedrock_port = pumpkin_server_get_bedrock_port(self->current);
+  int max_players = pumpkin_server_get_max_players(self->current);
+  int stats_sample = pumpkin_server_get_stats_sample_msec(self->current);
+  int auto_restart_delay = pumpkin_server_get_auto_restart_delay(self->current);
+  int rcon_port = pumpkin_server_get_rcon_port(self->current);
+  gboolean has_value = FALSE;
+
+  pumpkin_parse_optional_positive_int(self->entry_server_port, &server_port, &has_value);
+  pumpkin_parse_optional_positive_int(self->entry_bedrock_port, &bedrock_port, &has_value);
+  pumpkin_parse_optional_positive_int(self->entry_max_players, &max_players, &has_value);
+  pumpkin_parse_optional_positive_int(self->entry_stats_sample_msec, &stats_sample, &has_value);
+  pumpkin_parse_optional_positive_int(self->entry_auto_restart_delay, &auto_restart_delay, &has_value);
+  pumpkin_parse_optional_positive_int(self->entry_rcon_port, &rcon_port, &has_value);
+
   pumpkin_server_set_name(self->current, gtk_editable_get_text(GTK_EDITABLE(self->entry_server_name)));
   pumpkin_server_set_download_url(self->current, gtk_editable_get_text(GTK_EDITABLE(self->entry_download_url)));
-  pumpkin_server_set_port(self->current, atoi(gtk_editable_get_text(GTK_EDITABLE(self->entry_server_port))));
-  pumpkin_server_set_bedrock_port(self->current, atoi(gtk_editable_get_text(GTK_EDITABLE(self->entry_bedrock_port))));
-  pumpkin_server_set_max_players(self->current, atoi(gtk_editable_get_text(GTK_EDITABLE(self->entry_max_players))));
-  pumpkin_server_set_stats_sample_msec(
-    self->current,
-    atoi(gtk_editable_get_text(GTK_EDITABLE(self->entry_stats_sample_msec))));
+  pumpkin_server_set_port(self->current, server_port);
+  pumpkin_server_set_bedrock_port(self->current, bedrock_port);
+  pumpkin_server_set_max_players(self->current, max_players);
+  pumpkin_server_set_stats_sample_msec(self->current, stats_sample);
   int sys_cores = 0;
   int sys_ram_mb = 0;
   get_system_limits(&sys_cores, &sys_ram_mb);
-  int max_cpu = parse_limit_entry(self->entry_max_cpu_cores, sys_cores);
-  int max_ram = parse_limit_entry(self->entry_max_ram_mb, sys_ram_mb);
+  int max_cpu = pumpkin_parse_limit_entry(self->entry_max_cpu_cores, sys_cores);
+  int max_ram = pumpkin_parse_limit_entry(self->entry_max_ram_mb, sys_ram_mb);
   pumpkin_server_set_max_cpu_cores(self->current, max_cpu);
   pumpkin_server_set_max_ram_mb(self->current, max_ram);
   if (self->switch_auto_restart != NULL) {
     pumpkin_server_set_auto_restart(self->current, gtk_switch_get_active(self->switch_auto_restart));
   }
   if (self->entry_auto_restart_delay != NULL) {
-    pumpkin_server_set_auto_restart_delay(self->current, atoi(gtk_editable_get_text(GTK_EDITABLE(self->entry_auto_restart_delay))));
+    pumpkin_server_set_auto_restart_delay(self->current, auto_restart_delay);
   }
   if (self->switch_auto_update != NULL) {
     pumpkin_server_set_auto_update_enabled(self->current, gtk_switch_get_active(self->switch_auto_update));
@@ -14192,13 +11550,13 @@ save_settings_impl(PumpkinWindow *self, gboolean restart_server)
   if (self->entry_auto_update_time != NULL) {
     int hour = pumpkin_server_get_auto_update_hour(self->current);
     int minute = pumpkin_server_get_auto_update_minute(self->current);
-    if (parse_clock_time_entry(self->entry_auto_update_time, &hour, &minute)) {
+    if (pumpkin_parse_clock_time_entry(self->entry_auto_update_time, &hour, &minute)) {
       pumpkin_server_set_auto_update_hour(self->current, hour);
       pumpkin_server_set_auto_update_minute(self->current, minute);
     }
   }
   pumpkin_server_set_rcon_host(self->current, gtk_editable_get_text(GTK_EDITABLE(self->entry_rcon_host)));
-  pumpkin_server_set_rcon_port(self->current, atoi(gtk_editable_get_text(GTK_EDITABLE(self->entry_rcon_port))));
+  pumpkin_server_set_rcon_port(self->current, rcon_port);
   pumpkin_server_set_rcon_password(self->current, gtk_editable_get_text(GTK_EDITABLE(self->entry_rcon_password)));
 
   g_autoptr(GError) error = NULL;
@@ -14274,29 +11632,29 @@ server_settings_require_restart(PumpkinWindow *self)
   int sys_ram_mb = 0;
   get_system_limits(&sys_cores, &sys_ram_mb);
 
-  if (!entry_matches_int(self->entry_server_port, pumpkin_server_get_port(server))) {
+  if (!pumpkin_entry_matches_int(self->entry_server_port, pumpkin_server_get_port(server))) {
     return TRUE;
   }
-  if (!entry_matches_int(self->entry_bedrock_port, pumpkin_server_get_bedrock_port(server))) {
+  if (!pumpkin_entry_matches_int(self->entry_bedrock_port, pumpkin_server_get_bedrock_port(server))) {
     return TRUE;
   }
-  if (!entry_matches_int(self->entry_max_players, pumpkin_server_get_max_players(server))) {
+  if (!pumpkin_entry_matches_int(self->entry_max_players, pumpkin_server_get_max_players(server))) {
     return TRUE;
   }
-  if (parse_limit_entry(self->entry_max_cpu_cores, sys_cores) != pumpkin_server_get_max_cpu_cores(server)) {
+  if (pumpkin_parse_limit_entry(self->entry_max_cpu_cores, sys_cores) != pumpkin_server_get_max_cpu_cores(server)) {
     return TRUE;
   }
-  if (parse_limit_entry(self->entry_max_ram_mb, sys_ram_mb) != pumpkin_server_get_max_ram_mb(server)) {
+  if (pumpkin_parse_limit_entry(self->entry_max_ram_mb, sys_ram_mb) != pumpkin_server_get_max_ram_mb(server)) {
     return TRUE;
   }
-  if (!entry_matches_string(self->entry_rcon_host, pumpkin_server_get_rcon_host(server))) {
+  if (!pumpkin_entry_matches_string(self->entry_rcon_host, pumpkin_server_get_rcon_host(server))) {
     return TRUE;
   }
-  if (!entry_matches_int(self->entry_rcon_port, pumpkin_server_get_rcon_port(server))) {
+  if (!pumpkin_entry_matches_int(self->entry_rcon_port, pumpkin_server_get_rcon_port(server))) {
     return TRUE;
   }
   GtkEntry *rcon_password_entry = self->entry_rcon_password != NULL ? GTK_ENTRY(self->entry_rcon_password) : NULL;
-  if (!entry_matches_string(rcon_password_entry, pumpkin_server_get_rcon_password(server))) {
+  if (!pumpkin_entry_matches_string(rcon_password_entry, pumpkin_server_get_rcon_password(server))) {
     return TRUE;
   }
 
@@ -14338,6 +11696,10 @@ pumpkin_window_init(PumpkinWindow *self)
   gtk_widget_init_template(GTK_WIDGET(self));
   g_signal_connect(self, "close-request", G_CALLBACK(on_window_close_request), self);
   g_signal_connect(self, "notify::visible", G_CALLBACK(on_window_visible_changed), self);
+  if (self->overview_list != NULL) {
+    g_signal_connect(self->overview_list, "row-activated",
+                     G_CALLBACK(on_overview_row_activated), self);
+  }
 
   adw_view_stack_set_visible_child_name(self->view_stack, "overview");
   if (self->details_stack != NULL) {
@@ -14383,6 +11745,10 @@ pumpkin_window_init(PumpkinWindow *self)
   g_signal_connect(self->btn_import_server_overview, "clicked", G_CALLBACK(on_import_server), self);
   if (self->btn_sponsor_pumpkin != NULL) {
     g_signal_connect(self->btn_sponsor_pumpkin, "clicked", G_CALLBACK(on_sponsor_pumpkin_clicked), self);
+    GtkEventController *motion = gtk_event_controller_motion_new();
+    g_signal_connect(motion, "enter", G_CALLBACK(on_sponsor_button_enter), self);
+    g_signal_connect(motion, "leave", G_CALLBACK(on_sponsor_button_leave), self);
+    gtk_widget_add_controller(GTK_WIDGET(self->btn_sponsor_pumpkin), motion);
   }
   g_signal_connect(self->btn_remove_server, "clicked", G_CALLBACK(on_remove_server), self);
   g_signal_connect(self->btn_details_back, "clicked", G_CALLBACK(on_details_back), self);
@@ -14415,38 +11781,27 @@ pumpkin_window_init(PumpkinWindow *self)
   if (self->player_search != NULL) {
     g_signal_connect(self->player_search, "search-changed", G_CALLBACK(on_player_search_changed), self);
   }
-  if (self->btn_player_sort_last_online != NULL) {
-    g_object_set_data(G_OBJECT(self->btn_player_sort_last_online), "sort-field", GINT_TO_POINTER(0));
-    g_signal_connect(self->btn_player_sort_last_online, "clicked",
-                     G_CALLBACK(on_player_sort_button_clicked), self);
+  if (self->player_sort_dropdown != NULL) {
+    g_signal_connect(self->player_sort_dropdown, "notify::selected",
+                     G_CALLBACK(on_player_sort_dropdown_changed), self);
   }
-  if (self->btn_player_sort_playtime != NULL) {
-    g_object_set_data(G_OBJECT(self->btn_player_sort_playtime), "sort-field", GINT_TO_POINTER(1));
-    g_signal_connect(self->btn_player_sort_playtime, "clicked",
-                     G_CALLBACK(on_player_sort_button_clicked), self);
+  if (self->btn_player_sort_order != NULL) {
+    g_signal_connect(self->btn_player_sort_order, "toggled",
+                     G_CALLBACK(on_player_sort_order_toggled), self);
   }
-  if (self->btn_player_sort_first_joined != NULL) {
-    g_object_set_data(G_OBJECT(self->btn_player_sort_first_joined), "sort-field", GINT_TO_POINTER(2));
-    g_signal_connect(self->btn_player_sort_first_joined, "clicked",
-                     G_CALLBACK(on_player_sort_button_clicked), self);
-  }
-  if (self->btn_player_sort_name != NULL) {
-    g_object_set_data(G_OBJECT(self->btn_player_sort_name), "sort-field", GINT_TO_POINTER(3));
-    g_signal_connect(self->btn_player_sort_name, "clicked",
-                     G_CALLBACK(on_player_sort_button_clicked), self);
+  if (self->players_stack != NULL) {
+    g_signal_connect(self->players_stack, "notify::visible-child-name",
+                     G_CALLBACK(on_players_stack_visible_child_changed), self);
   }
   self->player_sort_field = 0;
   self->player_sort_ascending = FALSE;
-  update_player_sort_buttons(self);
-  if (self->whitelist_search != NULL) {
-    g_signal_connect(self->whitelist_search, "search-changed",
-                     G_CALLBACK(on_whitelist_search_changed), self);
-  }
-  if (self->banned_search != NULL) {
-    g_signal_connect(self->banned_search, "search-changed",
-                     G_CALLBACK(on_banned_search_changed), self);
-  }
+  update_player_sort_controls(self);
+  update_player_search_placeholder(self);
   g_signal_connect(self->btn_open_plugins, "clicked", G_CALLBACK(on_open_plugins), self);
+  if (self->btn_plugins_marketplace != NULL) {
+    g_signal_connect(self->btn_plugins_marketplace, "clicked",
+                     G_CALLBACK(on_plugins_marketplace_clicked), self);
+  }
   g_signal_connect(self->btn_open_players, "clicked", G_CALLBACK(on_open_players), self);
   g_signal_connect(self->btn_open_worlds, "clicked", G_CALLBACK(on_open_worlds), self);
   g_signal_connect(self->btn_save_settings, "clicked", G_CALLBACK(on_save_settings), self);
@@ -14531,6 +11886,10 @@ pumpkin_window_init(PumpkinWindow *self)
   }
   if (self->switch_run_in_background != NULL) {
     g_signal_connect(self->switch_run_in_background, "notify::active",
+                     G_CALLBACK(on_settings_switch_changed), self);
+  }
+  if (self->switch_detailed_overview_cards != NULL) {
+    g_signal_connect(self->switch_detailed_overview_cards, "notify::active",
                      G_CALLBACK(on_settings_switch_changed), self);
   }
   if (self->switch_autostart_on_boot != NULL) {
@@ -14643,6 +12002,7 @@ pumpkin_window_init(PumpkinWindow *self)
   self->server_running_hints = g_hash_table_new_full(g_direct_hash, g_direct_equal, g_object_unref, NULL);
   self->ddns_last_sync_by_server = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
   self->ddns_status_by_server = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
+  self->expanded_network_ids = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, NULL);
   self->command_history = g_ptr_array_new_with_free_func(g_free);
   self->command_history_index = -1;
   self->command_history_draft = NULL;
@@ -14669,6 +12029,10 @@ pumpkin_window_init(PumpkinWindow *self)
     if (self->switch_run_in_background != NULL) {
       gtk_switch_set_active(self->switch_run_in_background,
                             pumpkin_config_get_run_in_background(self->config));
+    }
+    if (self->switch_detailed_overview_cards != NULL) {
+      gtk_switch_set_active(self->switch_detailed_overview_cards,
+                            pumpkin_config_get_detailed_overview_cards(self->config));
     }
     if (self->switch_autostart_on_boot != NULL) {
       gtk_switch_set_active(self->switch_autostart_on_boot,
@@ -14789,6 +12153,10 @@ pumpkin_window_dispose(GObject *object)
     g_ptr_array_unref(self->networks);
     self->networks = NULL;
   }
+  if (self->expanded_network_ids != NULL) {
+    g_hash_table_destroy(self->expanded_network_ids);
+    self->expanded_network_ids = NULL;
+  }
   self->command_history_index = -1;
   g_clear_pointer(&self->command_history_draft, g_free);
   if (self->download_progress_state != NULL) {
@@ -14860,6 +12228,14 @@ pumpkin_window_dispose(GObject *object)
     g_source_remove(self->network_details_refresh_idle_id);
     self->network_details_refresh_idle_id = 0;
   }
+  if (self->console_scroll_idle_id != 0) {
+    g_source_remove(self->console_scroll_idle_id);
+    self->console_scroll_idle_id = 0;
+  }
+  if (self->log_file_scroll_idle_id != 0) {
+    g_source_remove(self->log_file_scroll_idle_id);
+    self->log_file_scroll_idle_id = 0;
+  }
   self->overview_refresh_needs_details = FALSE;
   clear_auto_update_countdown(self);
   if (self->restart_delay_id != 0) {
@@ -14880,7 +12256,7 @@ update_live_player_names(PumpkinWindow *self, const char *line)
     return;
   }
 
-  g_autofree char *clean = strip_ansi(line);
+  g_autofree char *clean = pumpkin_strip_ansi(line);
   const char *check = clean != NULL ? clean : line;
   PlayerPlatform platform_hint = platform_from_line(check);
 
@@ -14957,11 +12333,11 @@ update_live_player_names(PumpkinWindow *self, const char *line)
     }
   }
 
-  if (is_player_list_snapshot_line(check)) {
+  if (pumpkin_is_player_list_snapshot_line(check)) {
     g_autoptr(GHashTable) present = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, NULL);
     int count_value = -1;
     g_autofree char *names_csv = NULL;
-    gboolean parsed_snapshot = parse_player_list_snapshot_line(check, &count_value, &names_csv);
+    gboolean parsed_snapshot = pumpkin_parse_player_list_snapshot_line(check, &count_value, &names_csv);
 
     if (!parsed_snapshot) {
       g_autoptr(GRegex) count_re = g_regex_new("there\\s+are\\s+([0-9]+)", G_REGEX_CASELESS, 0, NULL);
@@ -15112,6 +12488,7 @@ pumpkin_window_class_init(PumpkinWindowClass *class)
   gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, view_stack);
   gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, details_switcher);
   gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, players_switcher);
+  gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, players_stack);
   gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, overview_page_box);
   gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, overview_header_row);
   gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, details_page_box);
@@ -15132,8 +12509,10 @@ pumpkin_window_class_init(PumpkinWindowClass *class)
   gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, btn_import_server);
   gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, btn_import_server_overview);
   gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, btn_sponsor_pumpkin);
+  gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, label_sponsor_heart);
   gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, btn_remove_server);
   gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, btn_open_plugins);
+  gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, btn_plugins_marketplace);
   gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, btn_open_players);
   gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, btn_open_worlds);
   gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, btn_save_settings);
@@ -15144,12 +12523,8 @@ pumpkin_window_class_init(PumpkinWindowClass *class)
   gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, world_drop_hint);
   gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, player_list);
   gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, player_search);
-  gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, btn_player_sort_last_online);
-  gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, btn_player_sort_playtime);
-  gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, btn_player_sort_first_joined);
-  gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, btn_player_sort_name);
-  gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, whitelist_search);
-  gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, banned_search);
+  gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, player_sort_dropdown);
+  gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, btn_player_sort_order);
   gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, whitelist_list);
   gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, banned_list);
   gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, log_files_list);
@@ -15247,6 +12622,7 @@ pumpkin_window_class_init(PumpkinWindowClass *class)
   gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, label_resource_limits);
   gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, switch_use_cache);
   gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, switch_run_in_background);
+  gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, switch_detailed_overview_cards);
   gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, switch_autostart_on_boot);
   gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, switch_start_minimized);
   gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, switch_auto_start_servers);
@@ -15391,6 +12767,25 @@ pumpkin_window_stop_all_servers(PumpkinWindow *self)
     }
     g_object_unref(server);
   }
+}
+
+void
+pumpkin_window_set_review_prompt_shown(PumpkinWindow *self, gboolean shown)
+{
+  if (self == NULL || self->config == NULL) {
+    return;
+  }
+  pumpkin_config_set_review_prompt_shown(self->config, shown);
+  pumpkin_config_save(self->config, NULL);
+}
+
+gboolean
+pumpkin_window_get_review_prompt_shown(PumpkinWindow *self)
+{
+  if (self == NULL || self->config == NULL) {
+    return FALSE;
+  }
+  return pumpkin_config_get_review_prompt_shown(self->config);
 }
 
 void

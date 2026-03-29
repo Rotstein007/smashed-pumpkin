@@ -17,6 +17,7 @@ struct _PumpkinApp {
   gboolean start_minimized;
   gboolean first_activation;
   gboolean auto_start_pending;
+  gboolean review_prompt_shown;
 };
 
 G_DEFINE_FINAL_TYPE(PumpkinApp, pumpkin_app, ADW_TYPE_APPLICATION)
@@ -25,6 +26,81 @@ static GPid tray_pid = 0;
 static gboolean tray_spawned = FALSE;
 static guint tray_watch_id = 0;
 static gboolean tray_available = FALSE;
+
+static void
+present_review_prompt(PumpkinApp *self, GtkWindow *win)
+{
+  if (self == NULL || win == NULL || self->review_prompt_shown) {
+    return;
+  }
+
+  self->review_prompt_shown = TRUE;
+
+  gboolean is_de = FALSE;
+  const char *const *langs = g_get_language_names();
+  for (const char *const *lang = langs; lang != NULL && *lang != NULL; lang++) {
+    if (g_str_has_prefix(*lang, "de")) {
+      is_de = TRUE;
+      break;
+    }
+  }
+
+  AdwAlertDialog *alert = ADW_ALERT_DIALOG(adw_alert_dialog_new(
+    is_de ? "Gib uns Feedback" : "Share your feedback",
+    is_de ? "Du kannst die App in GNOME Software oder KDE Discover bewerten."
+          : "You can rate the app in GNOME Software or KDE Discover."
+  ));
+  adw_alert_dialog_add_response(alert, "close", is_de ? "Schließen" : "Close");
+  adw_alert_dialog_set_default_response(alert, "close");
+  adw_alert_dialog_set_close_response(alert, "close");
+
+  GtkWidget *content = gtk_box_new(GTK_ORIENTATION_VERTICAL, 12);
+  gtk_widget_set_margin_top(content, 6);
+  gtk_widget_set_margin_bottom(content, 6);
+
+  GtkWidget *icons = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 18);
+  gtk_widget_set_halign(icons, GTK_ALIGN_CENTER);
+
+  GtkWidget *gnome_box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 6);
+  gtk_widget_set_halign(gnome_box, GTK_ALIGN_CENTER);
+  GtkWidget *gnome_icon = gtk_image_new_from_resource("/dev/rotstein/SmashedPumpkin/store/org.gnome.Software.svg");
+  gtk_image_set_pixel_size(GTK_IMAGE(gnome_icon), 64);
+  GtkWidget *gnome_label = gtk_label_new("GNOME Software");
+  gtk_box_append(GTK_BOX(gnome_box), gnome_icon);
+  gtk_box_append(GTK_BOX(gnome_box), gnome_label);
+
+  GtkWidget *discover_box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 6);
+  gtk_widget_set_halign(discover_box, GTK_ALIGN_CENTER);
+  GtkWidget *discover_icon = gtk_image_new_from_resource("/dev/rotstein/SmashedPumpkin/store/org.kde.discover.svg");
+  gtk_image_set_pixel_size(GTK_IMAGE(discover_icon), 64);
+  GtkWidget *discover_label = gtk_label_new("KDE Discover");
+  gtk_box_append(GTK_BOX(discover_box), discover_icon);
+  gtk_box_append(GTK_BOX(discover_box), discover_label);
+
+  gtk_box_append(GTK_BOX(icons), gnome_box);
+  gtk_box_append(GTK_BOX(icons), discover_box);
+
+  gtk_box_append(GTK_BOX(content), icons);
+  adw_alert_dialog_set_extra_child(alert, content);
+  adw_dialog_present(ADW_DIALOG(alert), GTK_WIDGET(win));
+}
+
+static void
+maybe_present_review_prompt(PumpkinApp *self, GtkWindow *win)
+{
+  if (self == NULL || win == NULL || self->review_prompt_shown) {
+    return;
+  }
+  if (!PUMPKIN_IS_WINDOW(win)) {
+    return;
+  }
+  if (pumpkin_window_get_review_prompt_shown(PUMPKIN_WINDOW(win))) {
+    self->review_prompt_shown = TRUE;
+    return;
+  }
+  pumpkin_window_set_review_prompt_shown(PUMPKIN_WINDOW(win), TRUE);
+  present_review_prompt(self, win);
+}
 
 static char *
 resolve_tray_helper_path(void)
@@ -192,6 +268,9 @@ pumpkin_app_activate(GApplication *app)
     pumpkin_window_select_server(PUMPKIN_WINDOW(win), self->pending_server_id);
     g_clear_pointer(&self->pending_server_id, g_free);
   }
+  if (gtk_widget_get_visible(GTK_WIDGET(win))) {
+    maybe_present_review_prompt(self, win);
+  }
 }
 
 static void
@@ -216,25 +295,29 @@ pumpkin_app_about_action(GSimpleAction *action,
   adw_about_dialog_set_application_name(about, APP_NAME);
   adw_about_dialog_set_application_icon(about, APP_ID);
   adw_about_dialog_set_version(about, APP_VERSION);
-  adw_about_dialog_set_release_notes_version(about, "0.4.1");
+  adw_about_dialog_set_release_notes_version(about, "0.5.0");
   if (is_de) {
     adw_about_dialog_set_release_notes(
       about,
       "<p>Neuerungen</p>"
       "<ul>"
-      "<li>Neue Server-Netzwerke: Mehrere Server lassen sich jetzt als Verbund verwalten und gemeinsam starten, stoppen und aktualisieren.</li>"
-      "<li>Neuer Domains-Tab mit Dynamic DNS: Bei wechselnder öffentlicher IP können DNS-Einträge jetzt automatisch aktualisiert werden.</li>"
+      "<li>Die App wirkt jetzt aufgeräumter und moderner, mit einer klareren Serverübersicht und überarbeiteten Detailansichten.</li>"
+      "<li>Plugins, Welten und Servergruppen lassen sich angenehmer verwalten, mit besseren Aktionen und weniger visuellem Ballast.</li>"
+      "<li>Netzwerke und Spielerverwaltung wurden erweitert, damit sich größere Setups übersichtlicher organisieren lassen.</li>"
+      "<li>Viele kleine Verbesserungen machen Updates, Neustarts und den Alltag insgesamt zuverlässiger.</li>"
       "</ul>"
-      "<p>Vielen Dank für euer Feedback, das diese Funktionen direkt mitgeprägt hat.</p>");
+      "<p>Vielen Dank für euer Feedback. Es hat dieses Update direkt mitgeprägt.</p>");
   } else {
     adw_about_dialog_set_release_notes(
       about,
       "<p>What’s new</p>"
       "<ul>"
-      "<li>New server networks: You can now manage multiple servers as one group and start, stop, or update them together.</li>"
-      "<li>New Domains tab with Dynamic DNS: DNS records can now be updated automatically when your public IP changes.</li>"
+      "<li>The app now feels cleaner and more modern, with a clearer server overview and refined detail views.</li>"
+      "<li>Plugins, worlds, and server groups are easier to manage, with better actions and less visual clutter.</li>"
+      "<li>Networks and player management have been expanded to make larger setups easier to organize.</li>"
+      "<li>Many smaller improvements make updates, restarts, and everyday use more reliable.</li>"
       "</ul>"
-      "<p>Thank you to everyone in the community whose feedback directly shaped this update.</p>");
+      "<p>Thank you for your feedback. It directly shaped this update.</p>");
   }
   adw_about_dialog_set_developer_name(about, "Rotstein");
   adw_about_dialog_set_comments(about,
@@ -382,6 +465,7 @@ pumpkin_app_init(PumpkinApp *self)
 {
   self->first_activation = TRUE;
   self->auto_start_pending = FALSE;
+  self->review_prompt_shown = FALSE;
 }
 
 PumpkinApp *
