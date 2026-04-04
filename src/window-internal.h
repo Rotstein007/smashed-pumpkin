@@ -179,6 +179,10 @@ struct _PumpkinWindow {
   GtkBox *details_page_box;
   GtkBox *details_header_row;
   GtkBox *details_identity_row;
+  GtkBox *network_details_page_box;
+  GtkBox *network_details_header_row;
+  GtkBox *network_details_identity_row;
+  GtkBox *network_details_action_row;
   GtkBox *console_command_row;
   GtkBox *servers_page_box;
   GtkBox *servers_header_row;
@@ -245,6 +249,19 @@ struct _PumpkinWindow {
   GtkLabel *details_title;
   GtkImage *details_server_icon;
   GtkButton *btn_details_back;
+  GtkLabel *network_details_title;
+  GtkLabel *network_details_status;
+  GtkImage *network_details_icon;
+  GtkButton *btn_network_details_back;
+  GtkButton *btn_network_details_start;
+  GtkButton *btn_network_details_stop;
+  GtkButton *btn_network_details_update;
+  GtkButton *btn_network_details_install;
+  GtkButton *btn_network_details_add;
+  GtkButton *btn_network_details_set_proxy;
+  GtkButton *btn_network_details_clear_proxy;
+  GtkButton *btn_network_details_set_icon;
+  GtkButton *btn_network_details_reset_icon;
   GtkButton *btn_details_start;
   GtkButton *btn_details_stop;
   GtkButton *btn_details_restart;
@@ -385,6 +402,7 @@ struct _PumpkinWindow {
   gboolean settings_invalid;
   gboolean background_hold;
   char *last_details_page;
+  char *details_return_view;
   char *pending_details_page;
   char *pending_view_page;
   PumpkinServer *pending_server;
@@ -415,7 +433,6 @@ struct _PumpkinWindow {
   char *command_history_draft;
   GPtrArray *networks;
   GHashTable *expanded_network_ids;
-  AdwDialog *network_details_dialog;
   GtkBox *network_details_members_box;
   GtkProgressBar *network_details_progress;
   char *network_details_network_id;

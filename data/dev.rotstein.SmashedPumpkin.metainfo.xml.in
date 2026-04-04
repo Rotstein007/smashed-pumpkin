@@ -6,9 +6,9 @@
   <summary xml:lang="de">Pumpkin-Minecraft-Server im GNOME-Stil verwalten</summary>
   <description>
     <p>Smashed Pumpkin is a GNOME-style app for managing your Pumpkin Minecraft server.</p>
-    <p>Smashed Pumpkin ist eine App im GNOME-Stil zur Verwaltung deines Pumpkin-Minecraft-Servers.</p>
+    <p xml:lang="de">Smashed Pumpkin ist eine App im GNOME-Stil zur Verwaltung deines Pumpkin-Minecraft-Servers.</p>
     <p>It helps you run and maintain your server and checks automatically for new updates.</p>
-    <p>Sie hilft dir beim Betrieb und bei der Pflege deines Servers und sucht automatisch nach Updates.</p>
+    <p xml:lang="de">Sie hilft dir beim Betrieb und bei der Pflege deines Servers und sucht automatisch nach Updates.</p>
   </description>
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>GPL-3.0-or-later</project_license>
@@ -25,78 +25,96 @@
     <screenshot type="default">
       <image type="source">https://raw.githubusercontent.com/Rotstein007/smashed-pumpkin/master/data/screenshots/start-screen.png</image>
       <caption xml:lang="en">Start screen</caption>
+      <caption xml:lang="de">Startansicht</caption>
     </screenshot>
     <screenshot>
       <image type="source">https://raw.githubusercontent.com/Rotstein007/smashed-pumpkin/master/data/screenshots/start-screen-wm.png</image>
       <caption xml:lang="en">Start screen in light mode</caption>
+      <caption xml:lang="de">Startansicht im hellen Modus</caption>
     </screenshot>
     <screenshot>
       <image type="source">https://raw.githubusercontent.com/Rotstein007/smashed-pumpkin/master/data/screenshots/start-screen-rating.png</image>
       <caption xml:lang="en">Feedback prompt</caption>
+      <caption xml:lang="de">Feedback-Hinweis</caption>
     </screenshot>
     <screenshot>
       <image type="source">https://raw.githubusercontent.com/Rotstein007/smashed-pumpkin/master/data/screenshots/start-screen-rating-wm.png</image>
       <caption xml:lang="en">Feedback prompt in light mode</caption>
+      <caption xml:lang="de">Feedback-Hinweis im hellen Modus</caption>
     </screenshot>
     <screenshot>
       <image type="source">https://raw.githubusercontent.com/Rotstein007/smashed-pumpkin/master/data/screenshots/console.png</image>
       <caption xml:lang="en">Server console</caption>
+      <caption xml:lang="de">Serverkonsole</caption>
     </screenshot>
     <screenshot>
       <image type="source">https://raw.githubusercontent.com/Rotstein007/smashed-pumpkin/master/data/screenshots/console-wm.png</image>
       <caption xml:lang="en">Server console in light mode</caption>
+      <caption xml:lang="de">Serverkonsole im hellen Modus</caption>
     </screenshot>
     <screenshot>
       <image type="source">https://raw.githubusercontent.com/Rotstein007/smashed-pumpkin/master/data/screenshots/stats.png</image>
       <caption xml:lang="en">Resource stats</caption>
+      <caption xml:lang="de">Ressourcenstatistiken</caption>
     </screenshot>
     <screenshot>
       <image type="source">https://raw.githubusercontent.com/Rotstein007/smashed-pumpkin/master/data/screenshots/stats-wm.png</image>
       <caption xml:lang="en">Resource stats in light mode</caption>
+      <caption xml:lang="de">Ressourcenstatistiken im hellen Modus</caption>
     </screenshot>
     <screenshot>
       <image type="source">https://raw.githubusercontent.com/Rotstein007/smashed-pumpkin/master/data/screenshots/player.png</image>
       <caption xml:lang="en">Players</caption>
+      <caption xml:lang="de">Spieler</caption>
     </screenshot>
     <screenshot>
       <image type="source">https://raw.githubusercontent.com/Rotstein007/smashed-pumpkin/master/data/screenshots/player-wm.png</image>
       <caption xml:lang="en">Players in light mode</caption>
+      <caption xml:lang="de">Spieler im hellen Modus</caption>
     </screenshot>
     <screenshot>
       <image type="source">https://raw.githubusercontent.com/Rotstein007/smashed-pumpkin/master/data/screenshots/plugins.png</image>
       <caption xml:lang="en">Plugin manager</caption>
+      <caption xml:lang="de">Plugin-Verwaltung</caption>
     </screenshot>
     <screenshot>
       <image type="source">https://raw.githubusercontent.com/Rotstein007/smashed-pumpkin/master/data/screenshots/plugins-wm.png</image>
       <caption xml:lang="en">Plugin manager in light mode</caption>
+      <caption xml:lang="de">Plugin-Verwaltung im hellen Modus</caption>
     </screenshot>
     <screenshot>
       <image type="source">https://raw.githubusercontent.com/Rotstein007/smashed-pumpkin/master/data/screenshots/world.png</image>
       <caption xml:lang="en">World manager</caption>
+      <caption xml:lang="de">Welten-Verwaltung</caption>
     </screenshot>
     <screenshot>
       <image type="source">https://raw.githubusercontent.com/Rotstein007/smashed-pumpkin/master/data/screenshots/world-wm.png</image>
       <caption xml:lang="en">World manager in light mode</caption>
+      <caption xml:lang="de">Welten-Verwaltung im hellen Modus</caption>
     </screenshot>
     <screenshot>
       <image type="source">https://raw.githubusercontent.com/Rotstein007/smashed-pumpkin/master/data/screenshots/logs.png</image>
       <caption xml:lang="en">Log files</caption>
+      <caption xml:lang="de">Logdateien</caption>
     </screenshot>
     <screenshot>
       <image type="source">https://raw.githubusercontent.com/Rotstein007/smashed-pumpkin/master/data/screenshots/logs-wm.png</image>
       <caption xml:lang="en">Log files in light mode</caption>
+      <caption xml:lang="de">Logdateien im hellen Modus</caption>
     </screenshot>
     <screenshot>
       <image type="source">https://raw.githubusercontent.com/Rotstein007/smashed-pumpkin/master/data/screenshots/settings.png</image>
       <caption xml:lang="en">Server settings</caption>
+      <caption xml:lang="de">Servereinstellungen</caption>
     </screenshot>
     <screenshot>
       <image type="source">https://raw.githubusercontent.com/Rotstein007/smashed-pumpkin/master/data/screenshots/settings-wm.png</image>
       <caption xml:lang="en">Server settings in light mode</caption>
+      <caption xml:lang="de">Servereinstellungen im hellen Modus</caption>
     </screenshot>
   </screenshots>
   <requires>
-    <display_length compare="ge">600</display_length>
+    <display_length compare="ge">360</display_length>
   </requires>
   <supports>
     <control>keyboard</control>
@@ -104,6 +122,22 @@
     <control>touch</control>
   </supports>
   <releases>
+    <release version="0.5.1" date="2026-04-04">
+      <description>
+        <ul>
+          <li>Updates are now more reliable and the console shows more clearly which build is being replaced.</li>
+          <li xml:lang="de">Updates laufen jetzt zuverlässiger und die Konsole zeigt klarer an, welcher Build ersetzt wird.</li>
+          <li>The overview handles server networks more cleanly, with better scrolling behavior and a more consistent visual style.</li>
+          <li xml:lang="de">Die Übersicht geht mit Servernetzwerken jetzt sauberer um, scrollt besser und wirkt optisch einheitlicher.</li>
+          <li>Server networks now have their own detail view to make larger setups easier to manage.</li>
+          <li xml:lang="de">Servernetzwerke haben jetzt eine eigene Detailansicht, damit sich größere Setups übersichtlicher verwalten lassen.</li>
+          <li>Flathub metadata, descriptions, and screenshots have been cleaned up and prepared more carefully.</li>
+          <li xml:lang="de">Flathub-Metadaten, Beschreibungen und Screenshots wurden bereinigt und sauberer vorbereitet.</li>
+        </ul>
+        <p>Thank you for your feedback. It directly shaped these fixes.</p>
+        <p xml:lang="de">Vielen Dank für euer Feedback. Es hat diese Fehlerbehebungen direkt mitgeprägt.</p>
+      </description>
+    </release>
     <release version="0.5.0" date="2026-03-29">
       <description>
         <ul>
@@ -117,7 +151,7 @@
           <li xml:lang="de">Viele kleine Verbesserungen machen Updates, Neustarts und den Alltag insgesamt zuverlässiger.</li>
         </ul>
         <p>Thank you for your feedback. It directly shaped this update.</p>
-        <p>Vielen Dank für euer Feedback. Es hat dieses Update direkt mitgeprägt.</p>
+        <p xml:lang="de">Vielen Dank für euer Feedback. Es hat dieses Update direkt mitgeprägt.</p>
       </description>
     </release>
     <release version="0.4.1" date="2026-03-04">
@@ -129,7 +163,7 @@
           <li xml:lang="de">Neuer Domains-Tab mit Dynamic DNS: Bei wechselnder öffentlicher IP können DNS-Einträge jetzt automatisch aktualisiert werden.</li>
         </ul>
         <p>Thank you to everyone in the community whose feedback directly shaped this update.</p>
-        <p>Vielen Dank für euer Feedback, das diese Funktionen direkt mitgeprägt hat.</p>
+        <p xml:lang="de">Vielen Dank für euer Feedback, das diese Funktionen direkt mitgeprägt hat.</p>
       </description>
     </release>
     <release version="0.4.0" date="2026-02-28">

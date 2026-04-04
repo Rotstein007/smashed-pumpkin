@@ -70,8 +70,9 @@ static void on_overview_network_start_all_clicked(GtkButton *button, gpointer us
 static void on_overview_network_stop_all_clicked(GtkButton *button, gpointer user_data);
 static void on_overview_network_update_all_clicked(GtkButton *button, gpointer user_data);
 static void on_overview_network_install_all_clicked(GtkButton *button, gpointer user_data);
-static void on_overview_network_details_clicked(GtkButton *button, gpointer user_data);
+static void open_overview_network_details(PumpkinWindow *self, ServerNetwork *network);
 static void on_overview_network_add_current_clicked(GtkButton *button, gpointer user_data);
+static void on_overview_network_row_activated(GtkListBox *box, GtkListBoxRow *row, PumpkinWindow *self);
 static void on_overview_network_add_server_clicked(GtkButton *button, gpointer user_data);
 static void on_overview_network_remove_member_clicked(GtkButton *button, gpointer user_data);
 static void on_overview_network_set_proxy_confirmed(GObject *dialog, GAsyncResult *res, gpointer user_data);
@@ -79,7 +80,6 @@ static void on_overview_network_clear_proxy_clicked(GtkButton *button, gpointer 
 static void on_overview_network_set_proxy_clicked(GtkButton *button, gpointer user_data);
 static void on_overview_network_delete_clicked(GtkButton *button, gpointer user_data);
 static void on_overview_network_delete_confirmed(GObject *dialog, GAsyncResult *res, gpointer user_data);
-static void on_overview_network_toggle_expanded(GtkToggleButton *button, PumpkinWindow *self);
 static void on_choose_network_icon_clicked(GtkButton *button, PumpkinWindow *self);
 static void on_choose_network_icon_done(GObject *source, GAsyncResult *res, gpointer user_data);
 static void on_reset_network_icon_clicked(GtkButton *button, PumpkinWindow *self);
@@ -92,7 +92,6 @@ static void queue_network_details_refresh(PumpkinWindow *self);
 static gboolean refresh_network_details_idle(gpointer user_data);
 static char *network_icon_path(PumpkinWindow *self, const char *network_id);
 static GtkWidget *create_network_icon_widget(PumpkinWindow *self, ServerNetwork *network, int pixel_size);
-static gboolean network_is_expanded(PumpkinWindow *self, const char *network_id);
 static void on_overview_remove_clicked(GtkButton *button, PumpkinWindow *self);
 static void on_overview_remove_confirmed(GObject *dialog, GAsyncResult *res, gpointer user_data);
 static void on_sponsor_pumpkin_clicked(GtkButton *button, PumpkinWindow *self);
@@ -103,6 +102,7 @@ static void on_add_server_entry_activate(GtkEntry *entry, PumpkinWindow *self);
 static void on_import_server(GtkButton *button, PumpkinWindow *self);
 static void on_import_server_done(GObject *source, GAsyncResult *res, gpointer user_data);
 static void on_details_back(GtkButton *button, PumpkinWindow *self);
+static void on_network_details_back(GtkButton *button, PumpkinWindow *self);
 static void on_download_progress(goffset current, goffset total, gpointer user_data);
 static void on_details_install(GtkButton *button, PumpkinWindow *self);
 static void on_details_update(GtkButton *button, PumpkinWindow *self);
@@ -2883,7 +2883,6 @@ start_auto_update_countdown(PumpkinWindow *self, PumpkinServer *server)
   self->auto_update_countdown_remaining = 10;
   send_server_chat(server,
                    "The server will restart in 10 seconds to update to the latest version.");
-  set_details_status_for_server(self, server, "Auto-update countdown started (10s)", 4);
   self->auto_update_countdown_id = g_timeout_add_seconds(1, auto_update_countdown_tick, self);
 }
 
@@ -2917,8 +2916,19 @@ auto_update_countdown_tick(gpointer data)
       g_autofree char *bin = pumpkin_server_get_bin_path(server);
       gboolean installed = g_file_test(bin, G_FILE_TEST_EXISTS);
       if (is_update_available_for_server(self, server, installed)) {
-        set_details_status_for_server(self, server, "Updating to latest build...", 4);
-        start_download_for_server(self, server, self->latest_url, TRUE, TRUE);
+        const char *from_label = pumpkin_server_get_installed_build_label(server);
+        const char *from_id = pumpkin_server_get_installed_build_id(server);
+        const char *to_label = self->latest_build_label;
+        const char *to_id = self->latest_build_id;
+        g_autofree char *from_label_norm = normalize_build_label(self, from_label);
+        g_autofree char *to_label_norm = normalize_build_label(self, to_label);
+        const char *from = (from_label_norm != NULL && *from_label_norm != '\0') ? from_label_norm :
+                           ((from_id != NULL && *from_id != '\0') ? from_id : "installed");
+        const char *to = (to_label_norm != NULL && *to_label_norm != '\0') ? to_label_norm :
+                         ((to_id != NULL && *to_id != '\0') ? to_id : "latest");
+        g_autofree char *message = g_strdup_printf("Updating Pumpkin binary: %s -> %s", from, to);
+        append_log_for_server(self, server, message);
+        start_download_for_server(self, server, self->latest_url, FALSE, TRUE);
       }
     }
     g_object_unref(server);
@@ -3473,11 +3483,22 @@ on_overview_update_clicked(GtkButton *button, gpointer user_data)
   if (server == NULL || self->latest_url == NULL) {
     return;
   }
-  if (server_download_active(self, server)) {
-    set_details_status_for_server(self, server, "Update already in progress", 3);
+  if (any_download_active(self) || server_download_active(self, server)) {
     return;
   }
 
+  const char *from_label = pumpkin_server_get_installed_build_label(server);
+  const char *from_id = pumpkin_server_get_installed_build_id(server);
+  const char *to_label = self->latest_build_label;
+  const char *to_id = self->latest_build_id;
+  g_autofree char *from_label_norm = normalize_build_label(self, from_label);
+  g_autofree char *to_label_norm = normalize_build_label(self, to_label);
+  const char *from = (from_label_norm != NULL && *from_label_norm != '\0') ? from_label_norm :
+                     ((from_id != NULL && *from_id != '\0') ? from_id : "installed");
+  const char *to = (to_label_norm != NULL && *to_label_norm != '\0') ? to_label_norm :
+                   ((to_id != NULL && *to_id != '\0') ? to_id : "latest");
+  g_autofree char *message = g_strdup_printf("Updating Pumpkin binary: %s -> %s", from, to);
+  append_log_for_server(self, server, message);
   start_download_for_server(self, server, self->latest_url, FALSE, FALSE);
 }
 
@@ -3490,6 +3511,17 @@ open_overview_server_details(PumpkinWindow *self, PumpkinServer *server, AdwDial
 
   if (dialog != NULL) {
     adw_dialog_close(dialog);
+  }
+
+  g_clear_pointer(&self->details_return_view, g_free);
+  if (self->view_stack != NULL) {
+    const char *current_view = adw_view_stack_get_visible_child_name(self->view_stack);
+    if (current_view != NULL && *current_view != '\0') {
+      self->details_return_view = g_strdup(current_view);
+    }
+  }
+  if (self->details_return_view == NULL) {
+    self->details_return_view = g_strdup("overview");
   }
 
   select_server(self, server);
@@ -3845,11 +3877,35 @@ network_total_players(PumpkinWindow *self, ServerNetwork *network)
   return total;
 }
 
+static gboolean
+network_has_active_download(PumpkinWindow *self, ServerNetwork *network)
+{
+  if (self == NULL || network == NULL) {
+    return FALSE;
+  }
+  GListModel *model = get_server_model(self);
+  if (model == NULL) {
+    return FALSE;
+  }
+  guint n = g_list_model_get_n_items(model);
+  for (guint i = 0; i < n; i++) {
+    g_autoptr(PumpkinServer) server = g_list_model_get_item(model, i);
+    if (server == NULL || !network_includes_server(network, server)) {
+      continue;
+    }
+    if (server_download_active(self, server)) {
+      return TRUE;
+    }
+  }
+  return FALSE;
+}
+
 static guint
 network_update_actionable_count(PumpkinWindow *self, ServerNetwork *network)
 {
   if (self == NULL || network == NULL ||
-      self->latest_url == NULL || *self->latest_url == '\0') {
+      self->latest_url == NULL || *self->latest_url == '\0' ||
+      any_download_active(self)) {
     return 0;
   }
   GListModel *model = get_server_model(self);
@@ -3875,6 +3931,30 @@ network_update_actionable_count(PumpkinWindow *self, ServerNetwork *network)
     }
   }
   return actionable;
+}
+
+static gboolean
+network_has_available_server_to_add(PumpkinWindow *self)
+{
+  if (self == NULL || self->store == NULL) {
+    return FALSE;
+  }
+  GListModel *model = get_server_model(self);
+  if (model == NULL) {
+    return FALSE;
+  }
+  guint n = g_list_model_get_n_items(model);
+  for (guint i = 0; i < n; i++) {
+    g_autoptr(PumpkinServer) candidate = g_list_model_get_item(model, i);
+    if (candidate == NULL) {
+      continue;
+    }
+    const char *candidate_id = pumpkin_server_get_id(candidate);
+    if (candidate_id != NULL && *candidate_id != '\0' && !server_in_any_network(self, candidate_id)) {
+      return TRUE;
+    }
+  }
+  return FALSE;
 }
 
 static guint
@@ -4030,10 +4110,6 @@ update_network_details_progress_for_active(PumpkinWindow *self)
   if (self == NULL) {
     return;
   }
-  if (self->network_details_dialog == NULL) {
-    clear_network_details_dialog_tracking(self);
-    return;
-  }
   if (self->network_details_network_id == NULL ||
       *self->network_details_network_id == '\0') {
     return;
@@ -4052,21 +4128,6 @@ clear_network_details_dialog_tracking(PumpkinWindow *self)
   if (self == NULL) {
     return;
   }
-  if (self->network_details_dialog != NULL) {
-    g_object_remove_weak_pointer(G_OBJECT(self->network_details_dialog),
-                                 (gpointer *)&self->network_details_dialog);
-  }
-  if (self->network_details_members_box != NULL) {
-    g_object_remove_weak_pointer(G_OBJECT(self->network_details_members_box),
-                                 (gpointer *)&self->network_details_members_box);
-  }
-  if (self->network_details_progress != NULL) {
-    g_object_remove_weak_pointer(G_OBJECT(self->network_details_progress),
-                                 (gpointer *)&self->network_details_progress);
-  }
-  self->network_details_dialog = NULL;
-  self->network_details_members_box = NULL;
-  self->network_details_progress = NULL;
   g_clear_pointer(&self->network_details_network_id, g_free);
 }
 
@@ -4076,12 +4137,13 @@ refresh_network_details_dialog(PumpkinWindow *self)
   if (self == NULL) {
     return;
   }
-  if (self->network_details_dialog == NULL) {
-    clear_network_details_dialog_tracking(self);
+  if (self->network_details_members_box == NULL ||
+      self->network_details_progress == NULL ||
+      self->network_details_title == NULL ||
+      self->network_details_status == NULL) {
     return;
   }
-  if (self->network_details_members_box == NULL ||
-      self->network_details_network_id == NULL || *self->network_details_network_id == '\0') {
+  if (self->network_details_network_id == NULL || *self->network_details_network_id == '\0') {
     return;
   }
 
@@ -4091,9 +4153,73 @@ refresh_network_details_dialog(PumpkinWindow *self)
     return;
   }
 
-  GtkWidget *btn_update = g_object_get_data(G_OBJECT(self->network_details_dialog), "network-btn-update");
-  if (btn_update != NULL) {
-    gtk_widget_set_sensitive(btn_update, network_update_actionable_count(self, network) > 0);
+  guint members_count = network->member_server_ids != NULL ? network->member_server_ids->len : 0;
+  guint running_count = network_running_count(self, network);
+  guint players_total = network_total_players(self, network);
+  g_autofree char *proxy_name = NULL;
+  if (network->proxy_server_id != NULL && *network->proxy_server_id != '\0') {
+    g_autoptr(PumpkinServer) proxy = find_server_by_id(self, network->proxy_server_id);
+    proxy_name = g_strdup(proxy != NULL ? pumpkin_server_get_name(proxy) : network->proxy_server_id);
+  } else {
+    proxy_name = g_strdup("Not set");
+  }
+
+  gtk_label_set_text(self->network_details_title, network->name != NULL ? network->name : network->id);
+  if (self->network_details_icon != NULL) {
+    g_autofree char *icon_path = network_icon_path(self, network->id);
+    if (icon_path != NULL && g_file_test(icon_path, G_FILE_TEST_EXISTS)) {
+      g_autoptr(GError) error = NULL;
+      g_autoptr(GdkTexture) texture = NULL;
+      g_autoptr(GFile) file = g_file_new_for_path(icon_path);
+      texture = gdk_texture_new_from_file(file, &error);
+      if (texture != NULL) {
+        gtk_image_set_from_paintable(self->network_details_icon, GDK_PAINTABLE(texture));
+        gtk_image_set_pixel_size(self->network_details_icon, 32);
+      } else {
+        g_autoptr(GdkTexture) fallback = gdk_texture_new_from_resource(
+          "/dev/rotstein/SmashedPumpkin/icons/hicolor/512x512/apps/dev.rotstein.SmashedPumpkin.png");
+        gtk_image_set_from_paintable(self->network_details_icon, GDK_PAINTABLE(fallback));
+        gtk_image_set_pixel_size(self->network_details_icon, 32);
+      }
+    } else {
+      g_autoptr(GdkTexture) fallback = gdk_texture_new_from_resource(
+        "/dev/rotstein/SmashedPumpkin/icons/hicolor/512x512/apps/dev.rotstein.SmashedPumpkin.png");
+      gtk_image_set_from_paintable(self->network_details_icon, GDK_PAINTABLE(fallback));
+      gtk_image_set_pixel_size(self->network_details_icon, 32);
+    }
+  }
+  g_autofree char *status = g_strdup_printf("Servers: %u · Running: %u · Players: %u · Proxy: %s",
+                                            members_count,
+                                            running_count,
+                                            players_total,
+                                            proxy_name);
+  gtk_label_set_text(self->network_details_status, status);
+
+  if (self->btn_network_details_start != NULL) {
+    gtk_widget_set_sensitive(GTK_WIDGET(self->btn_network_details_start),
+                             network_startable_count(self, network) > 0);
+  }
+  if (self->btn_network_details_stop != NULL) {
+    gtk_widget_set_sensitive(GTK_WIDGET(self->btn_network_details_stop), running_count > 0);
+  }
+  if (self->btn_network_details_update != NULL) {
+    gtk_widget_set_sensitive(GTK_WIDGET(self->btn_network_details_update),
+                             network_update_actionable_count(self, network) > 0);
+  }
+  if (self->btn_network_details_install != NULL) {
+    gtk_widget_set_sensitive(GTK_WIDGET(self->btn_network_details_install),
+                             network_missing_install_count(self, network) > 0);
+  }
+  if (self->btn_network_details_add != NULL) {
+    gtk_widget_set_sensitive(GTK_WIDGET(self->btn_network_details_add),
+                             network_has_available_server_to_add(self));
+  }
+  if (self->btn_network_details_set_proxy != NULL) {
+    gtk_widget_set_sensitive(GTK_WIDGET(self->btn_network_details_set_proxy), members_count > 0);
+  }
+  if (self->btn_network_details_clear_proxy != NULL) {
+    gtk_widget_set_sensitive(GTK_WIDGET(self->btn_network_details_clear_proxy),
+                             network->proxy_server_id != NULL && *network->proxy_server_id != '\0');
   }
 
   clear_box_children(self->network_details_members_box);
@@ -4119,7 +4245,7 @@ refresh_network_details_dialog(PumpkinWindow *self)
       gtk_box_append(self->network_details_members_box, missing);
       continue;
     }
-    GtkWidget *member_card = create_overview_server_card(self, member, network->id, self->network_details_dialog);
+    GtkWidget *member_card = create_overview_server_card(self, member, network->id, NULL);
     if (member_card != NULL) {
       if (g_strcmp0(member_id, network->proxy_server_id) == 0) {
         gtk_widget_set_tooltip_text(member_card, "Proxy server");
@@ -4253,6 +4379,9 @@ on_overview_network_update_all_clicked(GtkButton *button, gpointer user_data)
     trigger_latest_resolve(self);
     return;
   }
+  if (any_download_active(self)) {
+    return;
+  }
 
   guint queued = 0;
   guint n = g_list_model_get_n_items(model);
@@ -4277,7 +4406,7 @@ on_overview_network_update_all_clicked(GtkButton *button, gpointer user_data)
   if (queued == 0) {
     set_details_status(self, "No updates started for this network.", 3);
   } else {
-    g_autofree char *msg = g_strdup_printf("Updating %u network server(s)...", queued);
+    g_autofree char *msg = g_strdup_printf("Preparing updates for %u network server(s)...", queued);
     set_details_status(self, msg, 3);
   }
   refresh_overview_list(self);
@@ -4336,120 +4465,51 @@ on_overview_network_install_all_clicked(GtkButton *button, gpointer user_data)
 }
 
 static void
-on_overview_network_details_clicked(GtkButton *button, gpointer user_data)
+open_overview_network_details(PumpkinWindow *self, ServerNetwork *network)
 {
-  PumpkinWindow *self = PUMPKIN_WINDOW(user_data);
-  ServerNetwork *network = network_for_button(self, button);
-  if (self == NULL || network == NULL) {
+  if (self == NULL || network == NULL || self->view_stack == NULL) {
     return;
   }
 
-  g_autofree char *proxy_name = NULL;
-  if (network->proxy_server_id != NULL && *network->proxy_server_id != '\0') {
-    g_autoptr(PumpkinServer) proxy = find_server_by_id(self, network->proxy_server_id);
-    proxy_name = g_strdup(proxy != NULL ? pumpkin_server_get_name(proxy) : network->proxy_server_id);
-  } else {
-    proxy_name = g_strdup("Not set");
+  g_clear_pointer(&self->network_details_network_id, g_free);
+  self->network_details_network_id = g_strdup(network->id);
+
+  GtkWidget *buttons[] = {
+    GTK_WIDGET(self->btn_network_details_start),
+    GTK_WIDGET(self->btn_network_details_stop),
+    GTK_WIDGET(self->btn_network_details_update),
+    GTK_WIDGET(self->btn_network_details_install),
+    GTK_WIDGET(self->btn_network_details_add),
+    GTK_WIDGET(self->btn_network_details_set_proxy),
+    GTK_WIDGET(self->btn_network_details_clear_proxy),
+    GTK_WIDGET(self->btn_network_details_set_icon),
+    GTK_WIDGET(self->btn_network_details_reset_icon),
+    NULL
+  };
+  for (guint i = 0; buttons[i] != NULL; i++) {
+    g_object_set_data_full(G_OBJECT(buttons[i]), "network-id", g_strdup(network->id), g_free);
   }
 
-  guint running = network_running_count(self, network);
-  guint players_total = network_total_players(self, network);
-  g_autofree char *body = g_strdup_printf("Servers: %u · Running: %u · Players: %u · Proxy: %s",
-                                          network->member_server_ids != NULL ? network->member_server_ids->len : 0,
-                                          running,
-                                          players_total,
-                                          proxy_name);
-
-  AdwDialog *dialog = adw_alert_dialog_new(network->name != NULL ? network->name : "Network", body);
-  AdwAlertDialog *alert = ADW_ALERT_DIALOG(dialog);
-  adw_alert_dialog_add_response(alert, "close", "Close");
-  adw_alert_dialog_set_default_response(alert, "close");
-  adw_alert_dialog_set_close_response(alert, "close");
-
-  GtkWidget *content = gtk_box_new(GTK_ORIENTATION_VERTICAL, 8);
-  gtk_widget_set_margin_top(content, 8);
-  gtk_widget_set_margin_bottom(content, 8);
-  gtk_widget_set_margin_start(content, 8);
-  gtk_widget_set_margin_end(content, 8);
-
-  GtkWidget *actions = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
-  GtkWidget *btn_update = gtk_button_new_with_label("Update all");
-  GtkWidget *btn_set_proxy = gtk_button_new_with_label("Set proxy");
-  GtkWidget *btn_clear_proxy = gtk_button_new_with_label("Clear proxy");
-  GtkWidget *btn_set_icon = gtk_button_new_with_label("Set icon");
-  GtkWidget *btn_reset_icon = gtk_button_new_with_label("Reset icon");
-  gtk_widget_add_css_class(btn_update, "card-button");
-  gtk_widget_add_css_class(btn_set_proxy, "card-button");
-  gtk_widget_add_css_class(btn_clear_proxy, "card-button");
-  gtk_widget_add_css_class(btn_set_icon, "card-button");
-  gtk_widget_add_css_class(btn_reset_icon, "card-button");
-  g_object_set_data_full(G_OBJECT(btn_update), "network-id", g_strdup(network->id), g_free);
-  g_object_set_data_full(G_OBJECT(btn_set_proxy), "network-id", g_strdup(network->id), g_free);
-  g_object_set_data_full(G_OBJECT(btn_clear_proxy), "network-id", g_strdup(network->id), g_free);
-  g_object_set_data_full(G_OBJECT(btn_set_icon), "network-id", g_strdup(network->id), g_free);
-  g_object_set_data_full(G_OBJECT(btn_reset_icon), "network-id", g_strdup(network->id), g_free);
-  g_object_set_data(G_OBJECT(btn_update), "network-dialog", dialog);
-  g_object_set_data(G_OBJECT(btn_set_proxy), "network-dialog", dialog);
-  g_object_set_data(G_OBJECT(btn_clear_proxy), "network-dialog", dialog);
-  g_object_set_data(G_OBJECT(dialog), "network-btn-update", btn_update);
-  g_signal_connect(btn_update, "clicked", G_CALLBACK(on_overview_network_update_all_clicked), self);
-  g_signal_connect(btn_set_proxy, "clicked", G_CALLBACK(on_overview_network_set_proxy_clicked), self);
-  g_signal_connect(btn_clear_proxy, "clicked", G_CALLBACK(on_overview_network_clear_proxy_clicked), self);
-  g_signal_connect(btn_set_icon, "clicked", G_CALLBACK(on_choose_network_icon_clicked), self);
-  g_signal_connect(btn_reset_icon, "clicked", G_CALLBACK(on_reset_network_icon_clicked), self);
-  gtk_widget_set_sensitive(btn_update, network_update_actionable_count(self, network) > 0);
-  gtk_widget_set_sensitive(btn_set_proxy, network->member_server_ids->len > 0);
-  gtk_widget_set_sensitive(btn_clear_proxy, network->proxy_server_id != NULL && *network->proxy_server_id != '\0');
-  gtk_box_append(GTK_BOX(actions), btn_update);
-  gtk_box_append(GTK_BOX(actions), btn_set_proxy);
-  gtk_box_append(GTK_BOX(actions), btn_clear_proxy);
-  gtk_box_append(GTK_BOX(actions), btn_set_icon);
-  gtk_box_append(GTK_BOX(actions), btn_reset_icon);
-  gtk_box_append(GTK_BOX(content), actions);
-
-  GtkWidget *shared_progress = gtk_progress_bar_new();
-  gtk_widget_set_visible(shared_progress, FALSE);
-  gtk_progress_bar_set_show_text(GTK_PROGRESS_BAR(shared_progress), TRUE);
-  gtk_box_append(GTK_BOX(content), shared_progress);
-
-  GtkWidget *members_scroller = gtk_scrolled_window_new();
-  gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(members_scroller), GTK_POLICY_NEVER, GTK_POLICY_AUTOMATIC);
-  gtk_widget_set_size_request(members_scroller, -1, 360);
-
-  GtkWidget *members_box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 8);
-  gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(members_scroller), members_box);
-  gtk_box_append(GTK_BOX(content), members_scroller);
-
-  clear_network_details_dialog_tracking(self);
-  self->network_details_dialog = dialog;
-  self->network_details_members_box = GTK_BOX(members_box);
-  self->network_details_progress = GTK_PROGRESS_BAR(shared_progress);
-  self->network_details_network_id = g_strdup(network->id);
-  g_object_add_weak_pointer(G_OBJECT(dialog), (gpointer *)&self->network_details_dialog);
-  g_object_add_weak_pointer(G_OBJECT(members_box), (gpointer *)&self->network_details_members_box);
-  g_object_add_weak_pointer(G_OBJECT(shared_progress), (gpointer *)&self->network_details_progress);
   refresh_network_details_dialog(self);
-
-  adw_alert_dialog_set_extra_child(alert, content);
-  adw_dialog_present(dialog, GTK_WIDGET(self));
+  adw_view_stack_set_visible_child_name(self->view_stack, "network-details");
 }
 
 static void
-on_overview_network_toggle_expanded(GtkToggleButton *button, PumpkinWindow *self)
+on_overview_network_row_activated(GtkListBox *box, GtkListBoxRow *row, PumpkinWindow *self)
 {
-  if (self == NULL || self->expanded_network_ids == NULL) {
+  (void)box;
+  if (self == NULL || row == NULL) {
     return;
   }
-  const char *network_id = g_object_get_data(G_OBJECT(button), "network-id");
+  const char *network_id = g_object_get_data(G_OBJECT(row), "network-id");
   if (network_id == NULL || *network_id == '\0') {
     return;
   }
-  if (gtk_toggle_button_get_active(button)) {
-    g_hash_table_add(self->expanded_network_ids, g_strdup(network_id));
-  } else {
-    g_hash_table_remove(self->expanded_network_ids, network_id);
+  ServerNetwork *network = find_network_by_id(self, network_id);
+  if (network == NULL) {
+    return;
   }
-  refresh_overview_list(self);
+  open_overview_network_details(self, network);
 }
 
 static void
@@ -4959,6 +5019,7 @@ create_overview_server_card(PumpkinWindow *self,
   }
   gboolean running = server_is_running_ui(self, server);
   gboolean installed = download_active || g_strcmp0(version, "Not installed") != 0;
+  gboolean global_download_active = any_download_active(self);
   const char *version_text =
     (download_active && g_strcmp0(version, "Not installed") == 0) ? "Installing..." : version;
   gboolean update_available = is_update_available_for_server(self, server, installed);
@@ -5049,9 +5110,11 @@ create_overview_server_card(PumpkinWindow *self,
     gtk_widget_set_vexpand(btn_update, FALSE);
     g_object_set_data_full(G_OBJECT(btn_update), "server", g_object_ref(server), g_object_unref);
     g_signal_connect(btn_update, "clicked", G_CALLBACK(on_overview_update_clicked), self);
-    gtk_widget_set_sensitive(btn_update, !download_active);
+    gtk_widget_set_sensitive(btn_update, !global_download_active);
     if (download_active) {
       gtk_button_set_label(GTK_BUTTON(btn_update), "Updating...");
+    } else if (global_download_active) {
+      gtk_button_set_label(GTK_BUTTON(btn_update), "Update");
     }
     gtk_box_append(GTK_BOX(btn_box), btn_update);
   }
@@ -5134,188 +5197,96 @@ refresh_overview_network_list(PumpkinWindow *self)
       continue;
     }
 
-    g_autofree char *proxy_name = NULL;
-    if (network->proxy_server_id != NULL && *network->proxy_server_id != '\0') {
-      g_autoptr(PumpkinServer) proxy = find_server_by_id(self, network->proxy_server_id);
-      proxy_name = g_strdup(proxy != NULL ? pumpkin_server_get_name(proxy) : network->proxy_server_id);
-    } else {
-      proxy_name = g_strdup("Not set");
-    }
-
     guint members_count = network->member_server_ids != NULL ? network->member_server_ids->len : 0;
     guint running_count = network_running_count(self, network);
     guint players_total = network_total_players(self, network);
-    guint missing_install = network_missing_install_count(self, network);
-    g_autofree char *subtitle = g_strdup_printf("Servers: %u · Running: %u · Players: %u · Proxy: %s",
-                                                members_count,
-                                                running_count,
-                                                players_total,
-                                                proxy_name);
+    gboolean updating = network_has_active_download(self, network);
+    const char *network_status_css = "server-state-stopped";
+    if (updating) {
+      network_status_css = "server-state-updating";
+    } else if (members_count > 0 && running_count == members_count) {
+      network_status_css = "server-state-running";
+    } else if (running_count > 0) {
+      network_status_css = "server-state-updating";
+    }
 
     GtkWidget *row = gtk_list_box_row_new();
     GtkWidget *card = gtk_frame_new(NULL);
     gtk_widget_add_css_class(card, "card");
     gtk_widget_add_css_class(card, "overview-card");
 
-    GtkWidget *content = gtk_box_new(GTK_ORIENTATION_VERTICAL, 10);
-    gtk_widget_set_margin_top(content, 10);
-    gtk_widget_set_margin_bottom(content, 10);
-    gtk_widget_set_margin_start(content, 10);
-    gtk_widget_set_margin_end(content, 10);
-
-    gboolean expanded = network_is_expanded(self, network->id);
-
-    GtkWidget *header = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 12);
-    GtkWidget *identity = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
-    gtk_widget_set_hexpand(identity, TRUE);
-    gtk_widget_set_valign(identity, GTK_ALIGN_CENTER);
-
-    GtkWidget *btn_expand = gtk_toggle_button_new();
-    gtk_button_set_icon_name(GTK_BUTTON(btn_expand),
-                             expanded ? "pan-down-symbolic" : "pan-end-symbolic");
-    gtk_widget_add_css_class(btn_expand, "flat");
-    gtk_widget_add_css_class(btn_expand, "overview-square-button");
-    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(btn_expand), expanded);
-    g_object_set_data_full(G_OBJECT(btn_expand), "network-id", g_strdup(network->id), g_free);
-    g_signal_connect(btn_expand, "toggled", G_CALLBACK(on_overview_network_toggle_expanded), self);
+    GtkWidget *box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 16);
+    gtk_widget_set_margin_top(box, 10);
+    gtk_widget_set_margin_bottom(box, 10);
+    gtk_widget_set_margin_start(box, 10);
+    gtk_widget_set_margin_end(box, 10);
 
     GtkWidget *icon = create_network_icon_widget(self, network, 40);
     gtk_widget_set_valign(icon, GTK_ALIGN_CENTER);
 
     GtkWidget *vbox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 4);
+    GtkWidget *title_row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
     GtkWidget *title = gtk_label_new(network->name != NULL ? network->name : network->id);
-    GtkWidget *sub = gtk_label_new(subtitle);
+    g_autofree char *players_text = g_strdup_printf("Players: %u", players_total);
+    GtkWidget *sub = gtk_label_new(players_text);
+    GtkWidget *status_dot = gtk_label_new("●");
     gtk_label_set_xalign(GTK_LABEL(title), 0.0);
     gtk_label_set_xalign(GTK_LABEL(sub), 0.0);
     gtk_widget_add_css_class(title, "title-4");
+    gtk_widget_add_css_class(status_dot, "server-state-dot");
+    gtk_widget_add_css_class(status_dot, "network-state-dot");
+    gtk_widget_add_css_class(status_dot, network_status_css);
+    gtk_widget_set_valign(status_dot, GTK_ALIGN_CENTER);
+    gtk_widget_set_halign(title_row, GTK_ALIGN_START);
+    gtk_widget_set_valign(title_row, GTK_ALIGN_CENTER);
+    gtk_widget_set_hexpand(title, TRUE);
+    gtk_widget_set_valign(title, GTK_ALIGN_CENTER);
+    gtk_widget_add_css_class(title, "overview-compact-title");
+    gtk_widget_add_css_class(sub, "dim-label");
     gtk_widget_set_hexpand(vbox, TRUE);
-    gtk_box_append(GTK_BOX(vbox), title);
+    gtk_box_append(GTK_BOX(title_row), status_dot);
+    gtk_box_append(GTK_BOX(title_row), title);
+    gtk_box_append(GTK_BOX(vbox), title_row);
     gtk_box_append(GTK_BOX(vbox), sub);
 
-    gtk_box_append(GTK_BOX(identity), btn_expand);
-    gtk_box_append(GTK_BOX(identity), icon);
-    gtk_box_append(GTK_BOX(identity), vbox);
-
     GtkWidget *btn_box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
-    GtkWidget *btn_group = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
     gtk_widget_set_valign(btn_box, GTK_ALIGN_CENTER);
-    gtk_widget_add_css_class(btn_group, "linked");
-    GtkWidget *btn_start_all = gtk_button_new_with_label("Start all");
-    GtkWidget *btn_stop_all = gtk_button_new_with_label("Stop all");
-    GtkWidget *btn_add_current = gtk_button_new_with_label("Add server");
-    GtkWidget *btn_details = gtk_button_new_with_label("Details");
+    GtkWidget *btn_add_current = gtk_button_new();
     GtkWidget *btn_delete = gtk_button_new();
-    GtkWidget *btn_install = NULL;
 
+    gtk_button_set_icon_name(GTK_BUTTON(btn_add_current), "list-add-symbolic");
+    gtk_widget_set_tooltip_text(btn_add_current, "Add server");
     gtk_button_set_icon_name(GTK_BUTTON(btn_delete), "user-trash-symbolic");
     gtk_widget_set_tooltip_text(btn_delete, "Delete network");
-    gtk_widget_add_css_class(btn_start_all, "card-button");
-    gtk_widget_add_css_class(btn_stop_all, "card-button");
     gtk_widget_add_css_class(btn_add_current, "card-button");
-    gtk_widget_add_css_class(btn_details, "card-button");
+    gtk_widget_add_css_class(btn_add_current, "overview-square-button");
+    gtk_widget_add_css_class(btn_add_current, "flat");
     gtk_widget_add_css_class(btn_delete, "card-button");
     gtk_widget_add_css_class(btn_delete, "overview-square-button");
     gtk_widget_add_css_class(btn_delete, "destructive-action");
     gtk_widget_add_css_class(btn_delete, "flat");
-    if (missing_install > 0) {
-      btn_install = gtk_button_new_with_label("Install all");
-      gtk_widget_add_css_class(btn_install, "card-button");
-    }
 
-    g_object_set_data_full(G_OBJECT(btn_start_all), "network-id", g_strdup(network->id), g_free);
-    g_object_set_data_full(G_OBJECT(btn_stop_all), "network-id", g_strdup(network->id), g_free);
     g_object_set_data_full(G_OBJECT(btn_add_current), "network-id", g_strdup(network->id), g_free);
-    g_object_set_data_full(G_OBJECT(btn_details), "network-id", g_strdup(network->id), g_free);
     g_object_set_data_full(G_OBJECT(btn_delete), "network-id", g_strdup(network->id), g_free);
-    if (btn_install != NULL) {
-      g_object_set_data_full(G_OBJECT(btn_install), "network-id", g_strdup(network->id), g_free);
-    }
 
-    g_signal_connect(btn_start_all, "clicked", G_CALLBACK(on_overview_network_start_all_clicked), self);
-    g_signal_connect(btn_stop_all, "clicked", G_CALLBACK(on_overview_network_stop_all_clicked), self);
     g_signal_connect(btn_add_current, "clicked", G_CALLBACK(on_overview_network_add_current_clicked), self);
-    g_signal_connect(btn_details, "clicked", G_CALLBACK(on_overview_network_details_clicked), self);
     g_signal_connect(btn_delete, "clicked", G_CALLBACK(on_overview_network_delete_clicked), self);
-    if (btn_install != NULL) {
-      g_signal_connect(btn_install, "clicked", G_CALLBACK(on_overview_network_install_all_clicked), self);
-    }
 
-    gboolean has_available_server = FALSE;
-    if (self->store != NULL) {
-      GListModel *model = get_server_model(self);
-      if (model != NULL) {
-        guint available_n = g_list_model_get_n_items(model);
-        for (guint s = 0; s < available_n; s++) {
-          PumpkinServer *candidate = g_list_model_get_item(model, s);
-          if (candidate == NULL) {
-            continue;
-          }
-          const char *candidate_id = pumpkin_server_get_id(candidate);
-          if (candidate_id != NULL && *candidate_id != '\0' && !server_in_any_network(self, candidate_id)) {
-            has_available_server = TRUE;
-            g_object_unref(candidate);
-            break;
-          }
-          g_object_unref(candidate);
-        }
-      }
-    }
+    gtk_widget_set_sensitive(btn_add_current, network_has_available_server_to_add(self));
 
-    gtk_widget_set_sensitive(btn_start_all, network_startable_count(self, network) > 0);
-    gtk_widget_set_sensitive(btn_stop_all, running_count > 0);
-    gtk_widget_set_sensitive(btn_add_current, has_available_server);
-    if (btn_install != NULL) {
-      gtk_widget_set_sensitive(btn_install, network->member_server_ids->len > 0);
-    }
-
-    gtk_box_append(GTK_BOX(btn_group), btn_start_all);
-    gtk_box_append(GTK_BOX(btn_group), btn_stop_all);
-    gtk_box_append(GTK_BOX(btn_group), btn_add_current);
-    gtk_box_append(GTK_BOX(btn_group), btn_details);
-    if (btn_install != NULL) {
-      gtk_box_append(GTK_BOX(btn_box), btn_install);
-    }
-    gtk_box_append(GTK_BOX(btn_box), btn_group);
+    gtk_box_append(GTK_BOX(btn_box), btn_add_current);
     gtk_box_append(GTK_BOX(btn_box), btn_delete);
 
-    gtk_box_append(GTK_BOX(header), identity);
-    gtk_box_append(GTK_BOX(header), btn_box);
-    gtk_box_append(GTK_BOX(content), header);
+    gtk_box_append(GTK_BOX(box), icon);
+    gtk_box_append(GTK_BOX(box), vbox);
+    gtk_box_append(GTK_BOX(box), btn_box);
 
-    GtkWidget *members_revealer = gtk_revealer_new();
-    gtk_revealer_set_transition_type(GTK_REVEALER(members_revealer), GTK_REVEALER_TRANSITION_TYPE_SLIDE_DOWN);
-    gtk_revealer_set_reveal_child(GTK_REVEALER(members_revealer), expanded);
-
-    GtkWidget *members_shell = gtk_box_new(GTK_ORIENTATION_VERTICAL, 8);
-    gtk_widget_add_css_class(members_shell, "network-members-shell");
-    gtk_widget_set_margin_start(members_shell, 18);
-
-    if (network->member_server_ids == NULL || network->member_server_ids->len == 0) {
-      GtkWidget *empty = gtk_label_new("No servers in this network yet.");
-      gtk_widget_add_css_class(empty, "dim-label");
-      gtk_label_set_xalign(GTK_LABEL(empty), 0.0);
-      gtk_box_append(GTK_BOX(members_shell), empty);
-    } else {
-      for (guint j = 0; j < network->member_server_ids->len; j++) {
-        const char *member_id = g_ptr_array_index(network->member_server_ids, j);
-        if (member_id == NULL || *member_id == '\0') {
-          continue;
-        }
-        g_autoptr(PumpkinServer) member = find_server_by_id(self, member_id);
-        if (member == NULL) {
-          continue;
-        }
-        GtkWidget *member_card = create_overview_server_card(self, member, network->id, self->network_details_dialog);
-        gtk_box_append(GTK_BOX(members_shell), member_card);
-      }
-    }
-
-    gtk_revealer_set_child(GTK_REVEALER(members_revealer), members_shell);
-    gtk_box_append(GTK_BOX(content), members_revealer);
-
-    gtk_frame_set_child(GTK_FRAME(card), content);
+    gtk_frame_set_child(GTK_FRAME(card), box);
+    attach_hover_delete_button(card, btn_add_current);
     attach_hover_delete_button(card, btn_delete);
     gtk_list_box_row_set_child(GTK_LIST_BOX_ROW(row), card);
+    gtk_list_box_row_set_activatable(GTK_LIST_BOX_ROW(row), TRUE);
+    g_object_set_data_full(G_OBJECT(row), "network-id", g_strdup(network->id), g_free);
     gtk_list_box_append(self->overview_network_list, row);
   }
 }
@@ -5661,15 +5632,6 @@ create_network_icon_widget(PumpkinWindow *self, ServerNetwork *network, int pixe
 }
 
 static gboolean
-network_is_expanded(PumpkinWindow *self, const char *network_id)
-{
-  if (self == NULL || self->expanded_network_ids == NULL || network_id == NULL) {
-    return FALSE;
-  }
-  return g_hash_table_contains(self->expanded_network_ids, network_id);
-}
-
-static gboolean
 use_download_cache(PumpkinWindow *self)
 {
   if (self->config == NULL) {
@@ -5794,8 +5756,8 @@ update_details(PumpkinWindow *self)
   gboolean busy = (self->ui_state == UI_STATE_STARTING ||
                    self->ui_state == UI_STATE_STOPPING ||
                    self->ui_state == UI_STATE_RESTARTING);
-  gboolean download_busy = server_download_active(self, self->current);
-  busy = busy || download_busy;
+  gboolean any_download_busy = any_download_active(self);
+  busy = busy || any_download_busy;
   gboolean can_start = installed && !running && !busy;
   gboolean can_stop = running && !busy;
   gboolean can_restart = running && !busy &&
@@ -5807,7 +5769,7 @@ update_details(PumpkinWindow *self)
   gtk_widget_set_sensitive(GTK_WIDGET(self->btn_details_install), !running && !busy);
   gtk_widget_set_sensitive(GTK_WIDGET(self->btn_details_update), update_available && !running && !busy);
   gtk_widget_set_visible(GTK_WIDGET(self->btn_details_update), TRUE);
-  gtk_widget_set_sensitive(GTK_WIDGET(self->btn_details_check_updates), self->current != NULL && !download_busy);
+  gtk_widget_set_sensitive(GTK_WIDGET(self->btn_details_check_updates), self->current != NULL && !any_download_busy);
   update_check_updates_badge(self);
   if (self->btn_console_copy != NULL) {
     gtk_widget_set_sensitive(GTK_WIDGET(self->btn_console_copy), self->current != NULL);
@@ -10416,7 +10378,9 @@ install_server_from_binary_path(PumpkinWindow *self,
   }
 
   append_log_for_server(self, server, success_log != NULL ? success_log : "Installed from local cache");
-  set_details_status_for_server(self, server, success_status != NULL ? success_status : "Installed from cache", 3);
+  if (success_status != NULL && *success_status != '\0') {
+    set_details_status_for_server(self, server, success_status, 3);
+  }
   pumpkin_server_set_installed_url(server, installed_url);
   pumpkin_server_set_installed_build_id(server, build_id);
   if (build_label != NULL && *build_label != '\0') {
@@ -10585,7 +10549,6 @@ start_download_for_server(PumpkinWindow *self,
       wait_ctx->restart_after_download = restart_after_download;
       wait_ctx->attempts = 0;
       append_log_for_server(self, server, "Waiting for shared download...");
-      set_details_status_for_server(self, server, "Waiting for shared download...", 3);
       g_timeout_add(250, on_wait_for_shared_cache_tick, wait_ctx);
       refresh_overview_list(self);
       update_details(self);
@@ -10623,6 +10586,7 @@ on_download_done(GObject *source, GAsyncResult *res, gpointer user_data)
   PumpkinWindow *self = ctx->self;
   PumpkinServer *server = ctx->server;
   g_autoptr(GError) error = NULL;
+  const char *downloaded_binary_path = NULL;
 
   if (!pumpkin_download_file_finish(res, &error)) {
     append_log_for_server(self, server, error->message);
@@ -10647,7 +10611,7 @@ on_download_done(GObject *source, GAsyncResult *res, gpointer user_data)
     return;
   }
 
-  if (ctx->tmp_path != NULL && ctx->dest_path != NULL) {
+  if (ctx->use_cache && ctx->tmp_path != NULL && ctx->dest_path != NULL) {
     g_chmod(ctx->tmp_path, 0755);
     if (g_rename(ctx->tmp_path, ctx->dest_path) != 0) {
       g_autofree char *msg = g_strdup_printf("Failed to replace binary: %s", g_strerror(errno));
@@ -10670,14 +10634,19 @@ on_download_done(GObject *source, GAsyncResult *res, gpointer user_data)
     }
   }
 
-  if (ctx->dest_path != NULL && !binary_file_is_valid(ctx->dest_path)) {
+  downloaded_binary_path = ctx->use_cache ? ctx->dest_path : ctx->tmp_path;
+  if (downloaded_binary_path != NULL) {
+    g_chmod(downloaded_binary_path, 0755);
+  }
+
+  if (downloaded_binary_path != NULL && !binary_file_is_valid(downloaded_binary_path)) {
     append_log_for_server(self, server, "Downloaded binary is invalid");
-    g_autofree char *diag = describe_invalid_binary_file(ctx->dest_path);
+    g_autofree char *diag = describe_invalid_binary_file(downloaded_binary_path);
     if (diag != NULL) {
       append_log_for_server(self, server, diag);
     }
     set_details_status_for_server(self, server, "Download failed", 5);
-    g_remove(ctx->dest_path);
+    g_remove(downloaded_binary_path);
     DownloadProgressState *state = get_download_progress_state(self, server, FALSE);
     if (state != NULL) {
       state->active = FALSE;
@@ -10726,24 +10695,51 @@ on_download_done(GObject *source, GAsyncResult *res, gpointer user_data)
       return;
     }
   }
+  if (!ctx->use_cache && ctx->tmp_path != NULL) {
+    if (!install_server_from_binary_path(self,
+                                         server,
+                                         ctx->tmp_path,
+                                         ctx->used_url,
+                                         ctx->used_build_id,
+                                         ctx->used_build_label,
+                                         "Download complete",
+                                         "")) {
+      if (ctx->tmp_path != NULL) {
+        g_remove(ctx->tmp_path);
+      }
+      DownloadProgressState *state = get_download_progress_state(self, server, FALSE);
+      if (state != NULL) {
+        state->active = FALSE;
+      }
+      refresh_overview_list(self);
+      set_download_busy(self, FALSE);
+      update_details(self);
+      download_context_free(ctx);
+      return;
+    }
+    g_remove(ctx->tmp_path);
+  }
 
   set_download_busy(self, FALSE);
-  append_log_for_server(self, server, ctx->use_cache ? "Download complete (cached)" : "Download complete");
-  set_details_status_for_server(self, server, "Download complete", 3);
+  if (ctx->use_cache) {
+    append_log_for_server(self, server, "Download complete (cached)");
+  }
   DownloadProgressState *state = get_download_progress_state(self, server, FALSE);
   if (state != NULL) {
     state->active = FALSE;
   }
   refresh_overview_list(self);
-  pumpkin_server_set_installed_url(server, ctx->used_url);
-  pumpkin_server_set_installed_build_id(server, ctx->used_build_id);
-  if (ctx->used_build_label != NULL && *ctx->used_build_label != '\0') {
-    pumpkin_server_set_installed_build_label(server, ctx->used_build_label);
-  } else {
-    g_autofree char *local_label = build_label_from_binary_path(self, ctx->server_bin);
-    pumpkin_server_set_installed_build_label(server, local_label);
+  if (ctx->use_cache) {
+    pumpkin_server_set_installed_url(server, ctx->used_url);
+    pumpkin_server_set_installed_build_id(server, ctx->used_build_id);
+    if (ctx->used_build_label != NULL && *ctx->used_build_label != '\0') {
+      pumpkin_server_set_installed_build_label(server, ctx->used_build_label);
+    } else {
+      g_autofree char *local_label = build_label_from_binary_path(self, ctx->server_bin);
+      pumpkin_server_set_installed_build_label(server, local_label);
+    }
+    pumpkin_server_save(server, NULL);
   }
-  pumpkin_server_save(server, NULL);
   if (ctx->restart_after_download) {
     if (pumpkin_server_get_running(server)) {
       if (self->current == server) {
@@ -10753,7 +10749,6 @@ on_download_done(GObject *source, GAsyncResult *res, gpointer user_data)
         self->user_stop_requested = TRUE;
       }
       pumpkin_server_stop(server);
-      set_details_status_for_server(self, server, "Update installed, restarting server...", 4);
     } else {
       g_autoptr(GError) start_error = NULL;
       if (self->current == server) {
@@ -10769,7 +10764,6 @@ on_download_done(GObject *source, GAsyncResult *res, gpointer user_data)
         }
       } else {
         set_server_running_hint(self, server, TRUE);
-        set_details_status_for_server(self, server, "Updated and restarting server...", 4);
         if (self->current == server) {
           refresh_plugin_list(self);
           refresh_world_list(self);
@@ -10919,9 +10913,21 @@ on_details_back(GtkButton *button, PumpkinWindow *self)
   if (self->details_stack != NULL) {
     const char *page = adw_view_stack_get_visible_child_name(self->details_stack);
     if (self->settings_dirty && page != NULL && g_strcmp0(page, "settings") == 0) {
-      confirm_leave_settings(self, "settings", "overview");
+      confirm_leave_settings(self, "settings",
+                             self->details_return_view != NULL ? self->details_return_view : "overview");
       return;
     }
+  }
+  adw_view_stack_set_visible_child_name(self->view_stack,
+                                        self->details_return_view != NULL ? self->details_return_view : "overview");
+}
+
+static void
+on_network_details_back(GtkButton *button, PumpkinWindow *self)
+{
+  (void)button;
+  if (self == NULL || self->view_stack == NULL) {
+    return;
   }
   adw_view_stack_set_visible_child_name(self->view_stack, "overview");
 }
@@ -11022,8 +11028,7 @@ on_details_update(GtkButton *button, PumpkinWindow *self)
   if (self->current == NULL || self->latest_url == NULL) {
     return;
   }
-  if (server_download_active(self, self->current)) {
-    set_details_status(self, "Update already in progress", 3);
+  if (any_download_active(self) || server_download_active(self, self->current)) {
     return;
   }
   if (pumpkin_server_get_running(self->current)) {
@@ -11050,10 +11055,10 @@ on_details_update(GtkButton *button, PumpkinWindow *self)
                      ((from_id != NULL && *from_id != '\0') ? from_id : "installed");
   const char *to = (to_label_norm != NULL && *to_label_norm != '\0') ? to_label_norm :
                    ((to_id != NULL && *to_id != '\0') ? to_id : "latest");
-  g_autofree char *status = g_strdup_printf("Updating: %s -> %s", from, to);
-  set_details_status(self, status, 6);
+  g_autofree char *message = g_strdup_printf("Updating Pumpkin binary: %s -> %s", from, to);
+  append_log_for_server(self, self->current, message);
 
-  start_download_for_server(self, self->current, self->latest_url, TRUE, FALSE);
+  start_download_for_server(self, self->current, self->latest_url, FALSE, FALSE);
 }
 
 static void
@@ -11700,6 +11705,10 @@ pumpkin_window_init(PumpkinWindow *self)
     g_signal_connect(self->overview_list, "row-activated",
                      G_CALLBACK(on_overview_row_activated), self);
   }
+  if (self->overview_network_list != NULL) {
+    g_signal_connect(self->overview_network_list, "row-activated",
+                     G_CALLBACK(on_overview_network_row_activated), self);
+  }
 
   adw_view_stack_set_visible_child_name(self->view_stack, "overview");
   if (self->details_stack != NULL) {
@@ -11752,12 +11761,51 @@ pumpkin_window_init(PumpkinWindow *self)
   }
   g_signal_connect(self->btn_remove_server, "clicked", G_CALLBACK(on_remove_server), self);
   g_signal_connect(self->btn_details_back, "clicked", G_CALLBACK(on_details_back), self);
+  if (self->btn_network_details_back != NULL) {
+    g_signal_connect(self->btn_network_details_back, "clicked", G_CALLBACK(on_network_details_back), self);
+  }
   g_signal_connect(self->btn_details_start, "clicked", G_CALLBACK(on_details_start), self);
   g_signal_connect(self->btn_details_stop, "clicked", G_CALLBACK(on_details_stop), self);
   g_signal_connect(self->btn_details_restart, "clicked", G_CALLBACK(on_details_restart), self);
   g_signal_connect(self->btn_details_install, "clicked", G_CALLBACK(on_details_install), self);
   g_signal_connect(self->btn_details_update, "clicked", G_CALLBACK(on_details_update), self);
   g_signal_connect(self->btn_details_check_updates, "clicked", G_CALLBACK(on_details_check_updates), self);
+  if (self->btn_network_details_start != NULL) {
+    g_signal_connect(self->btn_network_details_start, "clicked",
+                     G_CALLBACK(on_overview_network_start_all_clicked), self);
+  }
+  if (self->btn_network_details_stop != NULL) {
+    g_signal_connect(self->btn_network_details_stop, "clicked",
+                     G_CALLBACK(on_overview_network_stop_all_clicked), self);
+  }
+  if (self->btn_network_details_update != NULL) {
+    g_signal_connect(self->btn_network_details_update, "clicked",
+                     G_CALLBACK(on_overview_network_update_all_clicked), self);
+  }
+  if (self->btn_network_details_install != NULL) {
+    g_signal_connect(self->btn_network_details_install, "clicked",
+                     G_CALLBACK(on_overview_network_install_all_clicked), self);
+  }
+  if (self->btn_network_details_add != NULL) {
+    g_signal_connect(self->btn_network_details_add, "clicked",
+                     G_CALLBACK(on_overview_network_add_current_clicked), self);
+  }
+  if (self->btn_network_details_set_proxy != NULL) {
+    g_signal_connect(self->btn_network_details_set_proxy, "clicked",
+                     G_CALLBACK(on_overview_network_set_proxy_clicked), self);
+  }
+  if (self->btn_network_details_clear_proxy != NULL) {
+    g_signal_connect(self->btn_network_details_clear_proxy, "clicked",
+                     G_CALLBACK(on_overview_network_clear_proxy_clicked), self);
+  }
+  if (self->btn_network_details_set_icon != NULL) {
+    g_signal_connect(self->btn_network_details_set_icon, "clicked",
+                     G_CALLBACK(on_choose_network_icon_clicked), self);
+  }
+  if (self->btn_network_details_reset_icon != NULL) {
+    g_signal_connect(self->btn_network_details_reset_icon, "clicked",
+                     G_CALLBACK(on_reset_network_icon_clicked), self);
+  }
   g_signal_connect(self->entry_command, "activate", G_CALLBACK(on_send_command), self);
   if (self->entry_command != NULL) {
     GtkEventController *entry_keys = gtk_event_controller_key_new();
@@ -12187,6 +12235,7 @@ pumpkin_window_dispose(GObject *object)
   g_clear_pointer(&self->pending_view_page, g_free);
   g_clear_pointer(&self->current_log_path, g_free);
   g_clear_pointer(&self->last_details_page, g_free);
+  g_clear_pointer(&self->details_return_view, g_free);
   g_clear_pointer(&self->latest_url, g_free);
   g_clear_pointer(&self->latest_build_id, g_free);
   g_clear_pointer(&self->latest_build_label, g_free);
@@ -12494,6 +12543,10 @@ pumpkin_window_class_init(PumpkinWindowClass *class)
   gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, details_page_box);
   gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, details_header_row);
   gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, details_identity_row);
+  gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, network_details_page_box);
+  gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, network_details_header_row);
+  gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, network_details_identity_row);
+  gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, network_details_action_row);
   gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, console_command_row);
   gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, servers_page_box);
   gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, servers_header_row);
@@ -12551,6 +12604,9 @@ pumpkin_window_class_init(PumpkinWindowClass *class)
 
   gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, details_title);
   gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, details_server_icon);
+  gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, network_details_title);
+  gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, network_details_status);
+  gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, network_details_icon);
   gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, details_stack);
   gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, details_error_revealer);
   gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, details_error);
@@ -12559,6 +12615,16 @@ pumpkin_window_class_init(PumpkinWindowClass *class)
   gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, download_progress_revealer);
   gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, download_progress);
   gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, btn_details_back);
+  gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, btn_network_details_back);
+  gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, btn_network_details_start);
+  gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, btn_network_details_stop);
+  gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, btn_network_details_update);
+  gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, btn_network_details_install);
+  gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, btn_network_details_add);
+  gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, btn_network_details_set_proxy);
+  gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, btn_network_details_clear_proxy);
+  gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, btn_network_details_set_icon);
+  gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, btn_network_details_reset_icon);
   gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, btn_details_start);
   gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, btn_details_stop);
   gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, btn_details_restart);
@@ -12566,6 +12632,8 @@ pumpkin_window_class_init(PumpkinWindowClass *class)
   gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, btn_details_update);
   gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, btn_details_check_updates);
   gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, details_action_row);
+  gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, network_details_members_box);
+  gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, network_details_progress);
   gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, entry_command);
   gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, btn_console_send);
   gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, btn_console_copy);

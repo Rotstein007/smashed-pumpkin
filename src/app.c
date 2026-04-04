@@ -295,29 +295,29 @@ pumpkin_app_about_action(GSimpleAction *action,
   adw_about_dialog_set_application_name(about, APP_NAME);
   adw_about_dialog_set_application_icon(about, APP_ID);
   adw_about_dialog_set_version(about, APP_VERSION);
-  adw_about_dialog_set_release_notes_version(about, "0.5.0");
+  adw_about_dialog_set_release_notes_version(about, "0.5.1");
   if (is_de) {
     adw_about_dialog_set_release_notes(
       about,
       "<p>Neuerungen</p>"
       "<ul>"
-      "<li>Die App wirkt jetzt aufgeräumter und moderner, mit einer klareren Serverübersicht und überarbeiteten Detailansichten.</li>"
-      "<li>Plugins, Welten und Servergruppen lassen sich angenehmer verwalten, mit besseren Aktionen und weniger visuellem Ballast.</li>"
-      "<li>Netzwerke und Spielerverwaltung wurden erweitert, damit sich größere Setups übersichtlicher organisieren lassen.</li>"
-      "<li>Viele kleine Verbesserungen machen Updates, Neustarts und den Alltag insgesamt zuverlässiger.</li>"
+      "<li>Updates laufen jetzt zuverlässiger und zeigen in der Konsole klarer an, von welchem Build auf welchen gewechselt wird.</li>"
+      "<li>Die Übersicht mit Servernetzwerken verhält sich sauberer, scrollt besser und wirkt optisch einheitlicher.</li>"
+      "<li>Servernetzwerke haben jetzt eine eigene Detailansicht, damit große Setups übersichtlicher verwaltet werden können.</li>"
+      "<li>Flathub-Metadaten, Beschreibungen und Screenshots wurden überarbeitet und sauberer aufbereitet.</li>"
       "</ul>"
-      "<p>Vielen Dank für euer Feedback. Es hat dieses Update direkt mitgeprägt.</p>");
+      "<p>Vielen Dank für euer Feedback. Es hat diese Fehlerbehebungen direkt mitgeprägt.</p>");
   } else {
     adw_about_dialog_set_release_notes(
       about,
       "<p>What’s new</p>"
       "<ul>"
-      "<li>The app now feels cleaner and more modern, with a clearer server overview and refined detail views.</li>"
-      "<li>Plugins, worlds, and server groups are easier to manage, with better actions and less visual clutter.</li>"
-      "<li>Networks and player management have been expanded to make larger setups easier to organize.</li>"
-      "<li>Many smaller improvements make updates, restarts, and everyday use more reliable.</li>"
+      "<li>Updates are now more reliable and the console shows more clearly which build is being replaced.</li>"
+      "<li>The overview handles server networks more cleanly, with better scrolling behavior and a more consistent visual style.</li>"
+      "<li>Server networks now have their own detail view to make larger setups easier to manage.</li>"
+      "<li>Flathub metadata, descriptions, and screenshots have been cleaned up and prepared more carefully.</li>"
       "</ul>"
-      "<p>Thank you for your feedback. It directly shaped this update.</p>");
+      "<p>Thank you for your feedback. It directly shaped these fixes.</p>");
   }
   adw_about_dialog_set_developer_name(about, "Rotstein");
   adw_about_dialog_set_comments(about,

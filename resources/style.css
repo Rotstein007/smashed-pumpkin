@@ -146,6 +146,11 @@ button.small > box > label {
   line-height: 1;
 }
 
+.network-state-dot {
+  min-width: 14px;
+  font-size: 14px;
+}
+
 .server-state-running {
   color: #2f9e44;
 }

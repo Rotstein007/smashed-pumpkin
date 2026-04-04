@@ -70,81 +70,83 @@
                 <property name="title" translatable="yes">Overview</property>
                 <property name="icon-name">view-grid-symbolic</property>
                 <property name="child">
-                  <object class="GtkBox" id="overview_page_box">
-                    <property name="orientation">vertical</property>
-                    <property name="spacing">12</property>
-                    <property name="margin-top">18</property>
-                    <property name="margin-bottom">18</property>
-                    <property name="margin-start">18</property>
-                    <property name="margin-end">18</property>
+                  <object class="GtkScrolledWindow">
+                    <property name="hscrollbar-policy">never</property>
+                    <property name="vscrollbar-policy">automatic</property>
+                    <property name="propagate-natural-height">true</property>
                     <child>
-                      <object class="GtkBox">
+                      <object class="GtkBox" id="overview_page_box">
                         <property name="orientation">vertical</property>
-                        <property name="spacing">8</property>
+                        <property name="spacing">12</property>
+                        <property name="margin-top">18</property>
+                        <property name="margin-bottom">18</property>
+                        <property name="margin-start">18</property>
+                        <property name="margin-end">18</property>
                         <child>
                           <object class="GtkBox">
+                            <property name="orientation">vertical</property>
+                            <property name="spacing">8</property>
+                            <child>
+                              <object class="GtkBox">
+                                <property name="spacing">8</property>
+                                <child>
+                                  <object class="GtkLabel">
+                                    <property name="label" translatable="yes">Server Networks</property>
+                                    <property name="xalign">0</property>
+                                    <property name="hexpand">true</property>
+                                    <style>
+                                      <class name="title-4"/>
+                                    </style>
+                                  </object>
+                                </child>
+                                <child>
+                                  <object class="GtkButton" id="btn_add_network_overview">
+                                    <property name="label" translatable="yes">Add Network</property>
+                                  </object>
+                                </child>
+                              </object>
+                            </child>
+                            <child>
+                              <object class="GtkListBox" id="overview_network_list">
+                                <property name="selection-mode">none</property>
+                                <property name="show-separators">false</property>
+                                <property name="css-classes">overview-list</property>
+                              </object>
+                            </child>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkBox" id="overview_header_row">
                             <property name="spacing">8</property>
                             <child>
                               <object class="GtkLabel">
-                                <property name="label" translatable="yes">Server Networks</property>
+                                <property name="label" translatable="yes">Servers</property>
                                 <property name="xalign">0</property>
                                 <property name="hexpand">true</property>
                                 <style>
-                                  <class name="title-4"/>
+                                  <class name="title-2"/>
                                 </style>
                               </object>
                             </child>
                             <child>
-                              <object class="GtkButton" id="btn_add_network_overview">
-                                <property name="label" translatable="yes">Add Network</property>
+                              <object class="GtkBox">
+                                <style>
+                                  <class name="linked"/>
+                                </style>
+                                <child>
+                                  <object class="GtkButton" id="btn_add_server_overview">
+                                    <property name="label" translatable="yes">Add Server</property>
+                                  </object>
+                                </child>
+                                <child>
+                                  <object class="GtkButton" id="btn_import_server_overview">
+                                    <property name="label" translatable="yes">Import Server</property>
+                                  </object>
+                                </child>
                               </object>
                             </child>
                           </object>
                         </child>
-                        <child>
-                          <object class="GtkListBox" id="overview_network_list">
-                            <property name="selection-mode">none</property>
-                            <property name="show-separators">false</property>
-                            <property name="css-classes">overview-list</property>
-                          </object>
-                        </child>
-                      </object>
-                    </child>
-                    <child>
-                      <object class="GtkBox" id="overview_header_row">
-                        <property name="spacing">8</property>
-                        <child>
-                          <object class="GtkLabel">
-                            <property name="label" translatable="yes">Servers</property>
-                            <property name="xalign">0</property>
-                            <property name="hexpand">true</property>
-                            <style>
-                              <class name="title-2"/>
-                            </style>
-                          </object>
-                        </child>
-                        <child>
-                          <object class="GtkBox">
-                            <style>
-                              <class name="linked"/>
-                            </style>
-                            <child>
-                              <object class="GtkButton" id="btn_add_server_overview">
-                                <property name="label" translatable="yes">Add Server</property>
-                              </object>
-                            </child>
-                            <child>
-                              <object class="GtkButton" id="btn_import_server_overview">
-                                <property name="label" translatable="yes">Import Server</property>
-                              </object>
-                            </child>
-                          </object>
-                        </child>
-                      </object>
-                    </child>
-                    <child>
-                      <object class="GtkScrolledWindow">
-                        <property name="vexpand">true</property>
                         <child>
                           <object class="GtkListBox" id="overview_list">
                             <property name="selection-mode">none</property>
@@ -2042,6 +2044,185 @@
                                 </child>
                               </object>
                             </property>
+                          </object>
+                        </child>
+                      </object>
+                    </child>
+                  </object>
+                </property>
+              </object>
+            </child>
+
+            <child>
+              <object class="AdwViewStackPage">
+                <property name="name">network-details</property>
+                <property name="title" translatable="yes">Network Details</property>
+                <property name="icon-name">network-workgroup-symbolic</property>
+                <property name="child">
+                  <object class="GtkBox" id="network_details_page_box">
+                    <property name="orientation">vertical</property>
+                    <property name="spacing">12</property>
+                    <property name="margin-top">18</property>
+                    <property name="margin-bottom">18</property>
+                    <property name="margin-start">18</property>
+                    <property name="margin-end">18</property>
+                    <child>
+                      <object class="GtkBox" id="network_details_header_row">
+                        <property name="spacing">12</property>
+                        <child>
+                          <object class="GtkButton" id="btn_network_details_back">
+                            <property name="icon-name">go-previous-symbolic</property>
+                            <property name="tooltip-text" translatable="yes">Back to Overview</property>
+                            <property name="valign">center</property>
+                            <property name="css-classes">small flat</property>
+                            <style><class name="compact-button"/></style>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkBox" id="network_details_identity_row">
+                            <property name="spacing">10</property>
+                            <property name="hexpand">true</property>
+                            <property name="valign">center</property>
+                            <child>
+                              <object class="GtkImage" id="network_details_icon">
+                                <property name="icon-name">network-workgroup-symbolic</property>
+                                <property name="pixel-size">32</property>
+                              </object>
+                            </child>
+                            <child>
+                              <object class="GtkLabel" id="network_details_title">
+                                <property name="label" translatable="yes">No network selected</property>
+                                <property name="xalign">0</property>
+                                <property name="valign">center</property>
+                                <style>
+                                  <class name="title-3"/>
+                                </style>
+                              </object>
+                            </child>
+                            <child>
+                              <object class="GtkLabel" id="network_details_status">
+                                <property name="label"></property>
+                                <property name="xalign">0</property>
+                                <property name="valign">center</property>
+                                <style>
+                                  <class name="dim-label"/>
+                                </style>
+                              </object>
+                            </child>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkProgressBar" id="network_details_progress">
+                            <property name="show-text">true</property>
+                            <property name="visible">false</property>
+                            <property name="valign">center</property>
+                            <property name="hexpand">true</property>
+                          </object>
+                        </child>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkBox" id="network_details_action_row">
+                        <property name="spacing">6</property>
+                        <property name="halign">end</property>
+                        <style>
+                          <class name="details-action-row"/>
+                        </style>
+                        <child>
+                          <object class="GtkBox">
+                            <style>
+                              <class name="linked"/>
+                            </style>
+                            <child>
+                              <object class="GtkButton" id="btn_network_details_start">
+                                <property name="label" translatable="yes">Start all</property>
+                                <property name="css-classes">suggested-action small flat</property>
+                                <style><class name="compact-button"/></style>
+                              </object>
+                            </child>
+                            <child>
+                              <object class="GtkButton" id="btn_network_details_stop">
+                                <property name="label" translatable="yes">Stop all</property>
+                                <property name="css-classes">destructive-action small flat</property>
+                                <style><class name="compact-button"/></style>
+                              </object>
+                            </child>
+                            <child>
+                              <object class="GtkButton" id="btn_network_details_update">
+                                <property name="label" translatable="yes">Update all</property>
+                                <property name="css-classes">small flat update-button</property>
+                                <style><class name="compact-button"/></style>
+                              </object>
+                            </child>
+                            <child>
+                              <object class="GtkButton" id="btn_network_details_install">
+                                <property name="label" translatable="yes">Install all</property>
+                                <property name="css-classes">small flat</property>
+                                <style><class name="compact-button"/></style>
+                              </object>
+                            </child>
+                            <child>
+                              <object class="GtkButton" id="btn_network_details_add">
+                                <property name="label" translatable="yes">Add server</property>
+                                <property name="css-classes">small flat</property>
+                                <style><class name="compact-button"/></style>
+                              </object>
+                            </child>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkBox">
+                            <style>
+                              <class name="linked"/>
+                            </style>
+                            <child>
+                              <object class="GtkButton" id="btn_network_details_set_icon">
+                                <property name="label" translatable="yes">Set icon</property>
+                                <property name="css-classes">small flat</property>
+                                <style><class name="compact-button"/></style>
+                              </object>
+                            </child>
+                            <child>
+                              <object class="GtkButton" id="btn_network_details_reset_icon">
+                                <property name="label" translatable="yes">Reset icon</property>
+                                <property name="css-classes">small flat</property>
+                                <style><class name="compact-button"/></style>
+                              </object>
+                            </child>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkBox">
+                            <style>
+                              <class name="linked"/>
+                            </style>
+                            <child>
+                              <object class="GtkButton" id="btn_network_details_set_proxy">
+                                <property name="label" translatable="yes">Set proxy</property>
+                                <property name="css-classes">small flat</property>
+                                <style><class name="compact-button"/></style>
+                              </object>
+                            </child>
+                            <child>
+                              <object class="GtkButton" id="btn_network_details_clear_proxy">
+                                <property name="label" translatable="yes">Clear proxy</property>
+                                <property name="css-classes">small flat</property>
+                                <style><class name="compact-button"/></style>
+                              </object>
+                            </child>
+                          </object>
+                        </child>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkScrolledWindow">
+                        <property name="vexpand">true</property>
+                        <property name="hscrollbar-policy">never</property>
+                        <property name="vscrollbar-policy">automatic</property>
+                        <child>
+                          <object class="GtkBox" id="network_details_members_box">
+                            <property name="orientation">vertical</property>
+                            <property name="spacing">8</property>
                           </object>
                         </child>
                       </object>

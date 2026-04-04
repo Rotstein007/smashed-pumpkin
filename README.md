@@ -20,24 +20,17 @@ winget install Rotstein.SmashedPumpkin
 - Apple Silicon (ARM64): [Download](https://nightly.link/Rotstein007/smashed-pumpkin/workflows/desktop-builds/master/smashed-pumpkin-macos-arm64.zip)
 - Intel (x64): [Download](https://nightly.link/Rotstein007/smashed-pumpkin/workflows/desktop-builds/master/smashed-pumpkin-macos-x64.zip)
 
-## Build it yourself (short)
+## Build it yourself
 ```bash
 meson setup buildDir
 meson compile -C buildDir
 ./buildDir/src/smashed-pumpkin
 ```
 
-## Tray icon on GNOME
-GNOME Shell does not show legacy tray icons by default.
-Install and enable the `AppIndicator and KStatusNotifierItem Support` extension to see the tray icon.
-
 ## Screenshots
-![Server console](data/screenshots/smashed-pumpkin-console.png)
-![Resource stats](data/screenshots/smashed-pumpkin-stats.png)
-![Log files](data/screenshots/smashed-pumpkin-logs.png)
-![Plugin manager](data/screenshots/smashed-pumpkin-plugins.png)
-![Worlds](data/screenshots/smashed-pumpkin-worlds.png)
-![Server settings](data/screenshots/smashed-pumpkin-settings.png)
+![Start screen](data/screenshots/start-screen.png)
+![Server console](data/screenshots/console.png)
+![Plugin manager](data/screenshots/plugins.png)
 
 ## License
 GPL-3.0-or-later. See `LICENSE`.
