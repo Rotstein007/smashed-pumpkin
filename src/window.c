@@ -15,6 +15,8 @@
 #include <glib/gstdio.h>
 #include <libsoup/soup.h>
 #if defined(G_OS_WIN32)
+#include <dwmapi.h>
+#include <gdk/win32/gdkwin32.h>
 #include <windows.h>
 #include <psapi.h>
 #elif defined(__APPLE__)
@@ -33,7 +35,11 @@
 #endif
 #include <time.h>
 
+#if defined(G_OS_WIN32)
+G_DEFINE_FINAL_TYPE(PumpkinWindow, pumpkin_window, GTK_TYPE_APPLICATION_WINDOW)
+#else
 G_DEFINE_FINAL_TYPE(PumpkinWindow, pumpkin_window, ADW_TYPE_APPLICATION_WINDOW)
+#endif
 
 typedef struct {
   PumpkinWindow *self;
@@ -280,6 +286,10 @@ static gboolean any_download_active(PumpkinWindow *self);
 static guint network_update_actionable_count(PumpkinWindow *self, ServerNetwork *network);
 static void auto_start_context_free(AutoStartContext *ctx);
 static gboolean auto_start_server_timeout_cb(gpointer user_data);
+#if defined(G_OS_WIN32)
+static void apply_windows_titlebar_theme(PumpkinWindow *self);
+static void on_windows_window_realize(GtkWidget *widget, gpointer user_data);
+#endif
 
 static void
 apply_compact_button(GtkWidget *button)
@@ -289,6 +299,56 @@ apply_compact_button(GtkWidget *button)
   }
   gtk_widget_set_size_request(button, -1, 24);
 }
+
+#if defined(G_OS_WIN32)
+#ifndef DWMWA_USE_IMMERSIVE_DARK_MODE
+#define DWMWA_USE_IMMERSIVE_DARK_MODE 20
+#endif
+#ifndef DWMWA_BORDER_COLOR
+#define DWMWA_BORDER_COLOR 34
+#endif
+#ifndef DWMWA_CAPTION_COLOR
+#define DWMWA_CAPTION_COLOR 35
+#endif
+#ifndef DWMWA_TEXT_COLOR
+#define DWMWA_TEXT_COLOR 36
+#endif
+
+static void
+apply_windows_titlebar_theme(PumpkinWindow *self)
+{
+  if (!gtk_widget_get_realized(GTK_WIDGET(self))) {
+    return;
+  }
+
+  GdkSurface *surface = gtk_native_get_surface(GTK_NATIVE(self));
+  if (surface == NULL || !GDK_IS_WIN32_SURFACE(surface)) {
+    return;
+  }
+
+  HWND hwnd = gdk_win32_surface_get_handle(surface);
+  if (hwnd == NULL) {
+    return;
+  }
+
+  BOOL use_dark = TRUE;
+  COLORREF caption_color = RGB(28, 30, 34);
+  COLORREF border_color = RGB(28, 30, 34);
+  COLORREF text_color = RGB(255, 255, 255);
+
+  DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &use_dark, sizeof(use_dark));
+  DwmSetWindowAttribute(hwnd, DWMWA_CAPTION_COLOR, &caption_color, sizeof(caption_color));
+  DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, &border_color, sizeof(border_color));
+  DwmSetWindowAttribute(hwnd, DWMWA_TEXT_COLOR, &text_color, sizeof(text_color));
+}
+
+static void
+on_windows_window_realize(GtkWidget *widget, gpointer user_data)
+{
+  (void)widget;
+  apply_windows_titlebar_theme(PUMPKIN_WINDOW(user_data));
+}
+#endif
 
 void
 set_details_error(PumpkinWindow *self, const char *message)
@@ -6812,7 +6872,7 @@ refresh_plugin_list(PumpkinWindow *self)
     GtkWidget *box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
     GtkWidget *label = gtk_label_new(display);
     g_autofree char *plugin_path = g_build_filename(plugins_dir, entry, NULL);
-    struct stat plugin_st;
+    GStatBuf plugin_st;
     gboolean has_size = (g_stat(plugin_path, &plugin_st) == 0);
     GtkWidget *toggle = gtk_switch_new();
     GtkWidget *btn_delete = gtk_button_new_with_label("Delete");
@@ -11699,6 +11759,9 @@ static void
 pumpkin_window_init(PumpkinWindow *self)
 {
   gtk_widget_init_template(GTK_WIDGET(self));
+#if defined(G_OS_WIN32)
+  g_signal_connect(self, "realize", G_CALLBACK(on_windows_window_realize), self);
+#endif
   g_signal_connect(self, "close-request", G_CALLBACK(on_window_close_request), self);
   g_signal_connect(self, "notify::visible", G_CALLBACK(on_window_visible_changed), self);
   if (self->overview_list != NULL) {
@@ -12532,7 +12595,11 @@ pumpkin_window_class_init(PumpkinWindowClass *class)
 
   object_class->dispose = pumpkin_window_dispose;
 
+#if defined(G_OS_WIN32)
+  gtk_widget_class_set_template_from_resource(widget_class, "/dev/rotstein/SmashedPumpkin/ui/window-windows.ui");
+#else
   gtk_widget_class_set_template_from_resource(widget_class, "/dev/rotstein/SmashedPumpkin/ui/window.ui");
+#endif
 
   gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, view_stack);
   gtk_widget_class_bind_template_child(widget_class, PumpkinWindow, details_switcher);

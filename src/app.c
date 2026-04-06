@@ -3,10 +3,12 @@
 #include "config.h"
 #include "window.h"
 
+#include <stdint.h>
 #include <string.h>
 #if defined(G_OS_WIN32)
 #include <windows.h>
 #include <process.h>
+#include <windowsx.h>
 #else
 #include <unistd.h>
 #endif
@@ -26,6 +28,127 @@ static GPid tray_pid = 0;
 static gboolean tray_spawned = FALSE;
 static guint tray_watch_id = 0;
 static gboolean tray_available = FALSE;
+
+#if defined(G_OS_WIN32)
+static HWND tray_control_hwnd = NULL;
+static UINT tray_control_show_msg = 0;
+static UINT tray_control_quit_msg = 0;
+static const char *tray_control_window_class = "SmashedPumpkinControlWindow";
+#endif
+
+static GtkWindow *
+find_existing_window(GtkApplication *app)
+{
+  GList *windows = gtk_application_get_windows(app);
+  for (GList *l = windows; l != NULL; l = l->next) {
+    if (GTK_IS_WINDOW(l->data)) {
+      return GTK_WINDOW(l->data);
+    }
+  }
+
+  return NULL;
+}
+
+#if defined(G_OS_WIN32)
+static gboolean
+present_existing_window_idle(gpointer data)
+{
+  PumpkinApp *app = PUMPKIN_APP(data);
+  GtkWindow *win = find_existing_window(GTK_APPLICATION(app));
+
+  if (win == NULL) {
+    g_application_activate(G_APPLICATION(app));
+  } else {
+    gtk_widget_set_visible(GTK_WIDGET(win), TRUE);
+    gtk_window_present(win);
+  }
+
+  g_object_unref(app);
+  return G_SOURCE_REMOVE;
+}
+
+static gboolean
+quit_application_idle(gpointer data)
+{
+  PumpkinApp *app = PUMPKIN_APP(data);
+  g_action_group_activate_action(G_ACTION_GROUP(app), "quit", NULL);
+  g_object_unref(app);
+  return G_SOURCE_REMOVE;
+}
+
+static LRESULT CALLBACK
+tray_control_window_proc(HWND hwnd, UINT msg, WPARAM w_param, LPARAM l_param)
+{
+  (void)w_param;
+  (void)l_param;
+
+  if (msg == WM_NCCREATE) {
+    CREATESTRUCTA *create = (CREATESTRUCTA *)l_param;
+    SetWindowLongPtrA(hwnd, GWLP_USERDATA, (LONG_PTR)create->lpCreateParams);
+    return TRUE;
+  }
+
+  PumpkinApp *app = (PumpkinApp *)GetWindowLongPtrA(hwnd, GWLP_USERDATA);
+  if (app != NULL) {
+    if (msg == tray_control_show_msg) {
+      g_idle_add_full(G_PRIORITY_DEFAULT, present_existing_window_idle, g_object_ref(app), NULL);
+      return 0;
+    }
+    if (msg == tray_control_quit_msg) {
+      g_idle_add_full(G_PRIORITY_DEFAULT, quit_application_idle, g_object_ref(app), NULL);
+      return 0;
+    }
+  }
+
+  return DefWindowProcA(hwnd, msg, w_param, l_param);
+}
+
+static void
+ensure_tray_control_window(PumpkinApp *app)
+{
+  HINSTANCE instance;
+  WNDCLASSEXA window_class = {0};
+
+  if (tray_control_show_msg == 0) {
+    tray_control_show_msg = RegisterWindowMessageW(L"Rotstein.SmashedPumpkin.Tray.Show");
+  }
+  if (tray_control_quit_msg == 0) {
+    tray_control_quit_msg = RegisterWindowMessageW(L"Rotstein.SmashedPumpkin.Tray.Quit");
+  }
+  if (tray_control_hwnd != NULL) {
+    return;
+  }
+
+  instance = GetModuleHandleA(NULL);
+  window_class.cbSize = sizeof(window_class);
+  window_class.lpfnWndProc = tray_control_window_proc;
+  window_class.hInstance = instance;
+  window_class.lpszClassName = tray_control_window_class;
+  RegisterClassExA(&window_class);
+
+  tray_control_hwnd = CreateWindowExA(WS_EX_TOOLWINDOW,
+                                      tray_control_window_class,
+                                      "",
+                                      WS_POPUP,
+                                      0,
+                                      0,
+                                      0,
+                                      0,
+                                      NULL,
+                                      NULL,
+                                      instance,
+                                      app);
+}
+
+static void
+destroy_tray_control_window(void)
+{
+  if (tray_control_hwnd != NULL) {
+    DestroyWindow(tray_control_hwnd);
+    tray_control_hwnd = NULL;
+  }
+}
+#endif
 
 static void
 present_review_prompt(PumpkinApp *self, GtkWindow *win)
@@ -200,10 +323,25 @@ spawn_tray_helper(void)
   g_free(arg);
 }
 
+static gboolean
+tray_should_be_enabled(PumpkinApp *app)
+{
+  PumpkinConfig *config = pumpkin_config_load(NULL);
+  if (config == NULL) {
+    return TRUE;
+  }
+
+  gboolean enabled = pumpkin_config_get_run_in_background(config) ||
+                     pumpkin_config_get_start_minimized(config) ||
+                     app->start_minimized;
+  pumpkin_config_free(config);
+  return enabled;
+}
+
 static void
 stop_tray_helper(void)
 {
-  if (!tray_spawned || tray_pid <= 0) {
+  if (!tray_spawned || tray_pid == 0) {
     return;
   }
 
@@ -213,7 +351,7 @@ stop_tray_helper(void)
   }
 
 #if defined(G_OS_WIN32)
-  HANDLE process = OpenProcess(PROCESS_TERMINATE, FALSE, (DWORD)tray_pid);
+  HANDLE process = OpenProcess(PROCESS_TERMINATE, FALSE, (DWORD)(uintptr_t)tray_pid);
   if (process != NULL) {
     TerminateProcess(process, 0);
     CloseHandle(process);
@@ -249,10 +387,20 @@ static void
 pumpkin_app_activate(GApplication *app)
 {
   PumpkinApp *self = PUMPKIN_APP(app);
-  GtkWindow *win = gtk_application_get_active_window(GTK_APPLICATION(app));
+  GtkApplication *gtk_app = GTK_APPLICATION(app);
+  GtkWindow *win = gtk_application_get_active_window(gtk_app);
+  if (win == NULL) {
+    win = find_existing_window(gtk_app);
+  }
   if (win == NULL) {
     win = GTK_WINDOW(pumpkin_window_new(ADW_APPLICATION(app)));
     gtk_window_set_default_icon_name(APP_ID);
+  }
+#if defined(G_OS_WIN32)
+  ensure_tray_control_window(self);
+#endif
+  if (!tray_spawned && tray_should_be_enabled(self)) {
+    pumpkin_app_set_tray_enabled(self, TRUE);
   }
   if (self->start_minimized && self->first_activation) {
     self->first_activation = FALSE;
@@ -427,8 +575,6 @@ pumpkin_app_startup(GApplication *app)
   g_action_map_add_action_entries(G_ACTION_MAP(app), app_actions, G_N_ELEMENTS(app_actions), app);
   gtk_application_set_accels_for_action(GTK_APPLICATION(app), "app.quit", (const char*[]) { "<primary>q", NULL });
 
-  pumpkin_app_set_tray_enabled(PUMPKIN_APP(app), TRUE);
-
   /* Auto-start servers on launch */
   PumpkinConfig *config = pumpkin_config_load(NULL);
   if (config != NULL) {
@@ -445,7 +591,20 @@ pumpkin_app_dispose(GObject *object)
 {
   PumpkinApp *self = PUMPKIN_APP(object);
   g_clear_pointer(&self->pending_server_id, g_free);
+#if defined(G_OS_WIN32)
+  destroy_tray_control_window();
+#endif
   G_OBJECT_CLASS(pumpkin_app_parent_class)->dispose(object);
+}
+
+static void
+pumpkin_app_shutdown(GApplication *app)
+{
+  stop_tray_helper();
+#if defined(G_OS_WIN32)
+  destroy_tray_control_window();
+#endif
+  G_APPLICATION_CLASS(pumpkin_app_parent_class)->shutdown(app);
 }
 
 static void
@@ -457,6 +616,7 @@ pumpkin_app_class_init(PumpkinAppClass *class)
   app_class->activate = pumpkin_app_activate;
   app_class->command_line = pumpkin_app_command_line;
   app_class->startup = pumpkin_app_startup;
+  app_class->shutdown = pumpkin_app_shutdown;
   object_class->dispose = pumpkin_app_dispose;
 }
 

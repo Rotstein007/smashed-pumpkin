@@ -2,6 +2,11 @@
 
 #include <glib/gstdio.h>
 
+#if defined(G_OS_WIN32)
+#include <windows.h>
+#include <wchar.h>
+#endif
+
 struct _PumpkinConfig {
   char *path;
   char *base_dir;
@@ -355,6 +360,65 @@ pumpkin_config_set_time_format(PumpkinConfig *config, PumpkinTimeFormat format)
 void
 pumpkin_config_manage_autostart_desktop(gboolean enabled)
 {
+#if defined(G_OS_WIN32)
+  const wchar_t *run_key_path = L"Software\\Microsoft\\Windows\\CurrentVersion\\Run";
+  const wchar_t *value_name = L"SmashedPumpkin";
+  HKEY key = NULL;
+
+  if (RegCreateKeyExW(HKEY_CURRENT_USER,
+                      run_key_path,
+                      0,
+                      NULL,
+                      REG_OPTION_NON_VOLATILE,
+                      KEY_SET_VALUE | KEY_QUERY_VALUE,
+                      NULL,
+                      &key,
+                      NULL) != ERROR_SUCCESS) {
+    return;
+  }
+
+  if (!enabled) {
+    RegDeleteValueW(key, value_name);
+    RegCloseKey(key);
+    return;
+  }
+
+  PumpkinConfig *config = pumpkin_config_load(NULL);
+  gboolean minimized = config != NULL && pumpkin_config_get_start_minimized(config);
+  if (config != NULL) {
+    pumpkin_config_free(config);
+  }
+
+  wchar_t exe_path[MAX_PATH] = {0};
+  DWORD written = GetModuleFileNameW(NULL, exe_path, G_N_ELEMENTS(exe_path));
+  if (written == 0 || written >= G_N_ELEMENTS(exe_path)) {
+    RegCloseKey(key);
+    return;
+  }
+
+  g_autofree gchar *exe_path_utf8 =
+    g_utf16_to_utf8((const gunichar2 *)exe_path, -1, NULL, NULL, NULL);
+  if (exe_path_utf8 == NULL) {
+    RegCloseKey(key);
+    return;
+  }
+
+  g_autofree gchar *command = g_strdup_printf("\"%s\"%s",
+                                              exe_path_utf8,
+                                              minimized ? " --minimized" : "");
+  g_autofree gunichar2 *command_utf16 = g_utf8_to_utf16(command, -1, NULL, NULL, NULL);
+  if (command_utf16 != NULL) {
+    RegSetValueExW(key,
+                   value_name,
+                   0,
+                   REG_SZ,
+                   (const BYTE *)command_utf16,
+                   (DWORD)((wcslen((const wchar_t *)command_utf16) + 1) * sizeof(wchar_t)));
+  }
+
+  RegCloseKey(key);
+  return;
+#else
   g_autofree char *autostart_dir = g_build_filename(g_get_user_config_dir(), "autostart", NULL);
   g_autofree char *desktop_path = g_build_filename(autostart_dir, "dev.rotstein.SmashedPumpkin.desktop", NULL);
 
@@ -381,4 +445,5 @@ pumpkin_config_manage_autostart_desktop(gboolean enabled)
     minimized ? " --minimized" : "");
 
   g_file_set_contents(desktop_path, contents, -1, NULL);
+#endif
 }

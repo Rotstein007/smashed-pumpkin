@@ -3,6 +3,7 @@
 
 #if defined(G_OS_WIN32)
 #include <windows.h>
+#include <shobjidl.h>
 
 #include <glib/gstdio.h>
 
@@ -48,11 +49,7 @@ prepend_search_path_env(const gchar *name, const gchar *value)
 static void
 prepare_gdk_pixbuf_cache(const gchar *prefix, const gchar *bin_dir)
 {
-  g_autofree gchar *query_tool =
-    g_build_filename(bin_dir, "gdk-pixbuf-query-loaders.exe", NULL);
-  if (!g_file_test(query_tool, G_FILE_TEST_EXISTS)) {
-    return;
-  }
+  (void)bin_dir;
 
   g_autofree gchar *pixbuf_root =
     g_build_filename(prefix, "lib", "gdk-pixbuf-2.0", NULL);
@@ -67,64 +64,16 @@ prepare_gdk_pixbuf_cache(const gchar *prefix, const gchar *bin_dir)
   }
 
   g_setenv("GDK_PIXBUF_MODULEDIR", loaders_dir, TRUE);
-
-  GDir *dir = g_dir_open(loaders_dir, 0, NULL);
-  if (dir == NULL) {
-    return;
-  }
-
-  g_autoptr(GPtrArray) argv = g_ptr_array_new_with_free_func(g_free);
-  g_ptr_array_add(argv, g_strdup(query_tool));
-
-  const gchar *name = NULL;
-  while ((name = g_dir_read_name(dir)) != NULL) {
-    if (!g_str_has_suffix(name, ".dll")) {
-      continue;
-    }
-
-    g_autofree gchar *loader_path = g_build_filename(loaders_dir, name, NULL);
-    if (g_file_test(loader_path, G_FILE_TEST_EXISTS)) {
-      g_ptr_array_add(argv, g_steal_pointer(&loader_path));
-    }
-  }
-  g_dir_close(dir);
-
-  if (argv->len <= 1) {
-    return;
-  }
-
-  g_ptr_array_add(argv, NULL);
-
-  g_autofree gchar *cache_dir =
-    g_build_filename(g_get_user_cache_dir(), "smashed-pumpkin", NULL);
-  if (g_mkdir_with_parents(cache_dir, 0700) != 0) {
-    return;
-  }
-
-  g_autofree gchar *cache_file =
-    g_build_filename(cache_dir, "gdk-pixbuf-loaders.cache", NULL);
-  g_autofree gchar *stdout_data = NULL;
-  g_autofree gchar *stderr_data = NULL;
-  gint status = 0;
-  gboolean ok =
-    g_spawn_sync(NULL,
-                 (gchar **)argv->pdata,
-                 NULL,
-                 G_SPAWN_DEFAULT,
-                 NULL,
-                 NULL,
-                 &stdout_data,
-                 &stderr_data,
-                 &status,
-                 NULL);
-
-  if (!ok || status != 0 || stdout_data == NULL || *stdout_data == '\0') {
-    return;
-  }
-
-  if (g_file_set_contents(cache_file, stdout_data, -1, NULL)) {
+  g_autofree gchar *cache_file = g_build_filename(pixbuf_version_dir, "loaders.cache", NULL);
+  if (g_file_test(cache_file, G_FILE_TEST_EXISTS)) {
     g_setenv("GDK_PIXBUF_MODULE_FILE", cache_file, TRUE);
   }
+}
+
+static void
+set_windows_app_id(void)
+{
+  SetCurrentProcessExplicitAppUserModelID(L"Rotstein.SmashedPumpkin");
 }
 
 static void
@@ -147,6 +96,9 @@ init_windows_runtime(void)
   g_autofree gchar *parent_share = g_build_filename(parent_dir, "share", NULL);
   g_autofree gchar *prefix =
     g_file_test(parent_share, G_FILE_TEST_IS_DIR) ? g_strdup(parent_dir) : g_strdup(bin_dir);
+
+  /* Use the native Windows non-client frame and title bar. */
+  g_setenv("GTK_CSD", "0", TRUE);
 
   g_autofree gchar *share_dir = g_build_filename(prefix, "share", NULL);
   if (g_file_test(share_dir, G_FILE_TEST_IS_DIR)) {
@@ -192,6 +144,7 @@ int
 main(int argc, char *argv[])
 {
 #if defined(G_OS_WIN32)
+  set_windows_app_id();
   init_windows_runtime();
 #endif
   smashed_pumpkin_register_resource();

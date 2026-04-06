@@ -5,7 +5,11 @@
 G_BEGIN_DECLS
 
 #define PUMPKIN_TYPE_WINDOW (pumpkin_window_get_type())
+#if defined(G_OS_WIN32)
+G_DECLARE_FINAL_TYPE(PumpkinWindow, pumpkin_window, PUMPKIN, WINDOW, GtkApplicationWindow)
+#else
 G_DECLARE_FINAL_TYPE(PumpkinWindow, pumpkin_window, PUMPKIN, WINDOW, AdwApplicationWindow)
+#endif
 
 GtkWindow *pumpkin_window_new(AdwApplication *app);
 void pumpkin_window_select_server(PumpkinWindow *self, const char *id_or_name);

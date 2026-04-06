@@ -8,6 +8,8 @@
 #include <stdio.h>
 #include <unistd.h>
 #if defined(G_OS_WIN32)
+#include <gio-win32-2.0/gio/gwin32inputstream.h>
+#include <gio-win32-2.0/gio/gwin32outputstream.h>
 #include <windows.h>
 #else
 #include <sys/resource.h>
@@ -93,6 +95,8 @@ struct _PumpkinServer {
   guint restart_source_id;
 #if defined(G_OS_WIN32)
   HANDLE job_handle;
+  HANDLE process_handle;
+  guint process_watch_source_id;
 #endif
 
   GSubprocess *process;
@@ -141,6 +145,14 @@ pumpkin_server_finalize(GObject *object)
   if (self->job_handle != NULL) {
     CloseHandle(self->job_handle);
     self->job_handle = NULL;
+  }
+  if (self->process_handle != NULL) {
+    CloseHandle(self->process_handle);
+    self->process_handle = NULL;
+  }
+  if (self->process_watch_source_id != 0) {
+    g_source_remove(self->process_watch_source_id);
+    self->process_watch_source_id = 0;
   }
 #endif
   if (self->restart_source_id != 0) {
@@ -198,6 +210,10 @@ pumpkin_server_init(PumpkinServer *self)
   self->ddns_update_ipv6 = FALSE;
   self->ddns_interval_seconds = SERVER_DDNS_INTERVAL_SECONDS_DEFAULT;
   self->pid = 0;
+#if defined(G_OS_WIN32)
+  self->process_handle = NULL;
+  self->process_watch_source_id = 0;
+#endif
 }
 
 static int
@@ -1294,14 +1310,83 @@ append_log_line(PumpkinServer *self, const char *line)
   g_output_stream_flush(self->log_stream, NULL, NULL);
 }
 
+static char *
+normalize_process_output_line(const char *line, gsize length)
+{
+  if (line == NULL) {
+    return NULL;
+  }
+
+#if defined(G_OS_WIN32)
+  if (length >= 4) {
+    const guint8 *bytes = (const guint8 *)line;
+    gboolean looks_like_utf16le = FALSE;
+
+    if (bytes[0] == 0xFF && bytes[1] == 0xFE) {
+      looks_like_utf16le = TRUE;
+      bytes += 2;
+      length -= 2;
+    } else {
+      gsize sample = length > 128 ? 128 : length;
+      sample -= sample % 2;
+      gsize pairs = 0;
+      gsize odd_nuls = 0;
+      gsize even_nuls = 0;
+      for (gsize i = 0; i + 1 < sample; i += 2) {
+        pairs++;
+        if (bytes[i] == 0) {
+          even_nuls++;
+        }
+        if (bytes[i + 1] == 0) {
+          odd_nuls++;
+        }
+      }
+
+      if (pairs >= 4 && odd_nuls * 4 >= pairs * 3 && even_nuls * 4 <= pairs) {
+        looks_like_utf16le = TRUE;
+      }
+    }
+
+    if (looks_like_utf16le && length >= 2) {
+      g_autofree gunichar2 *utf16 = g_malloc(length);
+      memcpy(utf16, bytes, length);
+      glong items = (glong)(length / 2);
+      char *utf8 = g_utf16_to_utf8((const gunichar2 *)utf16, items, NULL, NULL, NULL);
+      if (utf8 != NULL) {
+        return utf8;
+      }
+    }
+  }
+#endif
+
+  if (g_utf8_validate(line, (gssize)length, NULL)) {
+    return g_strndup(line, length);
+  }
+
+  g_autoptr(GError) error = NULL;
+  char *utf8 = g_locale_to_utf8(line, (gssize)length, NULL, NULL, &error);
+  if (utf8 != NULL) {
+    return utf8;
+  }
+
+  return g_strndup(line, length);
+}
+
 static void
 read_line_cb(GObject *source, GAsyncResult *res, gpointer user_data)
 {
   GDataInputStream *dis = G_DATA_INPUT_STREAM(source);
   PumpkinServer *self = PUMPKIN_SERVER(user_data);
   gsize length = 0;
-  g_autofree char *line = g_data_input_stream_read_line_finish(dis, res, &length, NULL);
+  g_autofree char *raw_line = g_data_input_stream_read_line_finish(dis, res, &length, NULL);
+  if (raw_line == NULL) {
+    g_object_unref(self);
+    return;
+  }
+
+  g_autofree char *line = normalize_process_output_line(raw_line, length);
   if (line == NULL) {
+    read_stream_line(dis, self, NULL);
     g_object_unref(self);
     return;
   }
@@ -1336,26 +1421,32 @@ pumpkin_server_attach_output(PumpkinServer *self)
   }
 }
 
-static void
-process_wait_cb(GObject *source, GAsyncResult *res, gpointer user_data)
-{
-  PumpkinServer *self = PUMPKIN_SERVER(user_data);
-  g_autoptr(GError) error = NULL;
-
-  g_clear_object(&self->process);
-  self->stdin_stream = NULL;
-  self->pid = 0;
 #if defined(G_OS_WIN32)
+static void
+pumpkin_server_handle_exit(PumpkinServer *self, const char *message)
+{
+  g_clear_object(&self->process);
+  g_clear_object(&self->stdout_dis);
+  g_clear_object(&self->stderr_dis);
+  g_clear_object(&self->stdin_stream);
+  self->pid = 0;
+
+  if (self->process_handle != NULL) {
+    CloseHandle(self->process_handle);
+    self->process_handle = NULL;
+  }
   if (self->job_handle != NULL) {
     CloseHandle(self->job_handle);
     self->job_handle = NULL;
   }
-#endif
+  if (self->process_watch_source_id != 0) {
+    g_source_remove(self->process_watch_source_id);
+    self->process_watch_source_id = 0;
+  }
   if (self->log_stream != NULL) {
     g_output_stream_flush(self->log_stream, NULL, NULL);
     g_clear_object(&self->log_stream);
   }
-
   if (self->restart_source_id != 0) {
     g_source_remove(self->restart_source_id);
     self->restart_source_id = 0;
@@ -1367,86 +1458,116 @@ process_wait_cb(GObject *source, GAsyncResult *res, gpointer user_data)
     self->restart_source_id = g_timeout_add(delay, auto_restart_cb, g_object_ref(self));
   }
 
-  if (!g_subprocess_wait_finish(G_SUBPROCESS(source), res, &error)) {
-    if (error != NULL) {
-      g_signal_emit(self, signals[LOG_LINE], 0, error->message);
-    }
-  } else {
-    g_signal_emit(self, signals[LOG_LINE], 0, "Server process exited");
-  }
+  g_signal_emit(self, signals[LOG_LINE], 0, message != NULL ? message : "Server process exited");
 }
 
-gboolean
-pumpkin_server_start(PumpkinServer *self, GError **error)
+static gboolean
+process_watch_cb(gpointer data)
 {
-  if (self->process != NULL) {
-    return TRUE;
+  PumpkinServer *self = PUMPKIN_SERVER(data);
+  if (self->process_handle == NULL) {
+    self->process_watch_source_id = 0;
+    g_object_unref(self);
+    return G_SOURCE_REMOVE;
   }
 
-  self->stop_requested = FALSE;
-  if (self->restart_source_id != 0) {
-    g_source_remove(self->restart_source_id);
-    self->restart_source_id = 0;
+  DWORD wait = WaitForSingleObject(self->process_handle, 0);
+  if (wait == WAIT_TIMEOUT) {
+    return G_SOURCE_CONTINUE;
   }
 
-  g_autofree char *bin = pumpkin_server_get_bin_path(self);
-  if (!g_file_test(bin, G_FILE_TEST_EXISTS)) {
-    g_set_error(error, G_IO_ERROR, G_IO_ERROR_NOT_FOUND, "Pumpkin binary not installed");
-    return FALSE;
+  self->process_watch_source_id = 0;
+  pumpkin_server_handle_exit(self, "Server process exited");
+  g_object_unref(self);
+  return G_SOURCE_REMOVE;
+}
+
+static gboolean
+pumpkin_server_start_windows(PumpkinServer *self,
+                             const char *bin,
+                             const char *data_dir,
+                             int max_cpu,
+                             int max_ram,
+                             GError **error)
+{
+  SECURITY_ATTRIBUTES sa = {0};
+  sa.nLength = sizeof(sa);
+  sa.bInheritHandle = TRUE;
+
+  HANDLE stdout_read = NULL;
+  HANDLE stdout_write = NULL;
+  HANDLE stderr_read = NULL;
+  HANDLE stderr_write = NULL;
+  HANDLE stdin_read = NULL;
+  HANDLE stdin_write = NULL;
+
+  if (!CreatePipe(&stdout_read, &stdout_write, &sa, 0) ||
+      !CreatePipe(&stderr_read, &stderr_write, &sa, 0) ||
+      !CreatePipe(&stdin_read, &stdin_write, &sa, 0)) {
+    g_set_error(error, G_IO_ERROR, G_IO_ERROR_FAILED, "Failed to create Windows pipes");
+    goto fail;
   }
 
-  if (!sync_pumpkin_basic_configuration(self, error)) {
-    return FALSE;
+  SetHandleInformation(stdout_read, HANDLE_FLAG_INHERIT, 0);
+  SetHandleInformation(stderr_read, HANDLE_FLAG_INHERIT, 0);
+  SetHandleInformation(stdin_write, HANDLE_FLAG_INHERIT, 0);
+
+  g_autofree gunichar2 *cmdline = NULL;
+  g_autofree gunichar2 *cwd = NULL;
+  g_autofree char *cmdline_utf8 = NULL;
+  cmdline_utf8 = g_strdup_printf("\"%s\"", bin);
+  cmdline = g_utf8_to_utf16(cmdline_utf8, -1, NULL, NULL, NULL);
+  cwd = g_utf8_to_utf16(data_dir, -1, NULL, NULL, NULL);
+  if (cmdline == NULL || cwd == NULL) {
+    g_set_error(error, G_IO_ERROR, G_IO_ERROR_FAILED, "Failed to prepare Windows command line");
+    goto fail;
   }
 
-  ensure_log_stream(self);
-  g_autofree char *data_dir = pumpkin_server_get_data_dir(self);
-  const char *argv[] = { bin, NULL };
+  STARTUPINFOW si = {0};
+  si.cb = sizeof(si);
+  si.dwFlags = STARTF_USESHOWWINDOW | STARTF_USESTDHANDLES;
+  si.wShowWindow = SW_HIDE;
+  si.hStdInput = stdin_read;
+  si.hStdOutput = stdout_write;
+  si.hStdError = stderr_write;
 
-  int max_cpu = clamp_cpu_cores(self->max_cpu_cores);
-  int max_ram = clamp_ram_mb(self->max_ram_mb);
-
-  GSubprocessLauncher *launcher = g_subprocess_launcher_new(
-    G_SUBPROCESS_FLAGS_STDOUT_PIPE | G_SUBPROCESS_FLAGS_STDERR_PIPE | G_SUBPROCESS_FLAGS_STDIN_PIPE
-  );
-  g_subprocess_launcher_set_cwd(launcher, data_dir);
-  if (max_cpu > 0) {
-    g_autofree char *num = g_strdup_printf("%d", max_cpu);
-    g_subprocess_launcher_setenv(launcher, "RAYON_NUM_THREADS", num, TRUE);
-    g_subprocess_launcher_setenv(launcher, "OMP_NUM_THREADS", num, TRUE);
-    g_subprocess_launcher_setenv(launcher, "TOKIO_WORKER_THREADS", num, TRUE);
-  }
-#if !defined(G_OS_WIN32)
-  ChildLimits *limits = g_new0(ChildLimits, 1);
-  limits->max_cpu_cores = max_cpu;
-  limits->max_ram_mb = max_ram;
-  limits->parent_pid = (int)getpid();
-  g_subprocess_launcher_set_child_setup(launcher, child_setup_cb, limits, g_free);
-#endif
-
-  self->process = g_subprocess_launcher_spawnv(launcher, argv, error);
-  g_object_unref(launcher);
-
-  if (self->process == NULL) {
-    return FALSE;
+  PROCESS_INFORMATION pi = {0};
+  if (!CreateProcessW(NULL,
+                      (LPWSTR)cmdline,
+                      NULL,
+                      NULL,
+                      TRUE,
+                      CREATE_NO_WINDOW,
+                      NULL,
+                      (LPCWSTR)cwd,
+                      &si,
+                      &pi)) {
+    g_set_error(error, G_IO_ERROR, G_IO_ERROR_FAILED, "Failed to start Pumpkin server on Windows");
+    goto fail;
   }
 
-  self->stdin_stream = g_subprocess_get_stdin_pipe(self->process);
-  const char *pid_str = g_subprocess_get_identifier(self->process);
-  if (pid_str != NULL) {
-    self->pid = (int)g_ascii_strtoll(pid_str, NULL, 10);
-  } else {
-    self->pid = 0;
-  }
-  pumpkin_server_attach_output(self);
-  g_subprocess_wait_async(self->process, NULL, process_wait_cb, self);
+  CloseHandle(pi.hThread);
+  CloseHandle(stdout_write);
+  CloseHandle(stderr_write);
+  CloseHandle(stdin_read);
+  stdout_write = NULL;
+  stderr_write = NULL;
+  stdin_read = NULL;
 
-#if defined(G_OS_WIN32)
-  if (self->job_handle != NULL) {
-    CloseHandle(self->job_handle);
-    self->job_handle = NULL;
-  }
-  if (self->pid > 0) {
+  self->process_handle = pi.hProcess;
+  self->pid = (int)pi.dwProcessId;
+  self->stdin_stream = g_win32_output_stream_new(stdin_write, TRUE);
+  self->stdout_dis = g_data_input_stream_new(g_win32_input_stream_new(stdout_read, TRUE));
+  self->stderr_dis = g_data_input_stream_new(g_win32_input_stream_new(stderr_read, TRUE));
+  stdin_write = NULL;
+  stdout_read = NULL;
+  stderr_read = NULL;
+
+  read_stream_line(self->stdout_dis, self, "stdout");
+  read_stream_line(self->stderr_dis, self, "stderr");
+  self->process_watch_source_id = g_timeout_add(500, process_watch_cb, g_object_ref(self));
+
+  if (max_cpu > 0 || max_ram > 0) {
     HANDLE process = OpenProcess(PROCESS_SET_INFORMATION | PROCESS_QUERY_LIMITED_INFORMATION, FALSE, (DWORD)self->pid);
     if (process != NULL) {
       if (max_cpu > 0) {
@@ -1481,14 +1602,136 @@ pumpkin_server_start(PumpkinServer *self, GError **error)
       CloseHandle(process);
     }
   }
-#endif
+
   return TRUE;
+
+fail:
+  if (stdout_read != NULL) CloseHandle(stdout_read);
+  if (stdout_write != NULL) CloseHandle(stdout_write);
+  if (stderr_read != NULL) CloseHandle(stderr_read);
+  if (stderr_write != NULL) CloseHandle(stderr_write);
+  if (stdin_read != NULL) CloseHandle(stdin_read);
+  if (stdin_write != NULL) CloseHandle(stdin_write);
+  return FALSE;
+}
+#endif
+
+#if !defined(G_OS_WIN32)
+static void
+process_wait_cb(GObject *source, GAsyncResult *res, gpointer user_data)
+{
+  PumpkinServer *self = PUMPKIN_SERVER(user_data);
+  g_autoptr(GError) error = NULL;
+
+  g_clear_object(&self->process);
+  self->stdin_stream = NULL;
+  self->pid = 0;
+  if (self->log_stream != NULL) {
+    g_output_stream_flush(self->log_stream, NULL, NULL);
+    g_clear_object(&self->log_stream);
+  }
+
+  if (self->restart_source_id != 0) {
+    g_source_remove(self->restart_source_id);
+    self->restart_source_id = 0;
+  }
+
+  if (self->auto_restart && !self->stop_requested) {
+    guint delay = self->auto_restart_delay > 0 ? (guint)self->auto_restart_delay : 10000;
+    g_signal_emit(self, signals[LOG_LINE], 0, "Auto-restart scheduled");
+    self->restart_source_id = g_timeout_add(delay, auto_restart_cb, g_object_ref(self));
+  }
+
+  if (!g_subprocess_wait_finish(G_SUBPROCESS(source), res, &error)) {
+    if (error != NULL) {
+      g_signal_emit(self, signals[LOG_LINE], 0, error->message);
+    }
+  } else {
+    g_signal_emit(self, signals[LOG_LINE], 0, "Server process exited");
+  }
+}
+#endif
+
+gboolean
+pumpkin_server_start(PumpkinServer *self, GError **error)
+{
+  if (self->process != NULL
+#if defined(G_OS_WIN32)
+      || self->process_handle != NULL
+#endif
+  ) {
+    return TRUE;
+  }
+
+  self->stop_requested = FALSE;
+  if (self->restart_source_id != 0) {
+    g_source_remove(self->restart_source_id);
+    self->restart_source_id = 0;
+  }
+
+  g_autofree char *bin = pumpkin_server_get_bin_path(self);
+  if (!g_file_test(bin, G_FILE_TEST_EXISTS)) {
+    g_set_error(error, G_IO_ERROR, G_IO_ERROR_NOT_FOUND, "Pumpkin binary not installed");
+    return FALSE;
+  }
+
+  if (!sync_pumpkin_basic_configuration(self, error)) {
+    return FALSE;
+  }
+
+  ensure_log_stream(self);
+  g_autofree char *data_dir = pumpkin_server_get_data_dir(self);
+  int max_cpu = clamp_cpu_cores(self->max_cpu_cores);
+  int max_ram = clamp_ram_mb(self->max_ram_mb);
+
+#if defined(G_OS_WIN32)
+  return pumpkin_server_start_windows(self, bin, data_dir, max_cpu, max_ram, error);
+#else
+  const char *argv[] = { bin, NULL };
+  GSubprocessLauncher *launcher = g_subprocess_launcher_new(
+    G_SUBPROCESS_FLAGS_STDOUT_PIPE | G_SUBPROCESS_FLAGS_STDERR_PIPE | G_SUBPROCESS_FLAGS_STDIN_PIPE
+  );
+  g_subprocess_launcher_set_cwd(launcher, data_dir);
+  if (max_cpu > 0) {
+    g_autofree char *num = g_strdup_printf("%d", max_cpu);
+    g_subprocess_launcher_setenv(launcher, "RAYON_NUM_THREADS", num, TRUE);
+    g_subprocess_launcher_setenv(launcher, "OMP_NUM_THREADS", num, TRUE);
+    g_subprocess_launcher_setenv(launcher, "TOKIO_WORKER_THREADS", num, TRUE);
+  }
+  ChildLimits *limits = g_new0(ChildLimits, 1);
+  limits->max_cpu_cores = max_cpu;
+  limits->max_ram_mb = max_ram;
+  limits->parent_pid = (int)getpid();
+  g_subprocess_launcher_set_child_setup(launcher, child_setup_cb, limits, g_free);
+
+  self->process = g_subprocess_launcher_spawnv(launcher, argv, error);
+  g_object_unref(launcher);
+
+  if (self->process == NULL) {
+    return FALSE;
+  }
+
+  self->stdin_stream = g_subprocess_get_stdin_pipe(self->process);
+  const char *pid_str = g_subprocess_get_identifier(self->process);
+  if (pid_str != NULL) {
+    self->pid = (int)g_ascii_strtoll(pid_str, NULL, 10);
+  } else {
+    self->pid = 0;
+  }
+  pumpkin_server_attach_output(self);
+  g_subprocess_wait_async(self->process, NULL, process_wait_cb, self);
+  return TRUE;
+#endif
 }
 
 void
 pumpkin_server_stop(PumpkinServer *self)
 {
-  if (self->process == NULL) {
+  if (self->process == NULL
+#if defined(G_OS_WIN32)
+      && self->process_handle == NULL
+#endif
+  ) {
     return;
   }
 
@@ -1499,7 +1742,9 @@ pumpkin_server_stop(PumpkinServer *self)
   }
 
 #if defined(G_OS_WIN32)
-  g_subprocess_force_exit(self->process);
+  if (self->process_handle != NULL) {
+    TerminateProcess(self->process_handle, 0);
+  }
 #else
   g_subprocess_send_signal(self->process, SIGTERM);
 #endif
@@ -1508,13 +1753,23 @@ pumpkin_server_stop(PumpkinServer *self)
 gboolean
 pumpkin_server_get_running(PumpkinServer *self)
 {
+#if defined(G_OS_WIN32)
+  return self->process_handle != NULL;
+#else
   return self->process != NULL;
+#endif
 }
 
 gboolean
 pumpkin_server_send_command(PumpkinServer *self, const char *command, GError **error)
 {
-  if (self->process == NULL || self->stdin_stream == NULL) {
+  if (self->stdin_stream == NULL
+#if defined(G_OS_WIN32)
+      || self->process_handle == NULL
+#else
+      || self->process == NULL
+#endif
+  ) {
     g_set_error(error, G_IO_ERROR, G_IO_ERROR_NOT_CONNECTED, "Server is not running");
     return FALSE;
   }

@@ -6,6 +6,7 @@
 #include <stdio.h>
 
 #define PUMPKIN_DOWNLOAD_PAGE "https://pumpkinmc.org/download/"
+#define PUMPKIN_DOWNLOAD_API_URL "https://api.github.com/repos/Pumpkin-MC/Pumpkin/releases/tags/nightly"
 
 typedef struct {
   char *url;
@@ -288,6 +289,27 @@ extract_asset_url(const char *html, const char *asset_name)
   return g_match_info_fetch(match, 0);
 }
 
+static char *
+extract_asset_url_from_release_json(const char *json, const char *asset_name)
+{
+  if (json == NULL || asset_name == NULL) {
+    return NULL;
+  }
+
+  g_autofree char *escaped_name = g_regex_escape_string(asset_name, -1);
+  g_autofree char *pattern = g_strdup_printf(
+    "\"name\"\\s*:\\s*\"%s\"(?s:.*?)\"browser_download_url\"\\s*:\\s*\"([^\"]+)\"",
+    escaped_name);
+  g_autoptr(GRegex) regex = g_regex_new(pattern, G_REGEX_CASELESS, 0, NULL);
+  g_autoptr(GMatchInfo) match = NULL;
+
+  if (!g_regex_match(regex, json, 0, &match)) {
+    return NULL;
+  }
+
+  return g_match_info_fetch(match, 1);
+}
+
 static gboolean
 url_matches_keywords(const char *url, const char *const *os_keywords, const char *const *arch_keywords)
 {
@@ -485,6 +507,36 @@ fill_build_metadata(SoupMessageHeaders *headers, PumpkinResolvedDownload *resolv
 
 static void on_resolve_metadata_ready(GObject *source, GAsyncResult *res, gpointer user_data);
 
+static char *
+resolve_asset_url_from_payload(const char *payload, gboolean *used_fallback)
+{
+  if (used_fallback != NULL) {
+    *used_fallback = FALSE;
+  }
+
+  const char *asset = expected_asset_name();
+
+  g_autofree char *url = extract_asset_url_from_release_json(payload, asset);
+  if (url != NULL) {
+    return g_steal_pointer(&url);
+  }
+
+  url = extract_asset_url(payload, asset);
+  if (url != NULL) {
+    return g_steal_pointer(&url);
+  }
+
+  url = extract_best_platform_url(payload);
+  if (url != NULL) {
+    return g_steal_pointer(&url);
+  }
+
+  if (used_fallback != NULL) {
+    *used_fallback = TRUE;
+  }
+  return fallback_nightly_url();
+}
+
 static void
 on_resolve_ready(GObject *source, GAsyncResult *res, gpointer user_data)
 {
@@ -510,29 +562,20 @@ on_resolve_ready(GObject *source, GAsyncResult *res, gpointer user_data)
 
   gsize size = 0;
   const char *data = g_bytes_get_data(bytes, &size);
-  g_autofree char *html = g_strndup(data, size);
+  g_autofree char *payload = g_strndup(data, size);
+  gboolean used_fallback = FALSE;
+  g_autofree char *resolved = resolve_asset_url_from_payload(payload, &used_fallback);
+  if (resolved == NULL) {
+    const char *asset = expected_asset_name();
+    g_task_return_new_error(task, G_IO_ERROR, G_IO_ERROR_FAILED,
+                            "Failed to find download URL for %s", asset);
+    g_object_unref(task);
+    return;
+  }
 
-  const char *asset = expected_asset_name();
-  g_autofree char *url = extract_asset_url(html, asset);
-  if (url == NULL) {
-    url = extract_best_platform_url(html);
-  }
-  if (url == NULL) {
-    g_autofree char *fallback = fallback_nightly_url();
-    if (fallback == NULL) {
-      g_task_return_new_error(task, G_IO_ERROR, G_IO_ERROR_FAILED,
-                              "Failed to find download URL for %s", asset);
-      g_object_unref(task);
-      return;
-    }
-    state->used_fallback = TRUE;
-    g_clear_pointer(&state->resolved_url, g_free);
-    state->resolved_url = g_strdup(fallback);
-  } else {
-    state->used_fallback = FALSE;
-    g_clear_pointer(&state->resolved_url, g_free);
-    state->resolved_url = g_strdup(url);
-  }
+  state->used_fallback = used_fallback;
+  g_clear_pointer(&state->resolved_url, g_free);
+  state->resolved_url = g_strdup(resolved);
 
   g_clear_object(&state->metadata_message);
   state->metadata_message = soup_message_new("HEAD", state->resolved_url);
@@ -583,7 +626,13 @@ pumpkin_resolve_latest_async(GCancellable *cancellable,
   state->session = g_object_ref(get_shared_session());
   g_task_set_task_data(task, state, (GDestroyNotify)resolve_state_free);
 
-  SoupMessage *msg = soup_message_new("GET", PUMPKIN_DOWNLOAD_PAGE);
+  SoupMessage *msg = soup_message_new("GET", PUMPKIN_DOWNLOAD_API_URL);
+  soup_message_headers_append(soup_message_get_request_headers(msg),
+                              "Accept",
+                              "application/vnd.github+json");
+  soup_message_headers_append(soup_message_get_request_headers(msg),
+                              "X-GitHub-Api-Version",
+                              "2022-11-28");
   soup_session_send_and_read_async(state->session, msg, G_PRIORITY_DEFAULT, cancellable,
                                    on_resolve_ready, task);
   g_object_unref(msg);

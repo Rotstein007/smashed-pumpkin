@@ -236,6 +236,50 @@ jobs:
         shell: powershell
         run: choco install wixtoolset --yes --no-progress
 
+      - name: Prepare Windows signing certificate
+        if: ${{ secrets.WINDOWS_SIGNING_CERT_BASE64 != '' && secrets.WINDOWS_SIGNING_CERT_PASSWORD != '' }}
+        id: signing
+        shell: powershell
+        run: |
+          $certPath = Join-Path $env:RUNNER_TEMP 'windows-signing-cert.pfx'
+          [System.IO.File]::WriteAllBytes(
+            $certPath,
+            [System.Convert]::FromBase64String("${{ secrets.WINDOWS_SIGNING_CERT_BASE64 }}")
+          )
+          "cert_path=$certPath" >> $env:GITHUB_OUTPUT
+
+      - name: Sign Windows executables
+        if: ${{ steps.signing.outputs.cert_path != '' }}
+        shell: powershell
+        run: |
+          $signtool = (Get-Command signtool.exe -ErrorAction Stop).Source
+          $certPath = "${{ steps.signing.outputs.cert_path }}"
+          $password = "${{ secrets.WINDOWS_SIGNING_CERT_PASSWORD }}"
+          $timestampUrl = if ("${{ secrets.WINDOWS_SIGNING_TIMESTAMP_URL }}" -ne '') {
+            "${{ secrets.WINDOWS_SIGNING_TIMESTAMP_URL }}"
+          } else {
+            'http://timestamp.digicert.com'
+          }
+
+          $files = @(
+            'package-root\bin\smashed-pumpkin.exe',
+            'package-root\bin\smashed-pumpkin-tray.exe'
+          )
+
+          foreach ($file in $files) {
+            & $signtool sign `
+              /fd SHA256 `
+              /td SHA256 `
+              /tr $timestampUrl `
+              /f $certPath `
+              /p $password `
+              $file
+
+            if ($LASTEXITCODE -ne 0) {
+              throw "Failed to sign $file"
+            }
+          }
+
       - name: Build MSI
         shell: powershell
         run: |
@@ -249,6 +293,7 @@ jobs:
           $version = "${{ steps.version.outputs.value }}"
           $upgradeCode = '8E643E21-5F9C-4D1C-89F1-A6B72E01F620'
           $programFilesDir = if ($platform -eq 'x86') { 'ProgramFilesFolder' } else { 'ProgramFiles64Folder' }
+          $appUserModelId = 'Rotstein.SmashedPumpkin'
 
           @"
           <?xml version="1.0" encoding="UTF-8"?>
@@ -257,13 +302,17 @@ jobs:
               <Package InstallerVersion="500" Compressed="yes" InstallScope="perMachine" Platform="$platform" />
               <MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
               <MediaTemplate EmbedCab="yes" />
+              <Icon Id="ProductIcon" SourceFile="resources\windows\smashed-pumpkin.ico" />
               <Property Id="ARPURLINFOABOUT" Value="https://github.com/${{ github.repository }}" />
               <Property Id="ARPHELPLINK" Value="https://github.com/${{ github.repository }}/issues" />
               <Property Id="ARPCONTACT" Value="Rotstein" />
+              <Property Id="ARPPRODUCTICON" Value="ProductIcon" />
 
               <Directory Id="TARGETDIR" Name="SourceDir">
                 <Directory Id="$programFilesDir">
-                  <Directory Id="INSTALLDIR" Name="Smashed Pumpkin" />
+                  <Directory Id="INSTALLROOT" Name="Smashed Pumpkin">
+                    <Directory Id="INSTALLDIR" Name="app" />
+                  </Directory>
                 </Directory>
                 <Directory Id="CommonProgramsFolder">
                   <Directory Id="ProgramMenuDir" Name="Smashed Pumpkin" />
@@ -276,7 +325,11 @@ jobs:
                             Name="Smashed Pumpkin"
                             Description="Desktop management app for Pumpkin servers"
                             Target="[INSTALLDIR]bin\smashed-pumpkin.exe"
-                            WorkingDirectory="INSTALLDIR" />
+                            WorkingDirectory="INSTALLDIR"
+                            Icon="ProductIcon"
+                            IconIndex="0">
+                    <ShortcutProperty Key="System.AppUserModel.ID" Value="$appUserModelId" />
+                  </Shortcut>
                   <RemoveFolder Id="RemoveProgramMenuDir" On="uninstall" />
                   <RegistryValue Root="HKLM"
                                  Key="Software\Rotstein\Smashed Pumpkin"
@@ -298,6 +351,32 @@ jobs:
           heat dir package-root -nologo -gg -srd -sreg -scom -cg AppFiles -dr INSTALLDIR -var var.SourceDir -out Files.wxs
           candle -nologo -arch $arch -dSourceDir="package-root" Product.wxs Files.wxs
           light -nologo Product.wixobj Files.wixobj -out "smashed-pumpkin-windows-${{ matrix.arch }}.msi"
+
+      - name: Sign MSI
+        if: ${{ steps.signing.outputs.cert_path != '' }}
+        shell: powershell
+        run: |
+          $signtool = (Get-Command signtool.exe -ErrorAction Stop).Source
+          $certPath = "${{ steps.signing.outputs.cert_path }}"
+          $password = "${{ secrets.WINDOWS_SIGNING_CERT_PASSWORD }}"
+          $timestampUrl = if ("${{ secrets.WINDOWS_SIGNING_TIMESTAMP_URL }}" -ne '') {
+            "${{ secrets.WINDOWS_SIGNING_TIMESTAMP_URL }}"
+          } else {
+            'http://timestamp.digicert.com'
+          }
+          $msi = "smashed-pumpkin-windows-${{ matrix.arch }}.msi"
+
+          & $signtool sign `
+            /fd SHA256 `
+            /td SHA256 `
+            /tr $timestampUrl `
+            /f $certPath `
+            /p $password `
+            $msi
+
+          if ($LASTEXITCODE -ne 0) {
+            throw "Failed to sign $msi"
+          }
 
       - name: Generate winget metadata
         shell: powershell

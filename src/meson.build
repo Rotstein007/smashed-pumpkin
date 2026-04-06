@@ -4,6 +4,9 @@ soup_dep = dependency('libsoup-3.0', version: '>= 3.4')
 psapi_dep = dependency('psapi', required: false)
 cc = meson.get_compiler('c')
 math_dep = cc.find_library('m', required: false)
+shell32_dep = cc.find_library('shell32', required: host_machine.system() == 'windows')
+user32_dep = cc.find_library('user32', required: host_machine.system() == 'windows')
+dwmapi_dep = cc.find_library('dwmapi', required: host_machine.system() == 'windows')
 
 app_id = 'dev.rotstein.SmashedPumpkin'
 
@@ -32,6 +35,24 @@ resources = gnome.compile_resources(
   c_name: 'smashed_pumpkin',
   extra_args: '--manual-register'
 )
+
+windows_resources = []
+if host_machine.system() == 'windows'
+  rc_conf = configuration_data()
+  rc_conf.set_quoted('ICON_PATH', meson.project_source_root() / 'resources' / 'windows' / 'smashed-pumpkin.ico')
+  windows_rc = configure_file(
+    input: 'windows-resource.rc.in',
+    output: 'smashed-pumpkin.rc',
+    configuration: rc_conf
+  )
+  windres = find_program('windres')
+  windows_resources = custom_target(
+    'smashed-pumpkin-windows-resources',
+    input: windows_rc,
+    output: 'smashed-pumpkin-windows-resources.o',
+    command: [windres, '@INPUT@', '@OUTPUT@']
+  )
+endif
 
 sources = [
   'app-config.c',
@@ -64,6 +85,7 @@ sources = [
   'download.h',
   config_h,
   resources,
+  windows_resources,
 ]
 
 install_data(join_paths('..', 'resources', 'icons', 'hicolor', 'scalable', 'apps',
@@ -80,7 +102,8 @@ executable(
   'smashed-pumpkin',
   sources,
   include_directories: inc,
-  dependencies: [adw_dep, Gtk_dep, soup_dep, psapi_dep, math_dep],
+  dependencies: [adw_dep, Gtk_dep, soup_dep, psapi_dep, math_dep, shell32_dep, dwmapi_dep],
+  win_subsystem: host_machine.system() == 'windows' ? 'windows' : 'console',
   install: true
 )
 
@@ -101,13 +124,12 @@ if host_machine.system() == 'linux' and gtk3_dep.found() and appindicator_dep.fo
 elif host_machine.system() == 'linux'
   warning('Tray helper disabled: missing gtk+-3.0 and/or appindicator (ayatana-appindicator3-0.1 or appindicator3-0.1)')
 elif host_machine.system() == 'windows'
-  shell32_dep = cc.find_library('shell32', required: true)
-  user32_dep = cc.find_library('user32', required: true)
   executable(
     'smashed-pumpkin-tray',
-    ['tray-win.c', config_h],
+    ['tray-win.c', config_h, windows_resources],
     include_directories: inc,
     dependencies: [shell32_dep, user32_dep],
+    win_subsystem: 'windows',
     install: true
   )
 endif
