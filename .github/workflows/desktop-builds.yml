@@ -1,5 +1,8 @@
 name: Desktop Builds
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 on:
   push:
     branches: ["master"]
@@ -16,6 +19,38 @@ permissions:
   contents: write
 
 jobs:
+  release-meta:
+    name: Resolve release metadata
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      tag: ${{ steps.meta.outputs.tag }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve version and release tag
+        id: meta
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          VERSION="$(sed -n "s/.*version: '\\([^']*\\)'.*/\\1/p" meson.build | head -n1)"
+          if [[ -z "${VERSION}" ]]; then
+            echo "Could not resolve app version from meson.build"
+            exit 1
+          fi
+
+          TAG="v${VERSION}"
+          if [[ "${GITHUB_REF}" == refs/tags/v* && "${GITHUB_REF_NAME}" != "${TAG}" ]]; then
+            echo "Tag version (${GITHUB_REF_NAME}) does not match meson.build version (${VERSION})."
+            exit 1
+          fi
+
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+
   macos:
     name: macOS ${{ matrix.arch }}
     runs-on: ${{ matrix.os }}
@@ -33,8 +68,15 @@ jobs:
 
       - name: Install dependencies
         run: |
-          brew update
-          brew install meson ninja pkg-config gtk4 libadwaita libsoup
+          missing=()
+          for formula in meson ninja pkg-config gtk4 libadwaita libsoup; do
+            if ! brew list --versions "$formula" >/dev/null 2>&1; then
+              missing+=("$formula")
+            fi
+          done
+          if [ "${#missing[@]}" -gt 0 ]; then
+            brew install "${missing[@]}"
+          fi
 
       - name: Configure
         run: meson setup build --buildtype=release
@@ -414,9 +456,9 @@ jobs:
 
   winget-manifests:
     name: Build winget manifests
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
-    needs: [windows]
+    needs: [release-meta, windows]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -441,9 +483,9 @@ jobs:
             echo "Could not resolve app version from meson.build"
             exit 1
           fi
-          TAG_VERSION="${GITHUB_REF_NAME#v}"
-          if [[ "${TAG_VERSION}" != "${VERSION}" ]]; then
-            echo "Tag version (${TAG_VERSION}) does not match meson.build version (${VERSION})."
+          RELEASE_TAG="${{ needs.release-meta.outputs.tag }}"
+          if [[ "${RELEASE_TAG}" != "v${VERSION}" ]]; then
+            echo "Release tag (${RELEASE_TAG}) does not match meson.build version (${VERSION})."
             exit 1
           fi
           OUT_DIR="winget"
@@ -469,7 +511,7 @@ jobs:
             file=$(jq -r '.installer_file' "$meta")
             sha=$(jq -r '.sha256' "$meta")
             product_code=$(jq -r '.product_code' "$meta")
-            url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}/${file}"
+            url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${RELEASE_TAG}/${file}"
 
             {
               echo "- Architecture: ${arch}"
@@ -503,7 +545,7 @@ jobs:
             echo "ShortDescription: Desktop management app for Pumpkin servers."
             echo "Description: Manage Pumpkin Minecraft servers and server networks from a native GTK desktop app."
             echo "Moniker: smashed-pumpkin"
-            echo "ReleaseNotesUrl: https://github.com/${GITHUB_REPOSITORY}/releases/tag/${GITHUB_REF_NAME}"
+            echo "ReleaseNotesUrl: https://github.com/${GITHUB_REPOSITORY}/releases/tag/${RELEASE_TAG}"
             echo "Tags:"
             echo "- minecraft"
             echo "- pumpkin"
@@ -530,9 +572,9 @@ jobs:
 
   homebrew-cask:
     name: Build Homebrew cask
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
-    needs: [macos]
+    needs: [release-meta, macos]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -577,9 +619,9 @@ jobs:
 
   release:
     name: Publish GitHub Release
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
-    needs: [macos, windows, flatpak, winget-manifests, homebrew-cask]
+    needs: [release-meta, macos, windows, flatpak, winget-manifests, homebrew-cask]
     steps:
       - name: Download all release artifacts
         uses: actions/download-artifact@v4
@@ -612,4 +654,7 @@ jobs:
       - name: Publish release assets
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ needs.release-meta.outputs.tag }}
+          name: ${{ needs.release-meta.outputs.tag }}
+          target_commitish: ${{ github.sha }}
           files: publish-assets/*
