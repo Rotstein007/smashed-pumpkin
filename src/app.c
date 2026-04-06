@@ -443,29 +443,23 @@ pumpkin_app_about_action(GSimpleAction *action,
   adw_about_dialog_set_application_name(about, APP_NAME);
   adw_about_dialog_set_application_icon(about, APP_ID);
   adw_about_dialog_set_version(about, APP_VERSION);
-  adw_about_dialog_set_release_notes_version(about, "0.5.1");
+  adw_about_dialog_set_release_notes_version(about, "0.5.2");
   if (is_de) {
     adw_about_dialog_set_release_notes(
       about,
       "<p>Neuerungen</p>"
       "<ul>"
-      "<li>Updates laufen jetzt zuverlässiger und zeigen in der Konsole klarer an, von welchem Build auf welchen gewechselt wird.</li>"
-      "<li>Die Übersicht mit Servernetzwerken verhält sich sauberer, scrollt besser und wirkt optisch einheitlicher.</li>"
-      "<li>Servernetzwerke haben jetzt eine eigene Detailansicht, damit große Setups übersichtlicher verwaltet werden können.</li>"
-      "<li>Flathub-Metadaten, Beschreibungen und Screenshots wurden überarbeitet und sauberer aufbereitet.</li>"
+      "<li>Windows-Portierung.</li>"
       "</ul>"
-      "<p>Vielen Dank für euer Feedback. Es hat diese Fehlerbehebungen direkt mitgeprägt.</p>");
+      "<p>Vielen Dank für euer Feedback. Es hilft der Entwicklung direkt weiter.</p>");
   } else {
     adw_about_dialog_set_release_notes(
       about,
       "<p>What’s new</p>"
       "<ul>"
-      "<li>Updates are now more reliable and the console shows more clearly which build is being replaced.</li>"
-      "<li>The overview handles server networks more cleanly, with better scrolling behavior and a more consistent visual style.</li>"
-      "<li>Server networks now have their own detail view to make larger setups easier to manage.</li>"
-      "<li>Flathub metadata, descriptions, and screenshots have been cleaned up and prepared more carefully.</li>"
+      "<li>Windows port.</li>"
       "</ul>"
-      "<p>Thank you for your feedback. It directly shaped these fixes.</p>");
+      "<p>Thank you for your feedback. It directly helps development.</p>");
   }
   adw_about_dialog_set_developer_name(about, "Rotstein");
   adw_about_dialog_set_comments(about,
