@@ -28,7 +28,7 @@ jobs:
       tag: ${{ steps.meta.outputs.tag }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Resolve version and release tag
         id: meta
@@ -64,7 +64,7 @@ jobs:
             arch: arm64
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Install dependencies
         run: |
@@ -139,7 +139,7 @@ jobs:
           ditto -c -k --sequesterRsrc --keepParent "${APP_ROOT}" "smashed-pumpkin-macos-${{ matrix.arch }}.app.zip"
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: smashed-pumpkin-macos-${{ matrix.arch }}
           path: smashed-pumpkin-macos-${{ matrix.arch }}.app.zip
@@ -158,7 +158,7 @@ jobs:
             runner: ubuntu-24.04-arm
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Install Flatpak
         run: |
@@ -195,7 +195,7 @@ jobs:
             master
 
       - name: Upload Flatpak Bundle
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: SmashedPumpkin-${{ matrix.flatpak_arch }}.flatpak
           path: SmashedPumpkin-${{ matrix.flatpak_arch }}.flatpak
@@ -226,7 +226,7 @@ jobs:
               mingw-w64-x86_64-libsoup3
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup MSYS2
         uses: msys2/setup-msys2@v2
@@ -446,7 +446,7 @@ jobs:
           } | ConvertTo-Json | Set-Content "winget/${{ matrix.arch }}.json"
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: smashed-pumpkin-windows-${{ matrix.arch }}
           path: |
@@ -461,13 +461,13 @@ jobs:
     needs: [release-meta, windows]
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Install jq
         run: sudo apt-get update && sudo apt-get install -y jq
 
       - name: Download Windows artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           pattern: smashed-pumpkin-windows-*
           path: windows-artifacts
@@ -564,7 +564,7 @@ jobs:
           } > "$VERSION_FILE"
 
       - name: Upload winget manifests
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: winget-manifests
           path: winget/
@@ -577,10 +577,10 @@ jobs:
     needs: [release-meta, macos]
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Download macOS artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           pattern: smashed-pumpkin-macos-*
           path: macos-artifacts
@@ -611,7 +611,7 @@ jobs:
             "${ARM_ZIP}"
 
       - name: Upload Homebrew cask
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: homebrew-cask
           path: homebrew/
@@ -624,7 +624,7 @@ jobs:
     needs: [release-meta, macos, windows, flatpak, winget-manifests, homebrew-cask]
     steps:
       - name: Download all release artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           path: release-assets
           merge-multiple: true
@@ -652,9 +652,21 @@ jobs:
           ls -1 publish-assets
 
       - name: Publish release assets
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ needs.release-meta.outputs.tag }}
-          name: ${{ needs.release-meta.outputs.tag }}
-          target_commitish: ${{ github.sha }}
-          files: publish-assets/*
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          TAG="${{ needs.release-meta.outputs.tag }}"
+          TITLE="${TAG}"
+
+          if gh release view "${TAG}" >/dev/null 2>&1; then
+            gh release upload "${TAG}" publish-assets/* --clobber
+          else
+            gh release create "${TAG}" publish-assets/* \
+              --title "${TITLE}" \
+              --target "${GITHUB_SHA}" \
+              --generate-notes
+          fi
+
