@@ -162,6 +162,10 @@ jobs:
   windows:
     name: Windows ${{ matrix.arch }} (MSI)
     runs-on: windows-latest
+    env:
+      WINDOWS_SIGNING_CERT_BASE64: ${{ secrets.WINDOWS_SIGNING_CERT_BASE64 }}
+      WINDOWS_SIGNING_CERT_PASSWORD: ${{ secrets.WINDOWS_SIGNING_CERT_PASSWORD }}
+      WINDOWS_SIGNING_TIMESTAMP_URL: ${{ secrets.WINDOWS_SIGNING_TIMESTAMP_URL }}
     strategy:
       fail-fast: false
       matrix:
@@ -237,14 +241,14 @@ jobs:
         run: choco install wixtoolset --yes --no-progress
 
       - name: Prepare Windows signing certificate
-        if: ${{ secrets.WINDOWS_SIGNING_CERT_BASE64 != '' && secrets.WINDOWS_SIGNING_CERT_PASSWORD != '' }}
+        if: ${{ env.WINDOWS_SIGNING_CERT_BASE64 != '' && env.WINDOWS_SIGNING_CERT_PASSWORD != '' }}
         id: signing
         shell: powershell
         run: |
           $certPath = Join-Path $env:RUNNER_TEMP 'windows-signing-cert.pfx'
           [System.IO.File]::WriteAllBytes(
             $certPath,
-            [System.Convert]::FromBase64String("${{ secrets.WINDOWS_SIGNING_CERT_BASE64 }}")
+            [System.Convert]::FromBase64String($env:WINDOWS_SIGNING_CERT_BASE64)
           )
           "cert_path=$certPath" >> $env:GITHUB_OUTPUT
 
@@ -254,9 +258,9 @@ jobs:
         run: |
           $signtool = (Get-Command signtool.exe -ErrorAction Stop).Source
           $certPath = "${{ steps.signing.outputs.cert_path }}"
-          $password = "${{ secrets.WINDOWS_SIGNING_CERT_PASSWORD }}"
-          $timestampUrl = if ("${{ secrets.WINDOWS_SIGNING_TIMESTAMP_URL }}" -ne '') {
-            "${{ secrets.WINDOWS_SIGNING_TIMESTAMP_URL }}"
+          $password = $env:WINDOWS_SIGNING_CERT_PASSWORD
+          $timestampUrl = if ($env:WINDOWS_SIGNING_TIMESTAMP_URL -ne '') {
+            $env:WINDOWS_SIGNING_TIMESTAMP_URL
           } else {
             'http://timestamp.digicert.com'
           }
@@ -358,9 +362,9 @@ jobs:
         run: |
           $signtool = (Get-Command signtool.exe -ErrorAction Stop).Source
           $certPath = "${{ steps.signing.outputs.cert_path }}"
-          $password = "${{ secrets.WINDOWS_SIGNING_CERT_PASSWORD }}"
-          $timestampUrl = if ("${{ secrets.WINDOWS_SIGNING_TIMESTAMP_URL }}" -ne '') {
-            "${{ secrets.WINDOWS_SIGNING_TIMESTAMP_URL }}"
+          $password = $env:WINDOWS_SIGNING_CERT_PASSWORD
+          $timestampUrl = if ($env:WINDOWS_SIGNING_TIMESTAMP_URL -ne '') {
+            $env:WINDOWS_SIGNING_TIMESTAMP_URL
           } else {
             'http://timestamp.digicert.com'
           }
