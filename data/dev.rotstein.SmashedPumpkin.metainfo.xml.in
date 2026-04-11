@@ -16,7 +16,7 @@
   <branding>
     <color type="primary">#FA8213</color>
   </branding>
-  <url type="homepage">https://github.com/Rotstein007/smashed-pumpkin</url>
+  <url type="homepage">https://smashed-pumpkin.rotstein.dev</url>
   <url type="bugtracker">https://github.com/Rotstein007/smashed-pumpkin/issues</url>
   <url type="vcs-browser">https://github.com/Rotstein007/smashed-pumpkin</url>
   <launchable type="desktop-id">@APP_ID@.desktop</launchable>
