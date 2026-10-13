@@ -7,6 +7,11 @@ G_BEGIN_DECLS
 
 typedef struct _PumpkinDownload PumpkinDownload;
 
+/* Non-2xx file downloads use this domain with the numeric HTTP status as code.
+ * Callers must classify errors by domain/code, never by their display message. */
+#define PUMPKIN_DOWNLOAD_HTTP_ERROR (pumpkin_download_http_error_quark())
+GQuark pumpkin_download_http_error_quark(void);
+
 typedef void (*PumpkinDownloadProgress)(goffset current,
                                         goffset total,
                                         gpointer user_data);
@@ -19,7 +24,7 @@ typedef enum {
 typedef struct {
   char *url;
   char *build_id;
-  char *build_label;
+  char *build_label; /* Raw, locale-independent metadata; format only at the UI boundary. */
   PumpkinDownloadResult result_code;
 } PumpkinResolvedDownload;
 

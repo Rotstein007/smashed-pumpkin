@@ -24,6 +24,11 @@ typedef enum {
 } PumpkinStartMode;
 
 PumpkinConfig *pumpkin_config_load(GError **error);
+/* Stored preference, not the language currently active in this process. */
+const char *pumpkin_config_get_language(PumpkinConfig *config);
+void pumpkin_config_set_language(PumpkinConfig *config, const char *language);
+/* Save all current fields, rolling back only the language preference on failure. */
+gboolean pumpkin_config_save_language(PumpkinConfig *config, const char *language, GError **error);
 void pumpkin_config_save(PumpkinConfig *config, GError **error);
 void pumpkin_config_free(PumpkinConfig *config);
 

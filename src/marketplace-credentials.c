@@ -147,6 +147,9 @@ windows_store_credential(const char *token, GError **error)
     g_set_error(error, G_IO_ERROR, g_io_error_from_errno(errno),
                 "Could not save the protected Marketplace API key: %s", g_strerror(errno));
   }
+  if (!saved) {
+    g_remove(temporary_path);
+  }
   LocalFree(encrypted.pbData);
   return saved;
 }
@@ -155,7 +158,7 @@ static char *
 windows_load_credential(GError **error)
 {
   g_autofree char *path = windows_credential_path();
-  gchar *encrypted_data = NULL;
+  g_autofree gchar *encrypted_data = NULL;
   gsize encrypted_length = 0;
   if (!g_file_get_contents(path, &encrypted_data, &encrypted_length, error)) {
     if (error != NULL && g_error_matches(*error, G_FILE_ERROR, G_FILE_ERROR_NOENT)) {
@@ -285,6 +288,14 @@ credential_request_free(CredentialRequest *request)
   g_free(request);
 }
 
+/* API keys leave no plaintext copies behind when freed. */
+static void
+secret_token_free(gpointer data)
+{
+  if (data != NULL) memset(data, 0, strlen(data));
+  g_free(data);
+}
+
 static void
 credential_task(GTask *task,
                 gpointer source_object,
@@ -308,7 +319,7 @@ credential_task(GTask *task,
       if (error != NULL) {
         g_task_return_error(task, g_steal_pointer(&error));
       } else {
-        g_task_return_pointer(task, token, g_free);
+        g_task_return_pointer(task, token, secret_token_free);
       }
       return;
     }
@@ -343,7 +354,7 @@ credential_task(GTask *task,
       if (error != NULL) {
         g_task_return_error(task, g_steal_pointer(&error));
       } else {
-        g_task_return_pointer(task, token, g_free);
+        g_task_return_pointer(task, token, secret_token_free);
       }
       break;
     }
@@ -376,7 +387,7 @@ credential_task(GTask *task,
       if (error != NULL) {
         g_task_return_error(task, g_steal_pointer(&error));
       } else {
-        g_task_return_pointer(task, token, g_free);
+        g_task_return_pointer(task, token, secret_token_free);
       }
       break;
     }

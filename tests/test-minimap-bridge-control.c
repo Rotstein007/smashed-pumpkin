@@ -74,6 +74,48 @@ static void test_bridge_control(void)
   remove_tree(root);
 }
 
+static void count_raw_output(PumpkinServer *server, const char *line, guint *count)
+{
+  (void)server;
+  (void)line;
+  ++*count;
+}
+
+static void capture_notice(PumpkinServer *server, const char *message, char **notice)
+{
+  (void)server;
+  g_free(*notice);
+  *notice = g_strdup(message);
+}
+
+static void test_bridge_failure_notice(void)
+{
+  g_autofree char *root = g_dir_make_tmp("smashed-bridge-notice-XXXXXX", NULL);
+  g_autoptr(PumpkinServer) server = pumpkin_server_new("notice", "Bridge notice");
+  pumpkin_server_set_root_dir(server, root);
+  g_autofree char *plugins = pumpkin_server_get_plugins_dir(server);
+  g_autofree char *bridge = g_build_filename(plugins, PUMPKIN_MAP_BRIDGE_FILENAME, NULL);
+  /* An unverified local plugin deterministically exercises the error path,
+   * including when tests run with permissions that bypass filesystem modes. */
+  const char *unverified = "Unverified local bridge";
+  g_assert_true(g_file_set_contents(bridge, unverified, -1, NULL));
+  guint raw_output = 0;
+  g_autofree char *notice = NULL;
+  g_signal_connect(server, "log-line", G_CALLBACK(count_raw_output), &raw_output);
+  g_signal_connect(server, "console-notice", G_CALLBACK(capture_notice), &notice);
+  pumpkin_minimap_bridge_set_enabled(server, FALSE);
+  g_assert_nonnull(notice);
+  g_assert_cmpstr(notice, !=, "");
+  g_assert_cmpuint(raw_output, ==, 0);
+  g_assert_false(pumpkin_server_get_running(server));
+  g_autofree char *contents = NULL;
+  g_assert_true(g_file_get_contents(bridge, &contents, NULL, NULL));
+  g_assert_cmpstr(contents, ==, unverified);
+  g_signal_handlers_disconnect_by_data(server, &raw_output);
+  g_signal_handlers_disconnect_by_data(server, &notice);
+  remove_tree(root);
+}
+
 int main(int argc, char **argv)
 {
   g_assert_cmpint(argc, >=, 2);
@@ -81,6 +123,7 @@ int main(int argc, char **argv)
   g_test_init(&argc, &argv, NULL);
   smashed_pumpkin_register_resource();
   g_test_add_func("/minimap/bridge-runtime-control", test_bridge_control);
+  g_test_add_func("/minimap/bridge-failure-notice", test_bridge_failure_notice);
   int result = g_test_run();
   smashed_pumpkin_unregister_resource();
   return result;

@@ -1,6 +1,7 @@
 #include "window-internal.h"
 #include "window-startup.h"
 #include "window-console.h"
+#include "window-lifecycle.h"
 #include "window-players.h"
 #include "player-heads.h"
 #include "window-dialogs.h"
@@ -14,6 +15,10 @@
 #include "minimap-cache.h"
 #include "vendor/cjson/cJSON.h"
 #include "refresh-button.h"
+#include "build-metadata.h"
+#include "i18n.h"
+#include "language.h"
+#include <locale.h>
 #include <glib/gstdio.h>
 #include <libsoup/soup.h>
 #include <math.h>
@@ -24,6 +29,21 @@
 #endif
 
 void smashed_pumpkin_register_resource(void);
+
+static char *
+notice_display_payload(PumpkinWindow *window, const char *notice)
+{
+  g_autofree char *display = format_console_line(window, notice, NULL);
+  g_assert_nonnull(display);
+  g_assert_cmpint(display[0], ==, '[');
+  g_assert_true(g_ascii_isdigit(display[1]));
+  const char *timestamp_end = strstr(display, "] ");
+  g_assert_nonnull(timestamp_end);
+  g_assert_cmpstr(timestamp_end + 2, !=, "");
+  /* Compare normalized severity and message text without a newly generated
+   * receipt time. Timestamp formatting has its own fixed-clock assertion. */
+  return g_strdup(timestamp_end + 2);
+}
 
 static void spin(int milliseconds)
 {
@@ -177,8 +197,73 @@ static void test_console_polling(PumpkinWindow *window, PumpkinServer *server)
   g_assert_false(pumpkin_command_poll_ready(G_OBJECT(server), "tps", g_get_monotonic_time()));
   g_signal_emit_by_name(server, "log-line", "[INFO] TPS: 20.0 MSPT: 0.5ms");
   g_assert_true(pumpkin_command_poll_ready(G_OBJECT(server), "tps", g_get_monotonic_time()));
-  g_signal_emit_by_name(server, "log-line", "Server process exited");
-  g_print("PASS: late player replies remain hidden across server switches; manual replies and chat remain visible\n");
+  pumpkin_command_track(G_OBJECT(server), "tps", TRUE, g_get_monotonic_time());
+  window->ui_state = UI_STATE_RUNNING;
+  window->user_stop_requested = TRUE;
+  const char *ordinary_logs[] = {"Server process exited", "Auto-restart scheduled", "Serverprozess beendet"};
+  for (guint i = 0; i < G_N_ELEMENTS(ordinary_logs); ++i) {
+    g_signal_emit_by_name(server, "log-line", ordinary_logs[i]);
+    g_assert_false(pumpkin_command_poll_ready(G_OBJECT(server), "tps", g_get_monotonic_time()));
+    g_assert_cmpint(window->ui_state, ==, UI_STATE_RUNNING);
+    g_assert_true(window->user_stop_requested);
+  }
+  g_clear_pointer(&text, g_free);
+  text = buffer_text(buffer);
+  for (guint i = 0; i < G_N_ELEMENTS(ordinary_logs); ++i) g_assert_nonnull(strstr(text, ordinary_logs[i]));
+  g_signal_emit_by_name(server, "process-exited");
+  g_assert_true(pumpkin_command_poll_ready(G_OBJECT(server), "tps", g_get_monotonic_time()));
+  g_assert_cmpint(window->ui_state, ==, UI_STATE_IDLE);
+  g_assert_false(window->user_stop_requested);
+  /* An exit for a background server clears only that server's tracking. */
+  pumpkin_command_track(G_OBJECT(other), "list uuids", TRUE, g_get_monotonic_time());
+  pumpkin_command_track(G_OBJECT(server), "list uuids", TRUE, g_get_monotonic_time());
+  g_signal_emit_by_name(other, "process-exited");
+  g_assert_true(pumpkin_command_poll_ready(G_OBJECT(other), "list uuids", g_get_monotonic_time()));
+  g_assert_false(pumpkin_command_poll_ready(G_OBJECT(server), "list uuids", g_get_monotonic_time()));
+  pumpkin_command_tracking_reset(G_OBJECT(server));
+
+  /* Display-only notices can contain protocol-like or translated text without
+   * changing readiness, players, statistics, or pending poll replies. */
+  ensure_server_log_handler(window, server);
+  ensure_server_log_handler(window, server);
+  pumpkin_command_track(G_OBJECT(server), "list uuids", TRUE, g_get_monotonic_time());
+  pumpkin_command_track(G_OBJECT(server), "tps", TRUE, g_get_monotonic_time());
+  guint player_states = g_hash_table_size(window->player_states);
+  window->ui_state = UI_STATE_STARTING;
+  window->list_snapshot_players = 3;
+  const char *notices[] = {
+    "Listening: application notice only",
+    "[INFO] TPS: 1.0 MSPT: 100.0ms",
+    "[INFO] There are 1 of a max of 20 players online: NoticePlayer",
+    "Serverprozess beendet",
+    "[SMPK] 服务器已停止；Done / TPS: 1.0 / 玩家 NoticePlayer"
+  };
+  gtk_text_buffer_set_text(buffer, "", 0);
+  for (guint i = 0; i < G_N_ELEMENTS(notices); ++i) {
+    g_signal_emit_by_name(server, "console-notice", notices[i]);
+    g_assert_false(server_is_running_ui(window, server));
+    g_assert_cmpint(window->ui_state, ==, UI_STATE_STARTING);
+    g_assert_false(window->last_tps_valid);
+    g_assert_cmpint(window->list_snapshot_players, ==, 3);
+    g_assert_cmpuint(g_hash_table_size(window->player_states), ==, player_states);
+    g_assert_false(pumpkin_command_poll_ready(G_OBJECT(server), "list uuids", g_get_monotonic_time()));
+    g_assert_false(pumpkin_command_poll_ready(G_OBJECT(server), "tps", g_get_monotonic_time()));
+  }
+  /* Reading later must still find each notice exactly once, regardless of
+   * the timestamp assigned when it was received. */
+  spin(1100);
+  g_clear_pointer(&text, g_free);
+  text = buffer_text(buffer);
+  for (guint i = 0; i < G_N_ELEMENTS(notices); ++i) {
+    g_autofree char *display = notice_display_payload(window, notices[i]);
+    g_assert_nonnull(strstr(text, display));
+    g_assert_true(strstr(text, display) == g_strrstr(text, display));
+  }
+  window->ui_state = UI_STATE_IDLE;
+  window->list_snapshot_players = 0;
+  pumpkin_command_tracking_reset(G_OBJECT(server));
+  g_print("PASS: late polling replies are isolated; lifecycle uses typed events, not raw English or translated logs\n");
+  g_print("PASS: application notices display once without driving server protocol state\n");
 }
 
 static void test_console_layout(PumpkinWindow *window, PumpkinServer *server)
@@ -1082,6 +1167,164 @@ wait_for_test_server_exit(PumpkinServer *server)
 }
 
 static void
+capture_console_notice(PumpkinServer *server, const char *message, char **notice)
+{
+  (void)server;
+  g_free(*notice);
+  *notice = g_strdup(message);
+}
+
+static void
+test_failed_restart_notice(PumpkinWindow *window, const char *binary, gsize size)
+{
+  g_autoptr(GError) error = NULL;
+  g_autoptr(PumpkinServer) server = pumpkin_server_store_add(window->store, "Failed restart", &error);
+  g_assert_no_error(error);
+  g_assert_nonnull(server);
+  g_autofree char *bin = pumpkin_server_get_bin_path(server);
+  g_assert_true(g_file_set_contents(bin, binary, (gssize)size, &error));
+  g_assert_no_error(error);
+  g_assert_cmpint(g_chmod(bin, 0755), ==, 0);
+  pumpkin_server_set_auto_restart_delay(server, 500);
+  g_autofree char *notice = NULL;
+  gulong notice_handler = g_signal_connect(server, "console-notice", G_CALLBACK(capture_console_notice), &notice);
+  pumpkin_window_select_server(window, pumpkin_server_get_id(server));
+  ensure_server_log_handler(window, server);
+  g_setenv("SMASHED_TEST_SERVER_MODE", "normal", TRUE);
+  g_assert_true(pumpkin_server_start(server, &error));
+  g_assert_no_error(error);
+  window->ui_state = UI_STATE_RUNNING;
+  g_assert_true(pumpkin_server_send_command(server, "crash", &error));
+  g_assert_no_error(error);
+  wait_for_test_server_exit(server);
+  g_assert_false(server_is_running_ui(window, server));
+  g_assert_cmpint(g_remove(bin), ==, 0);
+  gint64 deadline = g_get_monotonic_time() + 5 * G_USEC_PER_SEC;
+  while (notice == NULL && g_get_monotonic_time() < deadline) spin(10);
+  g_assert_nonnull(notice);
+  g_assert_cmpstr(notice, !=, "");
+  /* Inspect after a clock-second boundary: the assertion must not recreate
+   * the receipt timestamp with a later call to the live formatter. */
+  spin(1100);
+  /* A failed automatic restart is an application notice, not evidence of a
+   * running process. Parsing it as raw server output would revive the hint. */
+  g_assert_false(pumpkin_server_get_running(server));
+  g_assert_false(server_is_running_ui(window, server));
+  g_assert_cmpint(window->ui_state, ==, UI_STATE_IDLE);
+  GtkTextBuffer *buffer = g_hash_table_lookup(window->console_buffers, server);
+  g_assert_nonnull(buffer);
+  g_autofree char *text = buffer_text(buffer);
+  g_autofree char *display = notice_display_payload(window, notice);
+  g_assert_nonnull(strstr(text, display));
+  g_assert_true(strstr(text, display) == g_strrstr(text, display));
+  g_signal_handler_disconnect(server, notice_handler);
+  pumpkin_server_set_auto_restart(server, FALSE);
+  pumpkin_server_stop(server);
+  g_print("PASS: automatic restart failures remain visible without reviving a stopped server\n");
+}
+
+static char *
+write_recovery_cache(PumpkinWindow *window, const char *url, const char *identity,
+                     const char *binary, gsize size)
+{
+  g_autofree char *key = identity != NULL ? g_strdup_printf("%s|%s", url, identity) : g_strdup(url);
+  g_autofree char *hash = g_compute_checksum_for_string(G_CHECKSUM_SHA256, key, -1);
+  g_autofree char *dir = g_build_filename(pumpkin_config_get_base_dir(window->config),
+                                         ".pumpkin", "versions", hash, NULL);
+  g_assert_cmpint(g_mkdir_with_parents(dir, 0700), ==, 0);
+  char *path = g_build_filename(dir, "pumpkin", NULL);
+  g_assert_true(g_file_set_contents(path, binary, (gssize)size, NULL));
+  return path;
+}
+
+static void
+test_cache_recovery_candidates(PumpkinWindow *window, const char *binary, gsize size)
+{
+  g_autofree char *previous_url = g_steal_pointer(&window->latest_url);
+  g_autofree char *previous_id = g_steal_pointer(&window->latest_build_id);
+  g_autofree char *previous_label = g_steal_pointer(&window->latest_build_label);
+  g_autofree char *url_only_binary = g_memdup2(binary, size);
+  url_only_binary[size - 1] = 'U';
+  /* Missing URLs, missing/empty identities, invalid primary cache, latest
+   * label identity, and the legacy URL-only fallback are independent cases. */
+  for (guint mode = 0; mode < 8; ++mode) {
+    g_autofree char *name = g_strdup_printf("Cache recovery %u", mode);
+    g_autoptr(PumpkinServer) server = pumpkin_server_store_add(window->store, name, NULL);
+    g_assert_nonnull(server);
+    g_autofree char *bin = pumpkin_server_get_bin_path(server);
+    g_autofree char *installed_url = g_strdup_printf("https://example.org/recovery/%u/installed", mode);
+    g_autofree char *download_url = g_strdup_printf("https://example.org/recovery/%u/download", mode);
+    g_autofree char *latest_url = g_strdup_printf("https://example.org/recovery/%u/latest", mode);
+    const char *raw_label = mode == 3 || mode >= 6 ? NULL : "Benutzerdefinierter Build 2026-1-02";
+    pumpkin_server_set_installed_url(server, mode >= 2 ? (mode == 4 ? "" : installed_url) : NULL);
+    pumpkin_server_set_download_url(server, mode == 0 || mode == 5 ? download_url : NULL);
+    pumpkin_server_set_installed_build_id(server, mode == 4 ? "" : NULL);
+    pumpkin_server_set_installed_build_label(server, raw_label);
+    g_clear_pointer(&window->latest_url, g_free);
+    window->latest_url = mode == 1 || mode == 4 ? g_strdup(latest_url) : NULL;
+    g_clear_pointer(&window->latest_build_id, g_free);
+    window->latest_build_id = mode == 3 ? g_strdup("latest-identity-after-null-fields") : NULL;
+    g_clear_pointer(&window->latest_build_label, g_free);
+    window->latest_build_label = mode == 6 ? g_strdup("Opaque latest build label") : NULL;
+    const char *source_url = mode == 0 || mode == 5 ? download_url :
+                             mode == 1 || mode == 4 ? latest_url : installed_url;
+    const char *identity = mode == 3 ? window->latest_build_id :
+                           mode == 6 ? window->latest_build_label : raw_label;
+    g_autofree char *specific = identity != NULL ?
+      write_recovery_cache(window, source_url, identity, binary, size) : NULL;
+    g_autofree char *url_only = write_recovery_cache(window, source_url, NULL,
+                                                   identity != NULL ? url_only_binary : binary, size);
+    g_autofree char *invalid = mode == 5 ?
+      write_recovery_cache(window, installed_url, identity, "Invalid binary", strlen("Invalid binary")) : NULL;
+    g_assert_false(g_file_test(bin, G_FILE_TEST_EXISTS));
+    g_assert_true(server_has_installation(window, server));
+    g_autofree char *restored = NULL;
+    gsize restored_size = 0;
+    g_assert_true(g_file_get_contents(bin, &restored, &restored_size, NULL));
+    g_assert_cmpmem(restored, restored_size, binary, size);
+    g_assert_cmpstr(pumpkin_server_get_installed_build_label(server), ==, raw_label);
+    if (invalid != NULL) g_assert_false(g_file_test(invalid, G_FILE_TEST_EXISTS));
+  }
+  /* Repeated misses must only read the cache, without creating empty buckets. */
+  g_autoptr(PumpkinServer) missing = pumpkin_server_store_add(window->store, "Missing cache", NULL);
+  const char *miss_urls[] = {
+    "https://example.org/missing-cache/installed",
+    "https://example.org/missing-cache/download",
+    "https://example.org/missing-cache/latest"
+  };
+  const char *miss_identities[] = { "installed-id", "installed-label", "latest-id", "latest-label", NULL };
+  pumpkin_server_set_installed_url(missing, miss_urls[0]);
+  pumpkin_server_set_download_url(missing, miss_urls[1]);
+  pumpkin_server_set_installed_build_id(missing, miss_identities[0]);
+  pumpkin_server_set_installed_build_label(missing, miss_identities[1]);
+  g_clear_pointer(&window->latest_url, g_free);
+  window->latest_url = g_strdup(miss_urls[2]);
+  g_clear_pointer(&window->latest_build_id, g_free);
+  window->latest_build_id = g_strdup(miss_identities[2]);
+  g_clear_pointer(&window->latest_build_label, g_free);
+  window->latest_build_label = g_strdup(miss_identities[3]);
+  g_assert_false(server_has_installation(window, missing));
+  g_assert_false(server_has_installation(window, missing));
+  for (guint u = 0; u < G_N_ELEMENTS(miss_urls); ++u) {
+    for (guint i = 0; i < G_N_ELEMENTS(miss_identities); ++i) {
+      g_autofree char *key = miss_identities[i] != NULL ?
+        g_strdup_printf("%s|%s", miss_urls[u], miss_identities[i]) : g_strdup(miss_urls[u]);
+      g_autofree char *hash = g_compute_checksum_for_string(G_CHECKSUM_SHA256, key, -1);
+      g_autofree char *dir = g_build_filename(pumpkin_config_get_base_dir(window->config),
+                                             ".pumpkin", "versions", hash, NULL);
+      g_assert_false(g_file_test(dir, G_FILE_TEST_EXISTS));
+    }
+  }
+  g_clear_pointer(&window->latest_url, g_free);
+  window->latest_url = g_steal_pointer(&previous_url);
+  g_clear_pointer(&window->latest_build_id, g_free);
+  window->latest_build_id = g_steal_pointer(&previous_id);
+  g_clear_pointer(&window->latest_build_label, g_free);
+  window->latest_build_label = g_steal_pointer(&previous_label);
+  g_print("PASS: cache recovery skips missing URLs and identities before the URL-only fallback\n");
+}
+
+static void
 test_update_pipeline(PumpkinWindow *window)
 {
   g_autofree char *executable = NULL;
@@ -1092,6 +1335,8 @@ test_update_pipeline(PumpkinWindow *window)
   g_autofree char *old_binary = g_malloc0(size);
   memcpy(old_binary, executable, executable_size);
   old_binary[size - 1] = '0';
+  test_failed_restart_notice(window, old_binary, size);
+  test_cache_recovery_candidates(window, old_binary, size);
   g_autofree char *new_binary = g_memdup2(old_binary, size);
   new_binary[size - 1] = '1';
   UpdateFixture fixture = { .binary = g_bytes_new(new_binary, size) };
@@ -1115,6 +1360,7 @@ test_update_pipeline(PumpkinWindow *window)
     g_assert_true(g_file_set_contents(bin, old_binary, (gssize)size, NULL));
     g_assert_cmpint(g_chmod(bin, 0755), ==, 0);
     pumpkin_server_set_installed_build_id(server, "old");
+    pumpkin_server_set_installed_build_label(server, "Build 2020-01-02 03:04 UTC");
     g_autofree char *url = g_strdup_printf("%sdownload-%u", base_url, mode);
     g_autofree char *build = g_strdup_printf("new-%u", mode);
     pumpkin_window_select_server(window, pumpkin_server_get_id(server));
@@ -1123,7 +1369,10 @@ test_update_pipeline(PumpkinWindow *window)
     g_free(window->latest_build_id);
     window->latest_build_id = g_strdup(build);
     g_free(window->latest_build_label);
-    window->latest_build_label = g_strdup("Test update");
+    const char *raw_metadata = mode == 1 ? NULL : "Build 2026-10-12 03:04 UTC";
+    window->latest_build_label = g_strdup(raw_metadata);
+    pumpkin_config_set_date_format(window->config, (PumpkinDateFormat)(mode % 3));
+    pumpkin_config_set_time_format(window->config, (PumpkinTimeFormat)(mode % 2));
     pumpkin_config_set_use_cache(window->config, mode == 2 || mode == 3 || mode == 5);
     fixture.fail = mode == 0;
     fixture.invalid = mode == 6;
@@ -1186,8 +1435,22 @@ test_update_pipeline(PumpkinWindow *window)
     if (failed_download) {
       g_assert_true(pumpkin_server_get_running(server));
       g_assert_false(pumpkin_server_get_stopping(server));
+      g_assert_cmpstr(pumpkin_server_get_installed_build_id(server), ==, "old");
+      g_assert_cmpstr(pumpkin_server_get_installed_build_label(server), ==, "Build 2020-01-02 03:04 UTC");
     } else {
       g_assert_cmpstr(pumpkin_server_get_installed_build_id(server), ==, build);
+      g_autofree char *fallback_metadata = NULL;
+      if (raw_metadata == NULL) {
+        GStatBuf stat_buf;
+        g_assert_cmpint(g_stat(bin, &stat_buf), ==, 0);
+        fallback_metadata = pumpkin_build_metadata_from_unix(stat_buf.st_mtime);
+      }
+      const char *expected_metadata = raw_metadata != NULL ? raw_metadata : fallback_metadata;
+      g_assert_cmpstr(pumpkin_server_get_installed_build_label(server), ==, expected_metadata);
+      g_autoptr(PumpkinServer) reloaded = pumpkin_server_load(pumpkin_server_get_root_dir(server), &error);
+      g_assert_no_error(error);
+      g_assert_nonnull(reloaded);
+      g_assert_cmpstr(pumpkin_server_get_installed_build_label(reloaded), ==, expected_metadata);
       g_assert_true(mode == 4 ? !pumpkin_server_get_running(server) : pumpkin_server_get_running(server));
       g_autofree char *backup = g_strconcat(bin, ".previous", NULL);
       g_autofree char *previous = NULL;
@@ -1629,7 +1892,11 @@ static void test_minimap_only(PumpkinWindow *window)
   g_assert_true(pumpkin_config_get_minimap_consent(saved_settings));
   g_assert_cmpuint(pumpkin_config_get_minimap_refresh_hz(saved_settings), ==, 20);
   pumpkin_config_free(saved_settings);
-  if (sample == NULL) g_assert_false(gtk_widget_get_visible(find_label(map, "Terrain / 1 chunks")));
+  if (sample == NULL) {
+    GtkWidget *terrain_status = find_label(map, "Terrain / 1 chunk");
+    g_assert_nonnull(terrain_status);
+    g_assert_false(gtk_widget_get_visible(terrain_status));
+  }
   pumpkin_server_stop(server); wait_for_test_server_exit(server);
   gtk_window_destroy(GTK_WINDOW(window)); spin(100);
   g_print("PASS: explicit/cancelled bridge approval, fast discovery, terrain retention, nonce handshake, player selection, tracking and cleanup\n");
@@ -1706,13 +1973,456 @@ static void test_release_channels_only(PumpkinWindow *window)
   g_print("PASS: Nightly default, persisted Stable selection, request cancellation, busy guard, custom URLs and animated badge labels\n");
 }
 
+static GtkWidget *find_css_class(GtkWidget *root, const char *css_class)
+{
+  if (gtk_widget_has_css_class(root, css_class)) return root;
+  for (GtkWidget *child = gtk_widget_get_first_child(root); child != NULL;
+       child = gtk_widget_get_next_sibling(child)) {
+    GtkWidget *found = find_css_class(child, css_class);
+    if (found != NULL) return found;
+  }
+  return NULL;
+}
+
+static GtkWidget *overview_row_for(PumpkinWindow *window, PumpkinServer *server)
+{
+  queue_overview_refresh(window, TRUE);
+  spin(30);
+  for (GtkWidget *row = gtk_widget_get_first_child(GTK_WIDGET(window->overview_list)); row != NULL;
+       row = gtk_widget_get_next_sibling(row)) {
+    if (g_object_get_data(G_OBJECT(row), "server") == server) return row;
+  }
+  g_error("Missing overview row for the test server");
+}
+
+static void test_i18n_boundaries_only(PumpkinWindow *window)
+{
+  /* The update regressions use a local HTTP fixture, not a live release response. */
+  ++window->latest_resolve_generation;
+  if (window->latest_resolve_cancellable != NULL) g_cancellable_cancel(window->latest_resolve_cancellable);
+  g_clear_object(&window->latest_resolve_cancellable);
+  window->latest_resolve_in_flight = FALSE;
+  if (window->latest_poll_id != 0) {
+    g_source_remove(window->latest_poll_id);
+    window->latest_poll_id = 0;
+  }
+  g_clear_pointer(&window->latest_error, g_free);
+  g_clear_pointer(&window->latest_url, g_free);
+  window->latest_url = g_strdup("https://example.org/test-managed-build");
+  g_clear_pointer(&window->latest_build_id, g_free);
+  g_clear_pointer(&window->latest_build_label, g_free);
+  window->latest_build_label = g_strdup("Build 2026-10-12 03:04 UTC");
+
+  g_autoptr(PumpkinServer) server = pumpkin_server_store_add(window->store, "I18n boundaries", NULL);
+  g_autofree char *bin = pumpkin_server_get_bin_path(server);
+  g_autofree char *executable = NULL;
+  gsize executable_size = 0;
+  g_assert_true(g_file_get_contents(g_getenv("FAKE_MANAGED_PUMPKIN_BINARY"),
+                                   &executable, &executable_size, NULL));
+  gsize size = MAX(executable_size, (gsize)MIN_VALID_PUMPKIN_BINARY_BYTES);
+  g_autofree char *binary = g_malloc0(size);
+  memcpy(binary, executable, executable_size);
+  g_assert_true(g_file_set_contents(bin, binary, (gssize)size, NULL));
+  g_assert_cmpint(g_chmod(bin, 0755), ==, 0);
+  pumpkin_window_select_server(window, pumpkin_server_get_id(server));
+  test_console_polling(window, server);
+
+  /* These opaque stored labels deliberately collide with UI status wording.
+   * Installation must depend on the binary, not English or translated text. */
+  const char *status_labels[] = {"Not installed", "Nicht installiert"};
+  for (guint i = 0; i < G_N_ELEMENTS(status_labels); ++i) {
+    pumpkin_server_set_installed_build_label(server, status_labels[i]);
+    GtkWidget *row = overview_row_for(window, server);
+    g_assert_nonnull(find_css_class(row, "update-button"));
+    g_assert_false(gtk_widget_get_visible(GTK_WIDGET(window->btn_details_install)));
+  }
+
+  /* Optional legacy Build prefix is metadata grammar, not translated output.
+   * The same build remains current for every date/time presentation setting. */
+  pumpkin_server_set_installed_build_label(server, "Build 2026-10-12 03:04 UTC");
+  g_free(window->latest_build_label);
+  window->latest_build_label = g_strdup("2026-10-12 03:04 UTC");
+  for (guint date = 0; date < 3; ++date) {
+    for (guint time = 0; time < 2; ++time) {
+      pumpkin_config_set_date_format(window->config, (PumpkinDateFormat)date);
+      pumpkin_config_set_time_format(window->config, (PumpkinTimeFormat)time);
+      g_assert_null(find_css_class(overview_row_for(window, server), "update-button"));
+      g_assert_cmpstr(pumpkin_server_get_installed_build_label(server), ==, "Build 2026-10-12 03:04 UTC");
+    }
+  }
+  pumpkin_server_set_installed_build_id(server, "old-build");
+  window->latest_build_id = g_strdup("new-build");
+  g_assert_nonnull(find_css_class(overview_row_for(window, server), "update-button"));
+  g_clear_pointer(&window->latest_build_id, g_free);
+  g_free(window->latest_build_label);
+  window->latest_build_label = g_strdup("Build 2026-10-12 03:05 UTC");
+  g_assert_nonnull(find_css_class(overview_row_for(window, server), "update-button"));
+
+  /* Metadata alone cannot make a missing binary installed. */
+  g_assert_cmpint(g_remove(bin), ==, 0);
+  g_assert_null(find_css_class(overview_row_for(window, server), "update-button"));
+  g_assert_true(gtk_widget_get_visible(GTK_WIDGET(window->btn_details_install)));
+  g_print("PASS: installation is independent of status wording; raw metadata and build IDs drive update decisions\n");
+
+  test_update_pipeline(window);
+  gtk_window_destroy(GTK_WINDOW(window));
+  spin(650);
+  g_print("PASS: i18n boundary regressions use stable widget identities and retain raw persisted build metadata\n");
+}
+
+static GtkWidget *find_label_containing(GtkWidget *root, const char *text)
+{
+  if (GTK_IS_LABEL(root) && strstr(gtk_label_get_text(GTK_LABEL(root)), text) != NULL) return root;
+  for (GtkWidget *child = gtk_widget_get_first_child(root); child != NULL;
+       child = gtk_widget_get_next_sibling(child)) {
+    GtkWidget *found = find_label_containing(child, text);
+    if (found != NULL) return found;
+  }
+  return NULL;
+}
+
+static void test_i18n_loading_only(PumpkinWindow *window)
+{
+  /* Keep this test independent of remote release metadata and actual servers. */
+  ++window->latest_resolve_generation;
+  if (window->latest_resolve_cancellable != NULL) g_cancellable_cancel(window->latest_resolve_cancellable);
+  g_clear_object(&window->latest_resolve_cancellable);
+  window->latest_resolve_in_flight = FALSE;
+  if (window->latest_poll_id != 0) {
+    g_source_remove(window->latest_poll_id);
+    window->latest_poll_id = 0;
+  }
+  g_clear_pointer(&window->latest_error, g_free);
+  g_clear_pointer(&window->latest_url, g_free);
+  window->latest_url = g_strdup("https://example.org/test-managed-build");
+  g_clear_pointer(&window->latest_build_id, g_free);
+  g_clear_pointer(&window->latest_build_label, g_free);
+  window->latest_build_label = g_strdup("Build 2026-10-12 03:04 UTC");
+
+  /* Look up widgets and pages by stable identity, then assert their presentation. */
+  GtkWidget *overview = adw_view_stack_get_child_by_name(window->view_stack, "overview");
+  g_assert_nonnull(overview);
+  AdwViewStackPage *page = adw_view_stack_get_page(window->view_stack, overview);
+  g_assert_cmpstr(adw_view_stack_page_get_title(page), ==, "Übersicht");
+  g_assert_cmpstr(gtk_window_get_title(GTK_WINDOW(window)), ==, "Smashed Pumpkin");
+  g_assert_cmpstr(gtk_button_get_label(window->btn_details_install), ==, "Installieren");
+  g_assert_cmpstr(setlocale(LC_NUMERIC, NULL), ==, "C");
+  g_assert_cmpstr(localeconv()->decimal_point, ==, ".");
+
+  pumpkin_config_set_detailed_overview_cards(window->config, TRUE);
+  g_autoptr(PumpkinServer) server = pumpkin_server_store_add(window->store, "I18n loading", NULL);
+  pumpkin_window_select_server(window, pumpkin_server_get_id(server));
+  g_assert_nonnull(find_label_containing(overview_row_for(window, server), "Nicht installiert"));
+  pumpkin_window_update_server_actions(window, FALSE, FALSE, FALSE, FALSE);
+  g_assert_true(gtk_widget_get_visible(GTK_WIDGET(window->btn_details_install)));
+  g_assert_cmpstr(gtk_button_get_label(window->btn_details_stop), ==, "Anhalten");
+  g_assert_cmpstr(gtk_widget_get_tooltip_text(GTK_WIDGET(window->btn_details_stop)), ==,
+                 "Daten speichern und den Server anhalten");
+  g_assert_cmpstr(gtk_widget_get_tooltip_text(GTK_WIDGET(window->btn_details_update)), ==,
+                 "Den installierten Server aktualisieren");
+
+  /* A padded fake binary supplies installation state without running a process. */
+  g_autofree char *bin = pumpkin_server_get_bin_path(server);
+  g_autofree char *executable = NULL;
+  gsize executable_size = 0;
+  g_assert_true(g_file_get_contents(g_getenv("FAKE_MANAGED_PUMPKIN_BINARY"),
+                                   &executable, &executable_size, NULL));
+  gsize size = MAX(executable_size, (gsize)MIN_VALID_PUMPKIN_BINARY_BYTES);
+  g_autofree char *binary = g_malloc0(size);
+  memcpy(binary, executable, executable_size);
+  g_assert_true(g_file_set_contents(bin, binary, (gssize)size, NULL));
+  g_assert_cmpint(g_chmod(bin, 0755), ==, 0);
+  pumpkin_server_set_installed_build_label(server, "Build 2026-10-12 03:04 UTC");
+  pumpkin_config_set_date_format(window->config, PUMPKIN_DATE_FORMAT_YMD);
+  pumpkin_config_set_time_format(window->config, PUMPKIN_TIME_FORMAT_24H);
+  GtkWidget *row = overview_row_for(window, server);
+  g_assert_cmpstr(adw_preferences_row_get_title(ADW_PREFERENCES_ROW(window->row_language)), ==, "Sprache");
+  g_assert_cmpstr(gtk_string_list_get_string(GTK_STRING_LIST(adw_combo_row_get_model(window->row_language)), 0), ==, "Systemsprache");
+  g_assert_cmpstr(adw_preferences_row_get_title(ADW_PREFERENCES_ROW(window->row_language_restart)), ==, "Sprachänderung gespeichert");
+  g_assert_nonnull(find_label_containing(row, "Erstellt 2026-10-12 03:04"));
+  g_assert_null(find_css_class(row, "update-button"));
+  g_assert_cmpstr(pumpkin_server_get_installed_build_label(server), ==, "Build 2026-10-12 03:04 UTC");
+  g_assert_cmpstr(pumpkin_server_get_name(server), ==, "I18n loading");
+  pumpkin_server_set_installed_build_id(server, "old-build");
+  window->latest_build_id = g_strdup("new-build");
+  g_assert_nonnull(find_css_class(overview_row_for(window, server), "update-button"));
+  g_assert_false(pumpkin_server_get_running(server));
+
+  gtk_window_destroy(GTK_WINDOW(window));
+  spin(650);
+  g_print("PASS: GTK template and dynamic C translations load; raw build identities, branding and numeric wire formats stay stable\n");
+}
+
+static void test_i18n_chinese_only(PumpkinWindow *window)
+{
+  /* This exercises the installed-catalog discovery path, not the test fixture. */
+  ++window->latest_resolve_generation;
+  if (window->latest_resolve_cancellable != NULL) g_cancellable_cancel(window->latest_resolve_cancellable);
+  g_clear_object(&window->latest_resolve_cancellable);
+  window->latest_resolve_in_flight = FALSE;
+  if (window->latest_poll_id != 0) {
+    g_source_remove(window->latest_poll_id);
+    window->latest_poll_id = 0;
+  }
+  g_clear_pointer(&window->latest_error, g_free);
+  g_clear_pointer(&window->latest_url, g_free);
+  g_clear_pointer(&window->latest_build_id, g_free);
+  g_clear_pointer(&window->latest_build_label, g_free);
+  window->latest_url = g_strdup("https://example.org/test-managed-build");
+  window->latest_build_label = g_strdup("Build 2026-10-12 03:04 UTC");
+
+  g_assert_true(pumpkin_language_is_valid("zh_CN"));
+  g_assert_cmpstr(pumpkin_language_name(pumpkin_language_index("zh_CN")), ==, "简体中文");
+  g_assert_cmpstr(pumpkin_config_get_language(window->config), ==, "zh_CN");
+  g_assert_cmpstr(pumpkin_i18n_get_language(), ==, "zh_CN");
+  g_assert_cmpuint(adw_combo_row_get_selected(window->row_language), ==, pumpkin_language_index("zh_CN"));
+
+  GtkWidget *overview = adw_view_stack_get_child_by_name(window->view_stack, "overview");
+  g_assert_nonnull(overview);
+  AdwViewStackPage *page = adw_view_stack_get_page(window->view_stack, overview);
+  g_assert_cmpstr(adw_view_stack_page_get_title(page), ==, "总览");
+  g_assert_cmpstr(gtk_window_get_title(GTK_WINDOW(window)), ==, "Smashed Pumpkin");
+  g_assert_cmpstr(gtk_button_get_label(window->btn_details_install), ==, "安装");
+  g_assert_cmpstr(adw_preferences_row_get_title(ADW_PREFERENCES_ROW(window->row_language)), ==, "语言");
+  g_assert_cmpstr(gtk_string_list_get_string(GTK_STRING_LIST(adw_combo_row_get_model(window->row_language)),
+                  pumpkin_language_index("system")), ==, "跟随系统");
+  g_assert_cmpstr(setlocale(LC_NUMERIC, NULL), ==, "C");
+  g_assert_cmpstr(localeconv()->decimal_point, ==, ".");
+
+  pumpkin_config_set_detailed_overview_cards(window->config, TRUE);
+  g_autoptr(PumpkinServer) server = pumpkin_server_store_add(window->store, "I18n loading", NULL);
+  pumpkin_window_select_server(window, pumpkin_server_get_id(server));
+  g_assert_nonnull(find_label_containing(overview_row_for(window, server), "尚未安装"));
+  pumpkin_window_update_server_actions(window, FALSE, FALSE, FALSE, FALSE);
+  g_assert_cmpstr(gtk_button_get_label(window->btn_details_stop), ==, "停止");
+  g_assert_cmpstr(gtk_widget_get_tooltip_text(GTK_WIDGET(window->btn_details_stop)), ==,
+                  "保存数据并停止服务器");
+  GtkWidget *console = adw_view_stack_get_child_by_name(window->details_stack, "console");
+  g_assert_nonnull(console);
+  g_assert_cmpstr(adw_view_stack_page_get_title(adw_view_stack_get_page(window->details_stack, console)),
+                  ==, "控制台");
+
+  /* Exercise real count forms and long-long printf formats in the production
+   * catalog, including zero. These display formats must not be truncated by
+   * extraction at an adjacent GLib integer-format macro. */
+  for (gulong count = 0; count <= 2; count++) {
+    const char *format = g_dngettext(GETTEXT_PACKAGE, "Terrain / %u chunk", "Terrain / %u chunks", count);
+    g_assert_cmpstr(format, !=, "Terrain / %u chunk");
+    g_assert_cmpstr(format, !=, "Terrain / %u chunks");
+    g_assert_cmpstr(format, ==, g_dngettext(GETTEXT_PACKAGE, "Terrain / %u chunk", "Terrain / %u chunks", 0));
+    g_autofree char *summary = g_strdup_printf(format, (guint)count);
+    g_autofree char *number = g_strdup_printf("%lu", count);
+    g_assert_nonnull(strstr(summary, number));
+  }
+  g_assert_cmpstr(_("%llud %lluh"), !=, "%llud %lluh");
+  g_autofree char *duration = g_strdup_printf(_("%llud %lluh"), 42ULL, 7ULL);
+  g_assert_nonnull(strstr(duration, "42"));
+  g_assert_nonnull(strstr(duration, "7"));
+
+  /* A fake executable tests dynamic metadata presentation without starting a server. */
+  g_autofree char *bin = pumpkin_server_get_bin_path(server);
+  g_autofree char *executable = NULL;
+  gsize executable_size = 0;
+  g_assert_true(g_file_get_contents(g_getenv("FAKE_MANAGED_PUMPKIN_BINARY"),
+                                   &executable, &executable_size, NULL));
+  gsize size = MAX(executable_size, (gsize)MIN_VALID_PUMPKIN_BINARY_BYTES);
+  g_autofree char *binary = g_malloc0(size);
+  memcpy(binary, executable, executable_size);
+  g_assert_true(g_file_set_contents(bin, binary, (gssize)size, NULL));
+  g_assert_cmpint(g_chmod(bin, 0755), ==, 0);
+  pumpkin_server_set_installed_build_label(server, "Build 2026-10-12 03:04 UTC");
+  pumpkin_server_set_installed_build_id(server, "old-build");
+  pumpkin_config_set_date_format(window->config, PUMPKIN_DATE_FORMAT_YMD);
+  pumpkin_config_set_time_format(window->config, PUMPKIN_TIME_FORMAT_24H);
+  g_assert_nonnull(find_label_containing(overview_row_for(window, server), "构建版本"));
+  g_assert_cmpstr(pumpkin_server_get_installed_build_label(server), ==,
+                  "Build 2026-10-12 03:04 UTC");
+  window->latest_build_id = g_strdup("new-build");
+  g_assert_nonnull(find_css_class(overview_row_for(window, server), "update-button"));
+  g_assert_false(pumpkin_server_get_running(server));
+
+  /* Run the raw-log/typed-event regressions in the Chinese session as well as
+   * the English baseline. Signals are fixtures; no real process is started. */
+  test_console_polling(window, server);
+  g_assert_cmpstr(pumpkin_server_get_name(server), ==, "I18n loading");
+  g_assert_cmpstr(pumpkin_server_get_installed_build_label(server), ==,
+                  "Build 2026-10-12 03:04 UTC");
+  g_assert_cmpstr(pumpkin_server_get_installed_build_id(server), ==, "old-build");
+  g_assert_cmpstr(pumpkin_i18n_get_language(), ==, "zh_CN");
+  g_assert_cmpstr(setlocale(LC_NUMERIC, NULL), ==, "C");
+  g_assert_false(pumpkin_server_get_running(server));
+
+  gtk_window_destroy(GTK_WINDOW(window));
+  spin(650);
+  g_print("PASS: production Simplified Chinese catalog translates dynamic UI, counts and duration formats without changing raw metadata, branding, numeric formats or log/event handling\n");
+}
+
+static void test_language_settings_only(PumpkinWindow *window)
+{
+  ++window->latest_resolve_generation;
+  if (window->latest_resolve_cancellable != NULL) g_cancellable_cancel(window->latest_resolve_cancellable);
+  g_clear_object(&window->latest_resolve_cancellable);
+  window->latest_resolve_in_flight = FALSE;
+  g_assert_cmpstr(pumpkin_config_get_language(window->config), ==, "en");
+  g_assert_cmpstr(pumpkin_i18n_get_language(), ==, "en");
+  g_assert_cmpuint(adw_combo_row_get_selected(window->row_language), ==, pumpkin_language_index("en"));
+  g_assert_false(gtk_widget_get_visible(GTK_WIDGET(window->row_language_restart)));
+  g_assert_cmpuint(g_list_model_get_n_items(adw_combo_row_get_model(window->row_language)), ==, pumpkin_language_count());
+  g_assert_true(pumpkin_language_is_valid("zh_TW"));
+  g_assert_cmpstr(gtk_string_list_get_string(GTK_STRING_LIST(adw_combo_row_get_model(window->row_language)),
+                  pumpkin_language_index("zh_TW")), ==, "Chinese (Traditional)");
+  adw_combo_row_set_selected(window->row_language, pumpkin_language_index("de"));
+  g_assert_true(window->settings_dirty);
+  adw_combo_row_set_selected(window->row_language, pumpkin_language_index("en"));
+  g_assert_false(window->settings_dirty);
+
+  g_autoptr(PumpkinServer) server = pumpkin_server_store_add(window->store, "Language settings", NULL);
+  g_autofree char *bin = pumpkin_server_get_bin_path(server);
+  g_autofree char *binary = NULL;
+  gsize size = 0;
+  g_assert_true(g_file_get_contents(g_getenv("FAKE_MANAGED_PUMPKIN_BINARY"), &binary, &size, NULL));
+  g_assert_true(g_file_set_contents(bin, binary, (gssize)size, NULL));
+  g_assert_cmpint(g_chmod(bin, 0755), ==, 0);
+  pumpkin_server_set_auto_restart(server, FALSE);
+  pumpkin_window_select_server(window, pumpkin_server_get_id(server));
+  g_assert_true(pumpkin_server_start(server, NULL));
+  spin(200);
+  adw_combo_row_set_selected(window->row_language, pumpkin_language_index("zh_TW"));
+  g_signal_emit_by_name(window->btn_save_general_settings, "clicked");
+  PumpkinConfig *saved = pumpkin_config_load(NULL);
+  g_assert_cmpstr(pumpkin_config_get_language(saved), ==, "zh_TW");
+  pumpkin_config_free(saved);
+  g_assert_true(gtk_widget_get_visible(GTK_WIDGET(window->row_language_restart)));
+  g_assert_false(window->settings_dirty);
+  g_assert_true(pumpkin_server_get_running(server));
+  g_assert_cmpstr(pumpkin_i18n_get_language(), ==, "en");
+  g_assert_cmpstr(_("Overview"), ==, "Overview");
+  g_assert_cmpstr(setlocale(LC_NUMERIC, NULL), ==, "C");
+  update_settings_form(window);
+  g_assert_cmpuint(adw_combo_row_get_selected(window->row_language), ==, pumpkin_language_index("zh_TW"));
+  adw_combo_row_set_selected(window->row_language, pumpkin_language_index("system"));
+  gtk_drop_down_set_selected(window->drop_date_format, PUMPKIN_DATE_FORMAT_YMD);
+  PumpkinTimeFormat time_format = pumpkin_config_get_time_format(window->config) == PUMPKIN_TIME_FORMAT_24H ?
+    PUMPKIN_TIME_FORMAT_12H : PUMPKIN_TIME_FORMAT_24H;
+  gboolean detailed_cards = !pumpkin_config_get_detailed_overview_cards(window->config);
+  gtk_drop_down_set_selected(window->drop_time_format, time_format);
+  gtk_switch_set_active(window->switch_detailed_overview_cards, detailed_cards);
+  g_signal_emit_by_name(window->btn_save_settings, "clicked");
+  g_assert_null(adw_application_window_get_visible_dialog(ADW_APPLICATION_WINDOW(window)));
+  g_assert_true(pumpkin_server_get_running(server));
+  saved = pumpkin_config_load(NULL);
+  g_assert_cmpstr(pumpkin_config_get_language(saved), ==, "system");
+  g_assert_cmpint(pumpkin_config_get_date_format(saved), ==, PUMPKIN_DATE_FORMAT_YMD);
+  g_assert_cmpint(pumpkin_config_get_time_format(saved), ==, time_format);
+  g_assert_cmpint(pumpkin_config_get_detailed_overview_cards(saved), ==, detailed_cards);
+  g_assert_false(window->settings_dirty);
+  pumpkin_config_free(saved);
+  adw_combo_row_set_selected(window->row_language, pumpkin_language_index("en"));
+  g_signal_emit_by_name(window->btn_save_general_settings, "clicked");
+  g_assert_false(gtk_widget_get_visible(GTK_WIDGET(window->row_language_restart)));
+
+  /* Saving a language must not mark an unrelated server draft as saved. */
+  int saved_port = pumpkin_server_get_port(server);
+  g_autofree char *draft_port = g_strdup_printf("%d", saved_port + 1);
+  gtk_editable_set_text(GTK_EDITABLE(window->entry_server_port), draft_port);
+  adw_combo_row_set_selected(window->row_language, pumpkin_language_index("de"));
+  g_signal_emit_by_name(window->btn_save_general_settings, "clicked");
+  g_assert_cmpint(pumpkin_server_get_port(server), ==, saved_port);
+  g_assert_true(window->settings_dirty);
+  g_assert_true(gtk_widget_get_sensitive(GTK_WIDGET(window->btn_save_settings)));
+  update_settings_form(window);
+  g_assert_false(window->settings_dirty);
+  adw_combo_row_set_selected(window->row_language, pumpkin_language_index("en"));
+  g_signal_emit_by_name(window->btn_save_general_settings, "clicked");
+
+  /* A failed write must not claim success or discard the pending selection. */
+  g_autofree char *path = g_build_filename(g_get_user_config_dir(), "smashed-pumpkin", "config.ini", NULL);
+  g_autofree char *original = NULL;
+  g_assert_true(g_file_get_contents(path, &original, NULL, NULL));
+  g_assert_cmpint(g_remove(path), ==, 0);
+  g_assert_cmpint(g_mkdir(path, 0700), ==, 0);
+  adw_combo_row_set_selected(window->row_language, pumpkin_language_index("de"));
+  g_signal_emit_by_name(window->btn_save_general_settings, "clicked");
+  g_assert_cmpstr(pumpkin_config_get_language(window->config), ==, "en");
+  g_assert_true(window->settings_dirty);
+  g_assert_false(gtk_widget_get_visible(GTK_WIDGET(window->row_language_restart)));
+  g_assert_true(g_file_test(path, G_FILE_TEST_IS_DIR));
+  g_signal_emit_by_name(window->btn_save_settings, "clicked"); /* Also protect the server settings Save path. */
+  g_assert_true(pumpkin_server_get_running(server));
+  g_assert_cmpstr(pumpkin_config_get_language(window->config), ==, "en");
+  g_assert_true(window->settings_dirty);
+  g_assert_cmpint(g_rmdir(path), ==, 0);
+  g_assert_true(g_file_set_contents(path, original, -1, NULL));
+  g_signal_emit_by_name(window->btn_save_general_settings, "clicked");
+  g_assert_cmpstr(pumpkin_config_get_language(window->config), ==, "de");
+  g_assert_true(gtk_widget_get_visible(GTK_WIDGET(window->row_language_restart)));
+  g_assert_false(window->settings_dirty);
+  adw_combo_row_set_selected(window->row_language, pumpkin_language_index("zh_CN"));
+  update_settings_form(window);
+  g_assert_cmpuint(adw_combo_row_get_selected(window->row_language), ==, pumpkin_language_index("de"));
+
+  /* Unsupported IDs must survive saves of unrelated preferences in either form. */
+  g_autoptr(GKeyFile) future_config = g_key_file_new();
+  g_assert_true(g_key_file_load_from_file(future_config, path, G_KEY_FILE_NONE, NULL));
+  g_key_file_set_string(future_config, "behavior", "language", "future-language");
+  g_autofree char *future_data = g_key_file_to_data(future_config, NULL, NULL);
+  g_assert_true(g_file_set_contents(path, future_data, -1, NULL));
+  pumpkin_config_free(window->config);
+  window->config = pumpkin_config_load(NULL);
+  update_settings_form(window);
+  g_assert_cmpuint(adw_combo_row_get_selected(window->row_language), ==, pumpkin_language_index("en"));
+  gtk_drop_down_set_selected(window->drop_date_format, PUMPKIN_DATE_FORMAT_DMY);
+  g_signal_emit_by_name(window->btn_save_general_settings, "clicked");
+  saved = pumpkin_config_load(NULL);
+  g_assert_cmpstr(pumpkin_config_get_language(saved), ==, "future-language");
+  pumpkin_config_free(saved);
+  gtk_switch_set_active(window->switch_detailed_overview_cards, !detailed_cards);
+  g_signal_emit_by_name(window->btn_save_settings, "clicked");
+  saved = pumpkin_config_load(NULL);
+  g_assert_cmpstr(pumpkin_config_get_language(saved), ==, "future-language");
+  pumpkin_config_free(saved);
+  adw_combo_row_set_selected(window->row_language, pumpkin_language_index("de"));
+  g_signal_emit_by_name(window->btn_save_general_settings, "clicked");
+
+  /* Reset chooses system, but remains unsaved until explicitly saving. */
+  g_signal_emit_by_name(window->btn_reset_general_settings, "clicked");
+  AdwDialog *dialog = adw_application_window_get_visible_dialog(ADW_APPLICATION_WINDOW(window));
+  g_assert_nonnull(dialog);
+  g_signal_emit_by_name(dialog, "response", "reset");
+  adw_dialog_force_close(dialog);
+  g_assert_cmpuint(adw_combo_row_get_selected(window->row_language), ==, pumpkin_language_index("system"));
+  g_assert_cmpstr(pumpkin_config_get_language(window->config), ==, "de");
+  g_assert_true(window->settings_dirty);
+  g_assert_true(pumpkin_server_get_running(server));
+  g_assert_cmpstr(pumpkin_i18n_get_language(), ==, "en");
+  pumpkin_server_stop(server);
+  wait_for_test_server_exit(server);
+  gtk_window_destroy(GTK_WINDOW(window));
+  spin(650);
+  g_print("PASS: language selection saves stable IDs, supports reset/discard, handles write errors and never restarts a running server\n");
+}
+
 int main(void)
 {
+  gtk_disable_setlocale();
+  pumpkin_i18n_startup();
   adw_init();
   smashed_pumpkin_register_resource();
   g_autoptr(AdwApplication) app = adw_application_new("dev.rotstein.SmashedPumpkin.UIRegression", G_APPLICATION_NON_UNIQUE);
   g_assert_true(g_application_register(G_APPLICATION(app), NULL, NULL));
   PumpkinWindow *window = PUMPKIN_WINDOW(pumpkin_window_new(app));
+  if (g_strcmp0(g_getenv("SMASHED_UI_TEST_SCOPE"), "language-settings") == 0) {
+    test_language_settings_only(window); return 0;
+  }
+  if (g_strcmp0(g_getenv("SMASHED_UI_TEST_SCOPE"), "i18n-loading") == 0) {
+    test_i18n_loading_only(window); return 0;
+  }
+  if (g_strcmp0(g_getenv("SMASHED_UI_TEST_SCOPE"), "i18n-chinese") == 0) {
+    test_i18n_chinese_only(window); return 0;
+  }
+  if (g_strcmp0(g_getenv("SMASHED_UI_TEST_SCOPE"), "i18n-boundaries") == 0) {
+    test_i18n_boundaries_only(window); return 0;
+  }
   if (g_strcmp0(g_getenv("SMASHED_UI_TEST_SCOPE"), "releases") == 0) {
     test_release_channels_only(window); return 0;
   }
@@ -1779,8 +2489,6 @@ int main(void)
   test_players(window, server);
   if (g_getenv("SMASHED_PRIVATE_X11_POINTER") != NULL) {
     g_print("PASS: real XTest pointer clicks traverse GTK's modal event boundary and cancel safely\n");
-    gtk_window_destroy(GTK_WINDOW(window));
-    return 0;
   }
   test_worlds(window, server);
   test_reload_controls(window);
@@ -1875,6 +2583,7 @@ int main(void)
   g_assert_false(window->marketplace_loading);
   g_assert_false(window->marketplace_load_failed);
   row = GTK_WIDGET(gtk_list_box_get_row_at_index(window->marketplace_list, 0));
+  g_assert_nonnull(find_label(row, "UI Fixture Plugin"));
   GtkWidget *open = find_widget(row, GTK_TYPE_BUTTON);
   g_assert_nonnull(open);
   g_signal_emit_by_name(open, "clicked");
@@ -1887,7 +2596,7 @@ int main(void)
   g_assert_cmpint(min_height, >=, 280);
   screenshot(GTK_WIDGET(window), "/tmp/smashed-plugin-details.png");
   adw_dialog_close(dialog);
-  g_print("PASS: live Marketplace details have explicit minimum size\n");
+  g_print("PASS: local Marketplace fixture details have explicit minimum size\n");
 
   pumpkin_config_set_start_expanded(window->config, TRUE);
   pumpkin_config_set_autostart_on_boot(window->config, FALSE);

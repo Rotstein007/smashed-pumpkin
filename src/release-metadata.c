@@ -98,6 +98,8 @@ pumpkin_release_parse_metadata(const char *json, PumpkinReleaseChannel channel,
       g_strdup_printf("github:%s:%.0f:%s", tag, id->valuedouble, updated);
     g_autoptr(GDateTime) utc = g_date_time_to_utc(date);
     g_autofree char *formatted = g_date_time_format(utc, "%Y-%m-%d %H:%M UTC");
+    /* Legacy metadata grammar used by persistence/cache identities. These
+     * prefixes must remain stable; translate only a separately formatted label. */
     resolved->build_label = channel == PUMPKIN_RELEASE_STABLE ? g_strdup_printf("Stable %s", tag) :
       g_strdup_printf("Nightly %s", formatted);
     cJSON_Delete(root);

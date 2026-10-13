@@ -46,6 +46,35 @@ conf = configuration_data()
 conf.set_quoted('APP_ID', app_id)
 conf.set_quoted('APP_NAME', 'Smashed Pumpkin')
 conf.set_quoted('APP_VERSION', meson.project_version())
+conf.set_quoted('GETTEXT_PACKAGE', gettext_package)
+conf.set_quoted('LOCALEDIR', gettext_locale_dir)
+# Uninstalled development builds fall back to build-tree catalogs so running
+# ./buildDir/src/smashed-pumpkin discovers translations without meson install.
+# Installed catalogs always win when present; the fallback is only consulted
+# when the configured LOCALEDIR has no catalog for this domain.
+conf.set_quoted('BUILD_LOCALEDIR', meson.project_build_root() / 'po')
+
+# glibc suppresses gettext in C-family locales. Ship a messages-only UTF-8
+# locale so explicit language choices do not require a matching system locale.
+message_locale = []
+private_message_locale = false
+message_locale_root = get_option('prefix') / get_option('datadir') / 'smashed-pumpkin/locales'
+if host_machine.system() == 'linux' and not meson.is_cross_build() and cc.compiles('#include <features.h>\n#ifndef __GLIBC__\n#error not glibc\n#endif\nint main(void) { return 0; }')
+  message_locale = custom_target('message-locale',
+    output: 'SYS_LC_MESSAGES',
+    command: [find_program('python3'), meson.project_source_root() / 'build-aux/build-message-locale.py',
+              find_program('localedef', native: true).full_path(), '@OUTPUT@'],
+    depend_files: '../build-aux/build-message-locale.py',
+    build_by_default: true,
+    install: true,
+    install_dir: message_locale_root / 'smashed.UTF-8/LC_MESSAGES')
+  private_message_locale = true
+  conf.set('HAVE_PRIVATE_MESSAGE_LOCALE', 1)
+  conf.set_quoted('MESSAGE_LOCALE_ROOT', message_locale_root)
+  # The locale script mirrors the installed hierarchy under the build tree for
+  # uninstalled runs; use it when the installed private locale is absent.
+  conf.set_quoted('BUILD_MESSAGE_LOCALE_ROOT', meson.current_build_dir() / 'message-locales')
+endif
 
 startup_deps = []
 if host_machine.system() == 'linux'
@@ -116,10 +145,16 @@ if host_machine.system() == 'windows'
 endif
 
 sources = [
+  'i18n.c',
+  'i18n.h',
+  'language.c',
+  'language.h',
   'release-channel.c',
   'release-channel.h',
   'release-metadata.c',
   'release-metadata.h',
+  'build-metadata.c',
+  'build-metadata.h',
   'minimap-model.c',
   'minimap-model.h',
   'minimap-store.c',
@@ -130,6 +165,8 @@ sources = [
   'minimap-terrain.h',
   'minimap-cache.c',
   'minimap-cache.h',
+  'minimap-memory-cache.c',
+  'minimap-memory-cache.h',
   'minimap-motion.c',
   'minimap-motion.h',
   'minimap-render.c',
@@ -214,8 +251,9 @@ if android_host
     'smashed-pumpkin',
     sources,
     include_directories: inc,
-    dependencies: [adw_dep, Gtk_dep, soup_dep, psapi_dep, math_dep, shell32_dep, user32_dep, dwmapi_dep, crypt32_dep, gmodule_dep, cjson_dep] + platform_credential_deps + startup_deps,
+    dependencies: [adw_dep, Gtk_dep, soup_dep, psapi_dep, math_dep, shell32_dep, user32_dep, dwmapi_dep, crypt32_dep, gmodule_dep, cjson_dep, intl_dep] + platform_credential_deps + startup_deps,
     android_exe_type: 'application',
+    link_depends: message_locale,
     install: true
   )
 else
@@ -223,8 +261,9 @@ else
     'smashed-pumpkin',
     sources,
     include_directories: inc,
-    dependencies: [adw_dep, Gtk_dep, soup_dep, psapi_dep, math_dep, shell32_dep, user32_dep, dwmapi_dep, crypt32_dep, gmodule_dep, cjson_dep] + platform_credential_deps + startup_deps,
+    dependencies: [adw_dep, Gtk_dep, soup_dep, psapi_dep, math_dep, shell32_dep, user32_dep, dwmapi_dep, crypt32_dep, gmodule_dep, cjson_dep, intl_dep] + platform_credential_deps + startup_deps,
     win_subsystem: host_machine.system() == 'windows' ? 'windows' : 'console',
+    link_depends: message_locale,
     install: true
   )
 endif
@@ -239,6 +278,15 @@ if not meson.is_cross_build()
     include_directories: inc,
     dependencies: [dependency('gio-2.0'), soup_dep, math_dep, cjson_dep], install: false)
   test('release-download', release_download_tests)
+  build_metadata_tests = executable('test-build-metadata',
+    ['../tests/test-build-metadata.c', 'build-metadata.c'],
+    include_directories: inc, dependencies: [dependency('glib-2.0'), intl_dep], install: false)
+  test('build-metadata', build_metadata_tests, env: {'LC_ALL': 'C', 'LANGUAGE': 'en'})
+  download_http_tests = executable('test-download-http',
+    ['../tests/test-download-http.c', 'download.c', 'release-channel.c', 'release-metadata.c'],
+    include_directories: inc,
+    dependencies: [dependency('gio-2.0'), soup_dep, math_dep, cjson_dep], install: false)
+  test('download-http', download_http_tests)
   minimap_tests = executable('test-minimap',
     ['../tests/test-minimap.c', 'minimap-model.c', 'minimap-store.c', 'minimap-terrain.c', 'minimap-cache.c', 'minimap-motion.c', 'minimap-render.c', 'vendor/tomlc17/tomlc17.c', resources],
     include_directories: inc,
@@ -250,6 +298,11 @@ if not meson.is_cross_build()
     include_directories: inc,
     dependencies: [dependency('gio-2.0'), dependency('cairo'), math_dep], install: false)
   test('minimap-terrain', terrain_tests)
+  memory_cache_tests = executable('test-minimap-memory-cache',
+    ['../tests/test-minimap-memory-cache.c', 'minimap-memory-cache.c'],
+    include_directories: inc,
+    dependencies: [dependency('glib-2.0')], install: false)
+  test('minimap-memory-cache', memory_cache_tests)
   world_store_tests = executable('test-world-store',
     ['../tests/test-world-store.c', 'world-store.c', 'vendor/tomlc17/tomlc17.c'],
     include_directories: inc,
@@ -261,12 +314,21 @@ if not meson.is_cross_build()
     dependencies: [dependency('gio-2.0'), cjson_dep],
     install: false)
   test('player-protocol', player_protocol_tests)
+  player_heads_tests = executable('test-player-heads',
+    ['../tests/test-player-heads.c', 'player-heads.c'],
+    include_directories: inc,
+    dependencies: [Gtk_dep, soup_dep, cjson_dep], install: false)
+  test('player-heads', player_heads_tests)
   startup_config_tests = executable('test-startup-config',
-    ['../tests/test-startup-config.c', 'app-config.c', 'release-channel.c'],
+    ['../tests/test-startup-config.c', 'app-config.c', 'release-channel.c', 'language.c'],
     include_directories: inc,
     dependencies: [dependency('gio-2.0')],
     install: false)
   test('startup-config', startup_config_tests)
+  language_tests = executable('test-language',
+    ['../tests/test-language.c', 'language.c', 'app-config.c', 'release-channel.c'],
+    include_directories: inc, dependencies: [dependency('gio-2.0')], install: false)
+  test('language', language_tests)
   plugin_store_tests = executable('test-plugin-store',
     ['../tests/test-plugin-store.c', 'plugin-store.c', 'marketplace-auth.c',
      'vendor/tomlc17/tomlc17.c'],
@@ -292,6 +354,12 @@ if not meson.is_cross_build()
     dependencies: [dependency('gobject-2.0')], install: false)
   test('server-command-tracker', command_tracker_tests)
   if host_machine.system() == 'linux'
+    server_store_tests = executable('test-server-store',
+      ['../tests/test-server-store.c', 'server-store.c', 'server.c', 'server-command-tracker.c',
+       'app-config.c', 'language.c', 'release-channel.c'],
+      include_directories: inc,
+      dependencies: [dependency('gio-2.0')], install: false)
+    test('server-store', server_store_tests)
     managed_server_fixture = executable('fake-managed-server',
       '../tests/fake-managed-server.c',
       dependencies: [dependency('glib-2.0')], install: false)
@@ -312,6 +380,7 @@ if not meson.is_cross_build()
 endif
 
 appindicator_dep = dependency('ayatana-appindicator3-0.1', required: false)
+tray_c_args = appindicator_dep.found() ? ['-DHAVE_AYATANA_APPINDICATOR'] : []
 if not appindicator_dep.found()
   appindicator_dep = dependency('appindicator3-0.1', required: false)
 endif
@@ -319,9 +388,11 @@ endif
 if host_machine.system() == 'linux' and gtk3_dep.found() and appindicator_dep.found()
   executable(
     'smashed-pumpkin-tray',
-    ['tray.c', 'app-config.c', 'app-config.h', 'release-channel.c', config_h, resources],
+    ['tray.c', 'i18n.c', 'i18n.h', 'language.c', 'language.h', 'app-config.c', 'app-config.h', 'release-channel.c', config_h, resources],
     include_directories: inc,
-    dependencies: [gtk3_dep, appindicator_dep],
+    dependencies: [gtk3_dep, appindicator_dep, intl_dep],
+    c_args: tray_c_args,
+    link_depends: message_locale,
     install: true
   )
 elif host_machine.system() == 'linux'
@@ -333,6 +404,7 @@ elif host_machine.system() == 'windows'
     include_directories: inc,
     dependencies: [shell32_dep, user32_dep],
     win_subsystem: 'windows',
+    link_depends: message_locale,
     install: true
   )
 endif

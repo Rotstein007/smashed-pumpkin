@@ -1,4 +1,5 @@
 #include "window-lifecycle.h"
+#include "i18n.h"
 #include "platform.h"
 
 static gboolean
@@ -46,9 +47,10 @@ start_server_internal(PumpkinWindow *self,
   }
   if (!server_has_installation(self, server)) {
     if (from_network_action) {
-      append_log_for_server(self, server, "[SMPK] Cannot start: Pumpkin is not installed.");
+      g_autofree char *message = g_strdup_printf("[SMPK] %s", _("Cannot start: Pumpkin is not installed."));
+      append_log_for_server(self, server, message);
     } else if (self->current == server) {
-      set_details_error(self, "Install Pumpkin before starting.");
+      set_details_error(self, _("Install Pumpkin before starting."));
     }
     return FALSE;
   }
@@ -66,7 +68,7 @@ start_server_internal(PumpkinWindow *self,
   if (self->current == server) {
     int port = pumpkin_server_get_port(server);
     if (port <= 0) {
-      set_details_error(self, "Invalid server port.");
+      set_details_error(self, _("Invalid server port."));
       self->ui_state = UI_STATE_ERROR;
       return FALSE;
     }
@@ -76,11 +78,11 @@ start_server_internal(PumpkinWindow *self,
     gboolean port_ok = g_socket_listener_add_inet_port(listener, port, NULL, &port_error);
     if (!port_ok) {
       if (port_error != NULL) {
-        g_autofree char *msg = g_strdup_printf("Port %d may already be in use (%s). Trying to start anyway.",
+        g_autofree char *msg = g_strdup_printf(_("Port %d may already be in use (%s). Trying to start anyway."),
                                                port, port_error->message);
         append_log(self, msg);
       } else {
-        g_autofree char *msg = g_strdup_printf("Port %d may already be in use. Trying to start anyway.", port);
+        g_autofree char *msg = g_strdup_printf(_("Port %d may already be in use. Trying to start anyway."), port);
         append_log(self, msg);
       }
     }
@@ -93,15 +95,16 @@ start_server_internal(PumpkinWindow *self,
         append_log_for_server(self, server, error->message);
       }
     } else if (self->current == server) {
-      append_log(self, error != NULL ? error->message : "Failed to start server.");
-      set_details_error(self, error != NULL ? error->message : "Failed to start server.");
+      append_log(self, error != NULL ? error->message : _("Failed to start server."));
+      set_details_error(self, error != NULL ? error->message : _("Failed to start server."));
       self->ui_state = UI_STATE_ERROR;
     }
     return FALSE;
   }
 
   if (from_network_action) {
-    append_log_for_server(self, server, "[SMPK] Started by network action.");
+    g_autofree char *message = g_strdup_printf("[SMPK] %s", _("Started by network action."));
+    append_log_for_server(self, server, message);
   }
   set_server_running_hint(self, server, TRUE);
   if (self->current == server) {
@@ -221,9 +224,9 @@ on_details_stop(GtkButton *button, PumpkinWindow *self)
     return;
   }
   if (pumpkin_server_get_stop_timed_out(self->current)) {
-    AdwAlertDialog *dialog = ADW_ALERT_DIALOG(adw_alert_dialog_new("Force stop server?",
-      "The server has not finished shutting down. Force stopping may lose unsaved world or plugin data."));
-    adw_alert_dialog_add_responses(dialog, "cancel", "Keep Waiting", "force", "Force Stop", NULL);
+    AdwAlertDialog *dialog = ADW_ALERT_DIALOG(adw_alert_dialog_new(_("Force stop server?"),
+      _("The server has not finished shutting down. Force stopping may lose unsaved world or plugin data.")));
+    adw_alert_dialog_add_responses(dialog, "cancel", _("Keep Waiting"), "force", _("Force Stop"), NULL);
     adw_alert_dialog_set_response_appearance(dialog, "force", ADW_RESPONSE_DESTRUCTIVE);
     adw_alert_dialog_set_default_response(dialog, "cancel");
     adw_alert_dialog_set_close_response(dialog, "cancel");

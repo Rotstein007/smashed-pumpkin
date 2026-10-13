@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<interface>
+<interface domain="smashed-pumpkin">
   <requires lib="gtk" version="4.0"/>
   <requires lib="adwaita" version="1.0"/>
 
@@ -23,7 +23,7 @@
     <property name="default-height">720</property>
     <property name="width-request">800</property>
     <property name="height-request">580</property>
-    <property name="title" translatable="yes">Smashed Pumpkin</property>
+    <property name="title">Smashed Pumpkin</property>
 
     <child>
       <object class="AdwBreakpointBin">
@@ -1316,6 +1316,19 @@
                                     <child>
                                       <object class="AdwPreferencesGroup">
                                         <property name="title" translatable="yes">Display and time</property>
+                                        <child>
+                                          <object class="AdwComboRow" id="row_language">
+                                            <property name="title" translatable="yes">Language</property>
+                                            <property name="subtitle" translatable="yes">Save to apply on the next application launch. Missing translations use English.</property>
+                                          </object>
+                                        </child>
+                                        <child>
+                                          <object class="AdwActionRow" id="row_language_restart">
+                                            <property name="visible">false</property>
+                                            <property name="title" translatable="yes">Language change saved</property>
+                                            <property name="subtitle" translatable="yes">The new language will be used next time you launch the application. Running servers are not restarted.</property>
+                                          </object>
+                                        </child>
                                         <child>
                                           <object class="AdwActionRow">
                                             <property name="title" translatable="yes">Date format</property>

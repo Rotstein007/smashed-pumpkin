@@ -1,0 +1,18 @@
+# Paths are relative to the source root. Include real sources, never generated C.
+resources/ui/window.ui
+resources/ui/window-windows.ui
+src/app.c
+src/build-metadata.c
+src/refresh-button.c
+src/tray.c
+src/window.c
+src/window-console.c
+src/window-dialogs.c
+src/window-lifecycle.c
+src/window-minimap.c
+src/window-networks.c
+src/window-player-data.c
+src/window-players.c
+src/window-server-actions.c
+src/window-startup.c
+src/window-worlds.c

@@ -61,7 +61,7 @@ jobs:
       matrix:
         include:
           - arch: x86_64
-            runner: ubuntu-latest
+            runner: ubuntu-24.04
           - arch: aarch64
             runner: ubuntu-24.04-arm
     steps:
@@ -72,9 +72,11 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            build-essential meson ninja-build pkg-config \
+            build-essential clang meson ninja-build pkg-config gettext locales \
             libadwaita-1-dev libsoup-3.0-dev libgtk-3-dev \
-            libayatana-appindicator3-dev libx11-dev
+            libayatana-appindicator3-dev libx11-dev libxtst-dev \
+            xvfb openbox xauth x11-utils
+          sudo locale-gen en_US.UTF-8
 
       - name: Configure
         run: meson setup buildDir --buildtype=release
@@ -85,12 +87,33 @@ jobs:
       - name: Test
         run: meson test -C buildDir --print-errorlogs
 
+      - name: Headless UI regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p buildDir/meson-logs/ui
+          for scope in all minimap worlds-map-access releases i18n-boundaries i18n-loading i18n-chinese language-settings; do
+            bash build-aux/test-window-ui-headless.sh buildDir "$scope" \
+              2>&1 | tee "buildDir/meson-logs/ui/${scope}.log"
+          done
+
+      - name: Address and undefined behavior sanitizers
+        if: matrix.arch == 'x86_64'
+        env:
+          CC: clang
+        run: |
+          meson setup build-sanitize --buildtype=debug \
+            -Db_sanitize=address,undefined -Db_lundef=false
+          meson test -C build-sanitize --print-errorlogs
+
       - name: Upload test logs
         if: failure()
         uses: actions/upload-artifact@v6
         with:
           name: linux-test-logs-${{ matrix.arch }}
-          path: buildDir/meson-logs/
+          path: |
+            buildDir/meson-logs/
+            build-sanitize/meson-logs/
           if-no-files-found: ignore
           retention-days: 14
 
@@ -113,9 +136,10 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            build-essential meson ninja-build pkg-config \
+            build-essential meson ninja-build pkg-config gettext locales \
             libadwaita-1-dev libsoup-3.0-dev libgtk-3-dev \
             libayatana-appindicator3-dev libx11-dev
+          sudo locale-gen en_US.UTF-8
 
       - name: Verify app integration with the source-built bridge
         env:

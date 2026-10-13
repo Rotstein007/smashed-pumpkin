@@ -1,0 +1,93 @@
+# Small gettext integration fixture. Not a production translation catalog.
+# Copyright (C) 2026 Smashed Pumpkin contributors
+# This file is distributed under the same license as Smashed Pumpkin.
+msgid ""
+msgstr ""
+"Project-Id-Version: smashed-pumpkin test fixture\n"
+"Report-Msgid-Bugs-To: https://github.com/Rotstein/SmashedPumpkin/issues\n"
+"POT-Creation-Date: 2026-10-12 00:00+0000\n"
+"PO-Revision-Date: 2026-10-12 00:00+0000\n"
+"Last-Translator: Smashed Pumpkin contributors\n"
+"Language-Team: Test fixtures\n"
+"Language: de\n"
+"X-Language-Name: Deutsch\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+msgid "Overview"
+msgstr "Übersicht"
+
+msgid "Install"
+msgstr "Installieren"
+
+msgid "Language"
+msgstr "Sprache"
+
+msgid "System language"
+msgstr "Systemsprache"
+
+msgid "Language change saved"
+msgstr "Sprachänderung gespeichert"
+
+msgid "Stop"
+msgstr "Anhalten"
+
+msgid "Stopping..."
+msgstr "Wird angehalten..."
+
+msgid "Force Stop..."
+msgstr "Beenden erzwingen..."
+
+msgid "Save data and stop the server"
+msgstr "Daten speichern und den Server anhalten"
+
+msgid "Force termination can lose unsaved data"
+msgstr "Erzwungenes Beenden kann ungespeicherte Daten verlieren"
+
+msgid "Update the installed server"
+msgstr "Den installierten Server aktualisieren"
+
+msgid "Download first, then safely stop, install and restart"
+msgstr "Zuerst herunterladen, dann sicher anhalten, installieren und neu starten"
+
+msgid "Installing..."
+msgstr "Wird installiert..."
+
+msgid "Not installed"
+msgstr "Nicht installiert"
+
+msgid "Installed"
+msgstr "Installiert"
+
+#, c-format
+msgid "Build %s"
+msgstr "Erstellt %s"
+
+#, c-format
+msgid "Stable %s"
+msgstr "Stabile Version %s"
+
+#, c-format
+msgid "Nightly %s"
+msgstr "Nächtlicher Build %s"
+
+msgid "Open"
+msgstr "Öffnen"
+
+msgid "Quit"
+msgstr "Beenden"
+
+msgid "_Quit"
+msgstr "_Beenden"
+
+msgctxt "connection-state"
+msgid "Open"
+msgstr "Offen"
+
+#, c-format
+msgid "%u server"
+msgid_plural "%u servers"
+msgstr[0] "%u Serverinstanz"
+msgstr[1] "%u Serverinstanzen"

@@ -34,7 +34,7 @@ static void report_failure(PumpkinServer *server, BridgeControl *control, const 
   g_autofree char *message = g_strdup_printf("[SMPK] Minimap Bridge: %s. %s", detail,
     control->enabled ? "Live players may require a server restart." :
     "The bridge is disabled for the next start; restart the server if it could not be unloaded.");
-  g_signal_emit_by_name(server, "log-line", message);
+  g_signal_emit_by_name(server, "console-notice", message);
 }
 
 static gboolean timed_out(gpointer data)

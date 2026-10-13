@@ -16,7 +16,7 @@ const char *pumpkin_server_store_get_base_dir(PumpkinServerStore *self);
 
 PumpkinServer *pumpkin_server_store_add(PumpkinServerStore *self, const char *name, GError **error);
 PumpkinServer *pumpkin_server_store_import(PumpkinServerStore *self, const char *dir, GError **error);
-void pumpkin_server_store_remove_selected(PumpkinServerStore *self);
+gboolean pumpkin_server_store_remove_selected(PumpkinServerStore *self, GError **error);
 gboolean pumpkin_server_store_remove_tree(const char *path, GError **error);
 
 G_END_DECLS

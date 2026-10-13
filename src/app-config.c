@@ -1,6 +1,7 @@
 #include "app-config.h"
 
 #include <glib/gstdio.h>
+#include "language.h"
 
 #if defined(G_OS_WIN32)
 #include <windows.h>
@@ -9,6 +10,9 @@
 
 struct _PumpkinConfig {
   char *path;
+  char *language;
+  GKeyFile *key;
+  GError *load_error;
   char *base_dir;
   char *default_download_url;
   PumpkinReleaseChannel release_channel;
@@ -83,9 +87,9 @@ config_path(void)
 PumpkinConfig *
 pumpkin_config_load(GError **error)
 {
-  (void)error;
   PumpkinConfig *config = g_new0(PumpkinConfig, 1);
   config->path = config_path();
+  config->language = g_strdup("en");
   config->base_dir = default_base_dir();
   config->default_download_url = pumpkin_release_default_url(PUMPKIN_RELEASE_NIGHTLY);
   config->use_cache = TRUE;
@@ -100,8 +104,23 @@ pumpkin_config_load(GError **error)
   config->date_format = PUMPKIN_DATE_FORMAT_DMY;
   config->time_format = PUMPKIN_TIME_FORMAT_24H;
 
-  g_autoptr(GKeyFile) key = g_key_file_new();
-  if (g_key_file_load_from_file(key, config->path, G_KEY_FILE_NONE, NULL)) {
+  config->key = g_key_file_new();
+  GKeyFile *key = config->key;
+  g_autoptr(GError) load_error = NULL;
+  if (g_key_file_load_from_file(key, config->path,
+                              G_KEY_FILE_KEEP_COMMENTS | G_KEY_FILE_KEEP_TRANSLATIONS, &load_error)) {
+    g_autoptr(GError) language_error = NULL;
+    g_autofree char *language = g_key_file_get_string(key, "behavior", "language", &language_error);
+    if (language_error != NULL &&
+        !g_error_matches(language_error, G_KEY_FILE_ERROR, G_KEY_FILE_ERROR_KEY_NOT_FOUND) &&
+        !g_error_matches(language_error, G_KEY_FILE_ERROR, G_KEY_FILE_ERROR_GROUP_NOT_FOUND)) {
+      config->load_error = g_error_copy(language_error);
+      if (error != NULL) g_propagate_error(error, g_error_copy(language_error));
+    }
+    if (language != NULL && *language != '\0') {
+      g_free(config->language);
+      config->language = g_strdup(language);
+    }
     g_autofree char *base = g_key_file_get_string(key, "storage", "base_dir", NULL);
     if (base != NULL && *base != '\0') {
       g_clear_pointer(&config->base_dir, g_free);
@@ -172,6 +191,11 @@ pumpkin_config_load(GError **error)
     }
   }
 
+  if (load_error != NULL && !g_error_matches(load_error, G_FILE_ERROR, G_FILE_ERROR_NOENT)) {
+    config->load_error = g_error_copy(load_error);
+    g_propagate_error(error, g_steal_pointer(&load_error));
+  }
+
   gboolean migrated = FALSE;
   gboolean should_save = FALSE;
   g_autofree char *legacy = legacy_base_dir();
@@ -209,7 +233,12 @@ pumpkin_config_load(GError **error)
 void
 pumpkin_config_save(PumpkinConfig *config, GError **error)
 {
-  g_autoptr(GKeyFile) key = g_key_file_new();
+  if (config->load_error != NULL) {
+    g_propagate_error(error, g_error_copy(config->load_error));
+    return; /* Never replace an unreadable/damaged configuration with defaults. */
+  }
+  GKeyFile *key = config->key;
+  g_key_file_set_string(key, "behavior", "language", config->language);
   g_key_file_set_string(key, "storage", "base_dir", config->base_dir);
   g_key_file_set_boolean(key, "storage", "use_cache", config->use_cache);
   g_key_file_set_string(key, "updates", "default_download_url", config->default_download_url);
@@ -231,9 +260,12 @@ pumpkin_config_save(PumpkinConfig *config, GError **error)
 
   g_autofree char *data = g_key_file_to_data(key, NULL, NULL);
   g_autofree char *dir = g_path_get_dirname(config->path);
-  g_mkdir_with_parents(dir, 0755);
+  /* Match the language preparation path: the config directory holds private
+   * settings and is created 0700; the file itself is always 0600. */
+  g_mkdir_with_parents(dir, 0700);
 
-  g_file_set_contents(config->path, data, -1, error);
+  g_file_set_contents_full(config->path, data, -1,
+                           G_FILE_SET_CONTENTS_CONSISTENT | G_FILE_SET_CONTENTS_DURABLE, 0600, error);
 }
 
 void
@@ -243,6 +275,9 @@ pumpkin_config_free(PumpkinConfig *config)
     return;
   }
   g_clear_pointer(&config->path, g_free);
+  g_clear_pointer(&config->language, g_free);
+  g_clear_pointer(&config->key, g_key_file_unref);
+  g_clear_error(&config->load_error);
   g_clear_pointer(&config->base_dir, g_free);
   g_clear_pointer(&config->default_download_url, g_free);
   g_clear_pointer(&config->start_monitor, g_free);
@@ -367,6 +402,39 @@ gboolean
 pumpkin_config_get_review_prompt_shown(PumpkinConfig *config)
 {
   return config->review_prompt_shown;
+}
+
+const char *
+pumpkin_config_get_language(PumpkinConfig *config)
+{
+  return config->language;
+}
+
+void
+pumpkin_config_set_language(PumpkinConfig *config, const char *language)
+{
+  if (language == NULL) return;
+  char *copy = g_strdup(pumpkin_language_is_valid(language) ? language : "en");
+  g_free(config->language);
+  config->language = copy;
+}
+
+gboolean
+pumpkin_config_save_language(PumpkinConfig *config, const char *language, GError **error)
+{
+  g_autofree char *previous = g_strdup(config->language);
+  pumpkin_config_set_language(config, language);
+  g_autoptr(GError) save_error = NULL;
+  pumpkin_config_save(config, &save_error);
+  if (save_error != NULL) {
+    /* Restore the raw value, even if it is an unsupported persisted ID. */
+    g_free(config->language);
+    config->language = g_steal_pointer(&previous);
+    g_key_file_set_string(config->key, "behavior", "language", config->language);
+    g_propagate_error(error, g_steal_pointer(&save_error));
+    return FALSE;
+  }
+  return TRUE;
 }
 
 PumpkinDateFormat

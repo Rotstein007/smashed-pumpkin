@@ -1,6 +1,7 @@
 #include "app.h"
 #include "app-config.h"
 #include "config.h"
+#include "i18n.h"
 #include "platform.h"
 #include "window.h"
 #include "window-startup.h"
@@ -152,6 +153,23 @@ destroy_tray_control_window(void)
 }
 #endif
 
+/* The hand-translated German Feedback/About branches predate gettext and stay
+ * until a German catalog replaces them. A session that already resolves to
+ * German always uses them; an English session keeps them for German systems
+ * so the legacy content is not lost before the gettext migration. */
+static gboolean
+prefers_german_legacy(void)
+{
+  const char *language = pumpkin_i18n_get_language();
+  if (language != NULL && g_str_has_prefix(language, "de")) return TRUE;
+  if (language == NULL || !g_str_equal(language, "en")) return FALSE;
+  const gchar *const *names = g_get_language_names();
+  for (guint i = 0; names != NULL && names[i] != NULL; i++) {
+    if (g_str_has_prefix(names[i], "de")) return TRUE;
+  }
+  return FALSE;
+}
+
 static void
 present_review_prompt(PumpkinApp *self, GtkWindow *win)
 {
@@ -161,21 +179,15 @@ present_review_prompt(PumpkinApp *self, GtkWindow *win)
 
   self->review_prompt_shown = TRUE;
 
-  gboolean is_de = FALSE;
-  const char *const *langs = g_get_language_names();
-  for (const char *const *lang = langs; lang != NULL && *lang != NULL; lang++) {
-    if (g_str_has_prefix(*lang, "de")) {
-      is_de = TRUE;
-      break;
-    }
-  }
+  /* Keep the existing German content, but respect the startup preference. */
+  gboolean is_de = prefers_german_legacy();
 
   AdwAlertDialog *alert = ADW_ALERT_DIALOG(adw_alert_dialog_new(
-    is_de ? "Gib uns Feedback" : "Share your feedback",
+    is_de ? "Gib uns Feedback" : _("Share your feedback"),
     is_de ? "Du kannst die App in GNOME Software oder KDE Discover bewerten."
-          : "You can rate the app in GNOME Software or KDE Discover."
+          : _("You can rate the app in GNOME Software or KDE Discover.")
   ));
-  adw_alert_dialog_add_response(alert, "close", is_de ? "Schließen" : "Close");
+  adw_alert_dialog_add_response(alert, "close", is_de ? "Schließen" : _("Close"));
   adw_alert_dialog_set_default_response(alert, "close");
   adw_alert_dialog_set_close_response(alert, "close");
 
@@ -316,7 +328,12 @@ spawn_tray_helper(void)
   char *arg = g_strdup_printf("--parent-pid=%d", parent_pid);
   gchar *argv[] = { tray_path, arg, NULL };
   GError *error = NULL;
-  if (!g_spawn_async(NULL, argv, NULL, G_SPAWN_SEARCH_PATH | G_SPAWN_DO_NOT_REAP_CHILD,
+  g_auto(GStrv) environment = g_get_environ();
+  const char *language = pumpkin_i18n_get_language();
+  if (language != NULL) {
+    environment = g_environ_setenv(environment, "SMASHED_PUMPKIN_SESSION_LANGUAGE", language, TRUE);
+  }
+  if (!g_spawn_async(NULL, argv, environment, G_SPAWN_SEARCH_PATH | G_SPAWN_DO_NOT_REAP_CHILD,
                      NULL, NULL, &tray_pid, &error)) {
     g_warning("Failed to start tray helper: %s", error->message);
     g_clear_error(&error);
@@ -444,17 +461,7 @@ pumpkin_app_about_action(GSimpleAction *action,
   GtkWindow *win = gtk_application_get_active_window(GTK_APPLICATION(app));
 
   AdwAboutDialog *about = ADW_ABOUT_DIALOG(adw_about_dialog_new());
-  gboolean is_de = FALSE;
-  const char *const *langs = g_get_language_names();
-  for (const char *const *lang = langs; lang != NULL && *lang != NULL; lang++) {
-    if (g_str_has_prefix(*lang, "de")) {
-      is_de = TRUE;
-      break;
-    }
-    if (g_str_has_prefix(*lang, "en") || g_str_equal(*lang, "C")) {
-      break;
-    }
-  }
+  gboolean is_de = prefers_german_legacy();
   adw_about_dialog_set_application_name(about, APP_NAME);
   adw_about_dialog_set_application_icon(about, APP_ID);
   adw_about_dialog_set_version(about, APP_VERSION);
@@ -469,25 +476,26 @@ pumpkin_app_about_action(GSimpleAction *action,
   } else {
     adw_about_dialog_set_release_notes(
       about,
-      "<ul>"
-      "<li>Interactive minimap with player markers, viewing direction, player tracking and world switching.</li>"
-      "<li>Pumpkin Marketplace: browse, install and update plugins.</li>"
-      "</ul>");
+      /* Translators: Keep the <ul> and <li> markup in these release notes. */
+      _("<ul>"
+        "<li>Interactive minimap with player markers, viewing direction, player tracking and world switching.</li>"
+        "<li>Pumpkin Marketplace: browse, install and update plugins.</li>"
+        "</ul>"));
   }
   adw_about_dialog_set_developer_name(about, "Rotstein");
   adw_about_dialog_set_comments(about,
                                 is_de
                                   ? "Dies ist ein unabhängiges Tool und steht nicht in Verbindung mit PumpkinMC. "
                                     "Die folgenden Links führen zum PumpkinMC-Projekt."
-                                  : "This is an independend tool and is not related to PumpkinMC. "
-                                    "The following links lead to the PumpkinMC project.");
+                                  : _("This is an independend tool and is not related to PumpkinMC. "
+                                      "The following links lead to the PumpkinMC project."));
   adw_about_dialog_set_support_url(about, "https://github.com/Rotstein007/smashed-pumpkin");
   adw_about_dialog_set_issue_url(about, "https://github.com/Rotstein007/smashed-pumpkin/issues");
   adw_about_dialog_set_license_type(about, GTK_LICENSE_GPL_3_0);
-  adw_about_dialog_add_link(about, is_de ? "Webseite" : "Website", "https://pumpkinmc.org/");
-  adw_about_dialog_add_link(about, is_de ? "Mitwirken" : "Contribute",
+  adw_about_dialog_add_link(about, is_de ? "Webseite" : _("Website"), "https://pumpkinmc.org/");
+  adw_about_dialog_add_link(about, is_de ? "Mitwirken" : _("Contribute"),
                             "https://docs.pumpkinmc.org/developer/contributing");
-  adw_about_dialog_add_link(about, "Issues", "https://github.com/Pumpkin-MC/Pumpkin/issues");
+  adw_about_dialog_add_link(about, is_de ? "Issues" : _("Issues"), "https://github.com/Pumpkin-MC/Pumpkin/issues");
   adw_dialog_present(ADW_DIALOG(about), GTK_WIDGET(win));
 }
 

@@ -48,7 +48,7 @@ typedef struct {
   PumpkinServer *server;
   char *url;
   char *build_id;
-  char *build_label;
+  char *build_label; /* Raw build metadata; must not be formatted or translated. */
   char *cache_path;
   gboolean restart_after_download;
   guint attempts;
@@ -195,7 +195,7 @@ struct _PumpkinWindow {
   GtkListBox *overview_network_list;
   char *latest_url;
   char *latest_build_id;
-  char *latest_build_label;
+  char *latest_build_label; /* Raw build metadata, never a translated/formatted label. */
   char *latest_error;
   GCancellable *latest_resolve_cancellable;
   guint latest_resolve_generation;
@@ -414,6 +414,9 @@ struct _PumpkinWindow {
   AdwComboRow *row_start_monitor;
   GPtrArray *startup_monitor_ids;
   GtkSwitch *switch_auto_start_servers;
+  AdwComboRow *row_language;
+  AdwActionRow *row_language_restart;
+  guint initial_language_index;
   GtkDropDown *drop_date_format;
   GtkDropDown *drop_time_format;
   GtkListBox *autostart_server_list;

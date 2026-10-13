@@ -1,4 +1,5 @@
 #include "window-server-actions.h"
+#include "i18n.h"
 #include "platform.h"
 
 static void
@@ -26,15 +27,15 @@ pumpkin_window_update_server_actions(PumpkinWindow *self, gboolean installed,
   set_action(self->btn_details_restart, available && running && !stopping,
              !busy && self->restart_delay_id == 0);
   gtk_button_set_label(self->btn_details_stop,
-                        force_available ? "Force Stop..." : (stopping ? "Stopping..." : "Stop"));
+                        force_available ? _("Force Stop...") : (stopping ? _("Stopping...") : _("Stop")));
   if (force_available) {
     gtk_widget_add_css_class(GTK_WIDGET(self->btn_details_stop), "destructive-action");
   } else {
     gtk_widget_remove_css_class(GTK_WIDGET(self->btn_details_stop), "destructive-action");
   }
   gtk_widget_set_tooltip_text(GTK_WIDGET(self->btn_details_stop),
-    force_available ? "Force termination can lose unsaved data" : "Save data and stop the server");
+    force_available ? _("Force termination can lose unsaved data") : _("Save data and stop the server"));
   gtk_widget_set_tooltip_text(GTK_WIDGET(self->btn_details_update),
-    running ? "Download first, then safely stop, install and restart" : "Update the installed server");
+    running ? _("Download first, then safely stop, install and restart") : _("Update the installed server"));
   gtk_widget_set_sensitive(GTK_WIDGET(self->btn_remove_server), !running && !busy);
 }

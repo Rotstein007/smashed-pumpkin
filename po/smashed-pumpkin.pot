@@ -1,0 +1,3608 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the smashed-pumpkin package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: smashed-pumpkin\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-13 00:47+0800\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"Language: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=INTEGER; plural=EXPRESSION;\n"
+
+#: resources/ui/window.ui:9 resources/ui/window-windows.ui:9
+msgid "_Info"
+msgstr ""
+
+#: resources/ui/window.ui:15 resources/ui/window-windows.ui:15
+msgid "_Quit"
+msgstr ""
+
+#: resources/ui/window.ui:54 resources/ui/window.ui:2399
+#: resources/ui/window.ui:2555 resources/ui/window-windows.ui:47
+#: resources/ui/window-windows.ui:2396 resources/ui/window-windows.ui:2552
+msgid "Back to Overview"
+msgstr ""
+
+#: resources/ui/window.ui:71 resources/ui/window-windows.ui:64
+#: src/window.c:8360 src/window.c:10152 src/window.c:11881
+msgid "No server selected"
+msgstr ""
+
+#: resources/ui/window.ui:90 resources/ui/window-windows.ui:82
+msgid "Support Pumpkin development"
+msgstr ""
+
+#: resources/ui/window.ui:104 resources/ui/window-windows.ui:96
+msgid "Sponsor Pumpkin"
+msgstr ""
+
+#: resources/ui/window.ui:122 resources/ui/window-windows.ui:119
+#: src/window.c:5688 src/window.c:11075
+msgid "Overview"
+msgstr ""
+
+#: resources/ui/window.ui:146 resources/ui/window-windows.ui:143
+msgid "Server Networks"
+msgstr ""
+
+#: resources/ui/window.ui:156 resources/ui/window-windows.ui:153
+#: src/window.c:7414
+msgid "Add Network"
+msgstr ""
+
+#: resources/ui/window.ui:175 resources/ui/window.ui:2539
+#: resources/ui/window-windows.ui:172 resources/ui/window-windows.ui:2536
+msgid "Servers"
+msgstr ""
+
+#: resources/ui/window.ui:190 resources/ui/window.ui:2566
+#: resources/ui/window-windows.ui:187 resources/ui/window-windows.ui:2563
+msgid "Add Server"
+msgstr ""
+
+#: resources/ui/window.ui:195 resources/ui/window.ui:2572
+#: resources/ui/window-windows.ui:192 resources/ui/window-windows.ui:2569
+msgid "Import Server"
+msgstr ""
+
+#: resources/ui/window.ui:219 resources/ui/window-windows.ui:216
+#: src/window.c:5702
+msgid "Details"
+msgstr ""
+
+#: resources/ui/window.ui:239 resources/ui/window-windows.ui:236
+msgid "Toggle navigation"
+msgstr ""
+
+#: resources/ui/window.ui:255 resources/ui/window-windows.ui:252
+#: src/window.c:3132
+msgid "Up to date"
+msgstr ""
+
+#: resources/ui/window.ui:264 resources/ui/window-windows.ui:261
+#: src/window.c:5409 src/window-minimap.c:1089
+msgid "Install"
+msgstr ""
+
+#: resources/ui/window.ui:273 resources/ui/window-windows.ui:270
+#: src/window.c:5409 src/window.c:7574 src/window.c:7585
+#: src/window-minimap.c:1089
+msgid "Update"
+msgstr ""
+
+#: resources/ui/window.ui:282 resources/ui/window-windows.ui:279
+msgid "Start"
+msgstr ""
+
+#: resources/ui/window.ui:291 resources/ui/window-windows.ui:288
+#: src/window-server-actions.c:30
+msgid "Stop"
+msgstr ""
+
+#: resources/ui/window.ui:300 resources/ui/window-windows.ui:297
+msgid "Restart"
+msgstr ""
+
+#: resources/ui/window.ui:355 resources/ui/window-windows.ui:352
+#: src/window.c:2149
+msgid "Console"
+msgstr ""
+
+#: resources/ui/window.ui:367 resources/ui/window-windows.ui:364
+#: src/window.c:9259
+msgid "System CPU: --"
+msgstr ""
+
+#: resources/ui/window.ui:373 resources/ui/window-windows.ui:370
+#: src/window.c:9252
+msgid "System RAM: --"
+msgstr ""
+
+#: resources/ui/window.ui:379 resources/ui/window-windows.ui:376
+#: src/window.c:9364
+msgid "Pumpkin CPU: --"
+msgstr ""
+
+#: resources/ui/window.ui:385 resources/ui/window-windows.ui:382
+#: src/window.c:9355
+msgid "Pumpkin RAM: --"
+msgstr ""
+
+#: resources/ui/window.ui:416 resources/ui/window-windows.ui:413
+msgid "Enter command…"
+msgstr ""
+
+#: resources/ui/window.ui:422 resources/ui/window-windows.ui:419
+msgid "Send command"
+msgstr ""
+
+#: resources/ui/window.ui:434 resources/ui/window-windows.ui:431
+msgid "Copy"
+msgstr ""
+
+#: resources/ui/window.ui:439 resources/ui/window-windows.ui:436
+msgid "Clear"
+msgstr ""
+
+#: resources/ui/window.ui:446 resources/ui/window-windows.ui:443
+msgid "Filter"
+msgstr ""
+
+#: resources/ui/window.ui:447 resources/ui/window-windows.ui:444
+msgid "Filter log levels"
+msgstr ""
+
+#: resources/ui/window.ui:461 resources/ui/window-windows.ui:458
+msgid "Console Levels"
+msgstr ""
+
+#: resources/ui/window.ui:468 resources/ui/window.ui:2220
+#: resources/ui/window-windows.ui:465 resources/ui/window-windows.ui:2217
+msgid "All"
+msgstr ""
+
+#: resources/ui/window.ui:474 resources/ui/window.ui:2239
+#: resources/ui/window-windows.ui:471 resources/ui/window-windows.ui:2236
+msgid "Trace"
+msgstr ""
+
+#: resources/ui/window.ui:480 resources/ui/window.ui:2238
+#: resources/ui/window-windows.ui:477 resources/ui/window-windows.ui:2235
+msgid "Debug"
+msgstr ""
+
+#: resources/ui/window.ui:486 resources/ui/window.ui:2235
+#: resources/ui/window-windows.ui:483 resources/ui/window-windows.ui:2232
+msgid "Info"
+msgstr ""
+
+#: resources/ui/window.ui:492 resources/ui/window.ui:2236
+#: resources/ui/window-windows.ui:489 resources/ui/window-windows.ui:2233
+msgid "Warn"
+msgstr ""
+
+#: resources/ui/window.ui:498 resources/ui/window.ui:2237
+#: resources/ui/window-windows.ui:495 resources/ui/window-windows.ui:2234
+msgid "Error"
+msgstr ""
+
+#: resources/ui/window.ui:504 resources/ui/window-windows.ui:501
+msgid "SMPK"
+msgstr ""
+
+#: resources/ui/window.ui:510 resources/ui/window-windows.ui:507
+msgid "Other"
+msgstr ""
+
+#: resources/ui/window.ui:523 resources/ui/window-windows.ui:520
+msgid "Server Folder"
+msgstr ""
+
+#: resources/ui/window.ui:537 resources/ui/window-windows.ui:534
+#: src/window.c:2149
+msgid "Stats"
+msgstr ""
+
+#: resources/ui/window.ui:560 resources/ui/window-windows.ui:557
+msgid "CPU"
+msgstr ""
+
+#: resources/ui/window.ui:609 resources/ui/window-windows.ui:606
+msgid "Memory"
+msgstr ""
+
+#: resources/ui/window.ui:646 resources/ui/window-windows.ui:643
+msgid "TPS"
+msgstr ""
+
+#: resources/ui/window.ui:684 resources/ui/window-windows.ui:681
+#: src/window.c:2149
+msgid "Plugins"
+msgstr ""
+
+#: resources/ui/window.ui:707 resources/ui/window-windows.ui:704
+msgid "Connect Marketplace account"
+msgstr ""
+
+#: resources/ui/window.ui:714 resources/ui/window-windows.ui:711
+msgid "Plugin Folder"
+msgstr ""
+
+#: resources/ui/window.ui:725 resources/ui/window.ui:945
+#: resources/ui/window-windows.ui:722 resources/ui/window-windows.ui:942
+#: src/window.c:4326
+msgid "Marketplace"
+msgstr ""
+
+#: resources/ui/window.ui:737 resources/ui/window-windows.ui:734
+msgid "Search marketplace plugins"
+msgstr ""
+
+#: resources/ui/window.ui:743 resources/ui/window-windows.ui:740
+msgid "Category"
+msgstr ""
+
+#: resources/ui/window.ui:751 resources/ui/window-windows.ui:748
+msgid "All types"
+msgstr ""
+
+#: resources/ui/window.ui:752 resources/ui/window-windows.ui:749
+#: src/window.c:4910
+msgid "Free"
+msgstr ""
+
+#: resources/ui/window.ui:753 resources/ui/window-windows.ui:750
+#: src/window.c:4911
+msgid "Paid"
+msgstr ""
+
+#: resources/ui/window.ui:754 resources/ui/window-windows.ui:751
+#: src/window.c:4912
+msgid "Adwall"
+msgstr ""
+
+#: resources/ui/window.ui:770 resources/ui/window.ui:1065
+#: resources/ui/window-windows.ui:767 resources/ui/window-windows.ui:1062
+msgid "Name"
+msgstr ""
+
+#: resources/ui/window.ui:771 resources/ui/window-windows.ui:768
+msgid "Downloads"
+msgstr ""
+
+#: resources/ui/window.ui:772 resources/ui/window-windows.ui:769
+msgid "Created"
+msgstr ""
+
+#: resources/ui/window.ui:773 resources/ui/window-windows.ui:770
+#: src/window.c:5710
+msgid "Updated"
+msgstr ""
+
+#: resources/ui/window.ui:783 resources/ui/window.ui:1074
+#: resources/ui/window-windows.ui:780 resources/ui/window-windows.ui:1071
+#: src/window.c:6071 src/window.c:10394 src/window.c:14384
+msgid "Sort descending"
+msgstr ""
+
+#: resources/ui/window.ui:790 resources/ui/window-windows.ui:787
+msgid "Refresh marketplace list"
+msgstr ""
+
+#: resources/ui/window.ui:801 resources/ui/window-windows.ui:798
+#: src/window.c:5945
+msgid "Loading marketplace plugins..."
+msgstr ""
+
+#: resources/ui/window.ui:813 resources/ui/window-windows.ui:810
+msgid "Reload"
+msgstr ""
+
+#: resources/ui/window.ui:814 resources/ui/window-windows.ui:811
+msgid "Retry loading Marketplace plugins"
+msgstr ""
+
+#: resources/ui/window.ui:819 resources/ui/window-windows.ui:816
+msgid "Previous"
+msgstr ""
+
+#: resources/ui/window.ui:825 resources/ui/window-windows.ui:822
+msgid "Next"
+msgstr ""
+
+#: resources/ui/window.ui:849 resources/ui/window-windows.ui:846
+#: src/window.c:2972 src/window.c:5335 src/window.c:5409
+msgid "Installed"
+msgstr ""
+
+#: resources/ui/window.ui:895 resources/ui/window-windows.ui:892
+msgid "Drop .so or .wasm plugins here"
+msgstr ""
+
+#: resources/ui/window.ui:911 resources/ui/window-windows.ui:908
+msgid "Import local plugins"
+msgstr ""
+
+#: resources/ui/window.ui:923 resources/ui/window-windows.ui:920
+msgid "Import"
+msgstr ""
+
+#: resources/ui/window.ui:933 resources/ui/window-windows.ui:930
+msgid "Browse plugin marketplace"
+msgstr ""
+
+#: resources/ui/window.ui:973 resources/ui/window.ui:1086
+#: resources/ui/window-windows.ui:970 resources/ui/window-windows.ui:1083
+msgid "All players"
+msgstr ""
+
+#: resources/ui/window.ui:989 resources/ui/window-windows.ui:986
+#: src/window.c:10243
+msgid "Your players"
+msgstr ""
+
+#: resources/ui/window.ui:996 resources/ui/window-windows.ui:993
+msgid "Player history and live connections"
+msgstr ""
+
+#: resources/ui/window.ui:1006 resources/ui/window-windows.ui:1003
+msgid "Open player data folder"
+msgstr ""
+
+#: resources/ui/window.ui:1025 resources/ui/window-windows.ui:1022
+#: src/window.c:10408
+msgid "Search players"
+msgstr ""
+
+#: resources/ui/window.ui:1031 resources/ui/window-windows.ui:1028
+msgid "Filter by connection status"
+msgstr ""
+
+#: resources/ui/window.ui:1035 resources/ui/window-windows.ui:1032
+msgid "Any status"
+msgstr ""
+
+#: resources/ui/window.ui:1036 resources/ui/window-windows.ui:1033
+#: src/window.c:9965 src/window.c:10991 src/window.c:11058
+msgid "Online"
+msgstr ""
+
+#: resources/ui/window.ui:1037 resources/ui/window-windows.ui:1034
+#: src/window.c:9965 src/window.c:10991 src/window.c:11058
+msgid "Offline"
+msgstr ""
+
+#: resources/ui/window.ui:1046 resources/ui/window-windows.ui:1043
+msgid "Clear search and connection-status filter"
+msgstr ""
+
+#: resources/ui/window.ui:1058 resources/ui/window-windows.ui:1055
+msgid "Sort players"
+msgstr ""
+
+#: resources/ui/window.ui:1062 resources/ui/window-windows.ui:1059
+#: src/window.c:11084
+msgid "Last seen"
+msgstr ""
+
+#: resources/ui/window.ui:1063 resources/ui/window-windows.ui:1060
+#: src/window.c:11083
+msgid "Playtime"
+msgstr ""
+
+#: resources/ui/window.ui:1064 resources/ui/window-windows.ui:1061
+#: src/window.c:11085
+msgid "Recorded since"
+msgstr ""
+
+#: resources/ui/window.ui:1111 resources/ui/window-windows.ui:1108
+#: src/window.c:10243
+msgid "Whitelist"
+msgstr ""
+
+#: resources/ui/window.ui:1137 resources/ui/window-windows.ui:1134
+#: src/window.c:10243
+msgid "Bans"
+msgstr ""
+
+#: resources/ui/window.ui:1150 resources/ui/window-windows.ui:1147
+msgid "Account bans"
+msgstr ""
+
+#: resources/ui/window.ui:1170 resources/ui/window-windows.ui:1167
+msgid "IP bans"
+msgstr ""
+
+#: resources/ui/window.ui:1177 resources/ui/window-windows.ui:1174
+msgid "Address blocks are independent of player connection status."
+msgstr ""
+
+#: resources/ui/window.ui:1208 resources/ui/window-windows.ui:1205
+#: src/window.c:2149 src/window-worlds.c:482
+msgid "Worlds"
+msgstr ""
+
+#: resources/ui/window.ui:1223 resources/ui/window-windows.ui:1220
+#: src/window.c:2149
+msgid "Settings"
+msgstr ""
+
+#: resources/ui/window.ui:1240 resources/ui/window-windows.ui:1237
+msgid "Application"
+msgstr ""
+
+#: resources/ui/window.ui:1261 resources/ui/window-windows.ui:1258
+msgid "Application startup"
+msgstr ""
+
+#: resources/ui/window.ui:1264 resources/ui/window-windows.ui:1261
+msgid "Start with system"
+msgstr ""
+
+#: resources/ui/window.ui:1265 resources/ui/window-windows.ui:1262
+msgid "Launch the app automatically when you log in."
+msgstr ""
+
+#: resources/ui/window.ui:1276 resources/ui/window-windows.ui:1273
+msgid "Start minimized"
+msgstr ""
+
+#: resources/ui/window.ui:1277 resources/ui/window-windows.ui:1274
+msgid "Start hidden in the system tray."
+msgstr ""
+
+#: resources/ui/window.ui:1290 resources/ui/window-windows.ui:1287
+msgid "Window at startup"
+msgstr ""
+
+#: resources/ui/window.ui:1291 resources/ui/window-windows.ui:1288
+msgid "Applies on the next launch."
+msgstr ""
+
+#: resources/ui/window.ui:1294 resources/ui/window-windows.ui:1291
+msgid "Expand on startup"
+msgstr ""
+
+#: resources/ui/window.ui:1295 resources/ui/window-windows.ui:1292
+msgid "Start maximized or in borderless fullscreen."
+msgstr ""
+
+#: resources/ui/window.ui:1300 resources/ui/window-windows.ui:1297
+msgid "Window mode"
+msgstr ""
+
+#: resources/ui/window.ui:1301 resources/ui/window-windows.ui:1298
+msgid "In fullscreen, press F11 to return to a window."
+msgstr ""
+
+#: resources/ui/window.ui:1305 resources/ui/window-windows.ui:1302
+msgid "Maximized window"
+msgstr ""
+
+#: resources/ui/window.ui:1306 resources/ui/window-windows.ui:1303
+msgid "Borderless fullscreen"
+msgstr ""
+
+#: resources/ui/window.ui:1314 resources/ui/window-windows.ui:1311
+#: src/window.c:737 src/window.c:738
+msgid "Monitor"
+msgstr ""
+
+#: resources/ui/window.ui:1321 resources/ui/window-windows.ui:1318
+msgid "Display and time"
+msgstr ""
+
+#: resources/ui/window.ui:1324 resources/ui/window-windows.ui:1321
+msgid "Language"
+msgstr ""
+
+#: resources/ui/window.ui:1325 resources/ui/window-windows.ui:1322
+msgid ""
+"Save to apply on the next application launch. Missing translations use "
+"English."
+msgstr ""
+
+#: resources/ui/window.ui:1331 resources/ui/window-windows.ui:1328
+msgid "Language change saved"
+msgstr ""
+
+#: resources/ui/window.ui:1332 resources/ui/window-windows.ui:1329
+msgid ""
+"The new language will be used next time you launch the application. Running "
+"servers are not restarted."
+msgstr ""
+
+#: resources/ui/window.ui:1337 resources/ui/window-windows.ui:1334
+msgid "Date format"
+msgstr ""
+
+#: resources/ui/window.ui:1338 resources/ui/window-windows.ui:1335
+msgid "Used in logs, player information and build labels."
+msgstr ""
+
+#: resources/ui/window.ui:1346 resources/ui/window-windows.ui:1343
+msgid "YYYY-MM-DD"
+msgstr ""
+
+#: resources/ui/window.ui:1347 resources/ui/window-windows.ui:1344
+msgid "DD.MM.YYYY"
+msgstr ""
+
+#: resources/ui/window.ui:1348 resources/ui/window-windows.ui:1345
+msgid "MM/DD/YYYY"
+msgstr ""
+
+#: resources/ui/window.ui:1358 resources/ui/window-windows.ui:1355
+msgid "Time format"
+msgstr ""
+
+#: resources/ui/window.ui:1359 resources/ui/window-windows.ui:1356
+msgid "Uses your local system timezone."
+msgstr ""
+
+#: resources/ui/window.ui:1367 resources/ui/window-windows.ui:1364
+msgid "24-hour"
+msgstr ""
+
+#: resources/ui/window.ui:1368 resources/ui/window-windows.ui:1365
+msgid "12-hour"
+msgstr ""
+
+#: resources/ui/window.ui:1380 resources/ui/window-windows.ui:1377
+msgid "Server startup"
+msgstr ""
+
+#: resources/ui/window.ui:1383 resources/ui/window-windows.ui:1380
+msgid "Auto-start servers on launch"
+msgstr ""
+
+#: resources/ui/window.ui:1384 resources/ui/window-windows.ui:1381
+msgid "Start the selected servers after their configured delay."
+msgstr ""
+
+#: resources/ui/window.ui:1404 resources/ui/window-windows.ui:1401
+msgid "Add server to auto-start list"
+msgstr ""
+
+#: resources/ui/window.ui:1410 resources/ui/window.ui:2483
+#: resources/ui/window-windows.ui:1407 resources/ui/window-windows.ui:2480
+#: src/window.c:7727
+msgid "Add server"
+msgstr ""
+
+#: resources/ui/window.ui:1426 resources/ui/window-windows.ui:1423
+msgid "Background and overview"
+msgstr ""
+
+#: resources/ui/window.ui:1429 resources/ui/window-windows.ui:1426
+msgid "Keep running in background"
+msgstr ""
+
+#: resources/ui/window.ui:1430 resources/ui/window-windows.ui:1427
+msgid "Closing the window keeps the app and servers running."
+msgstr ""
+
+#: resources/ui/window.ui:1441 resources/ui/window-windows.ui:1438
+msgid "Show detailed server cards"
+msgstr ""
+
+#: resources/ui/window.ui:1442 resources/ui/window-windows.ui:1439
+msgid "Show build, players, size, ports and status in the overview."
+msgstr ""
+
+#: resources/ui/window.ui:1455 resources/ui/window-windows.ui:1452
+#: src/window.c:2149 src/window-minimap.c:1471
+msgid "Minimap"
+msgstr ""
+
+#: resources/ui/window.ui:1456 resources/ui/window-windows.ui:1453
+msgid "Optional world map and local player telemetry. Applies immediately."
+msgstr ""
+
+#: resources/ui/window.ui:1461 resources/ui/window-windows.ui:1458
+msgid "Downloads and storage"
+msgstr ""
+
+#: resources/ui/window.ui:1464 resources/ui/window-windows.ui:1461
+msgid "Pumpkin release channel"
+msgstr ""
+
+#: resources/ui/window.ui:1465 resources/ui/window-windows.ui:1462
+msgid ""
+"Applies to future installs and updates. Back up worlds before changing "
+"channels; plugin compatibility may differ."
+msgstr ""
+
+#: resources/ui/window.ui:1469 resources/ui/window-windows.ui:1466
+msgid "Nightly"
+msgstr ""
+
+#: resources/ui/window.ui:1470 resources/ui/window-windows.ui:1467
+msgid "Stable"
+msgstr ""
+
+#: resources/ui/window.ui:1478 resources/ui/window-windows.ui:1475
+msgid "Use local download cache"
+msgstr ""
+
+#: resources/ui/window.ui:1479 resources/ui/window-windows.ui:1476
+msgid "Reuse downloaded Pumpkin binaries across servers."
+msgstr ""
+
+#: resources/ui/window.ui:1490 resources/ui/window-windows.ui:1487
+msgid "Cached downloads"
+msgstr ""
+
+#: resources/ui/window.ui:1491 resources/ui/window-windows.ui:1488
+msgid "Installed servers are not removed."
+msgstr ""
+
+#: resources/ui/window.ui:1494 resources/ui/window-windows.ui:1491
+#: src/window.c:1152
+msgid "Clear Cache"
+msgstr ""
+
+#: resources/ui/window.ui:1496 resources/ui/window-windows.ui:1493
+msgid "Delete all cached Pumpkin binaries"
+msgstr ""
+
+#: resources/ui/window.ui:1505 resources/ui/window-windows.ui:1502
+msgid "Advanced"
+msgstr ""
+
+#: resources/ui/window.ui:1508 resources/ui/window-windows.ui:1505
+msgid "Download URL"
+msgstr ""
+
+#: resources/ui/window.ui:1509 resources/ui/window-windows.ui:1506
+msgid ""
+"Leave empty to use the selected release channel. Custom URLs override the "
+"channel and are not checked for updates."
+msgstr ""
+
+#: resources/ui/window.ui:1514 resources/ui/window-windows.ui:1511
+msgid "Pumpkin download URL (binary)"
+msgstr ""
+
+#: resources/ui/window.ui:1528 resources/ui/window-windows.ui:1525
+msgid "Save Application Settings"
+msgstr ""
+
+#: resources/ui/window.ui:1534 resources/ui/window.ui:2181
+#: resources/ui/window-windows.ui:1531 resources/ui/window-windows.ui:2178
+msgid "Reset to Defaults"
+msgstr ""
+
+#: resources/ui/window.ui:1551 resources/ui/window-windows.ui:1548
+msgid "Server"
+msgstr ""
+
+#: resources/ui/window.ui:1573 resources/ui/window-windows.ui:1570
+msgid "Server Settings"
+msgstr ""
+
+#: resources/ui/window.ui:1581 resources/ui/window-windows.ui:1578
+msgid "Identity & Install"
+msgstr ""
+
+#: resources/ui/window.ui:1588 resources/ui/window-windows.ui:1585
+msgid "Server name (shown in the app)"
+msgstr ""
+
+#: resources/ui/window.ui:1596 resources/ui/window-windows.ui:1593
+#: src/window.c:12798
+msgid "Choose Server Icon"
+msgstr ""
+
+#: resources/ui/window.ui:1601 resources/ui/window-windows.ui:1598
+msgid "Reset Icon"
+msgstr ""
+
+#: resources/ui/window.ui:1608 resources/ui/window-windows.ui:1605
+msgid ""
+"Minecraft uses a 64×64 PNG named server-icon.png in the server root. The "
+"image will be resized and saved there."
+msgstr ""
+
+#: resources/ui/window.ui:1620 resources/ui/window-windows.ui:1617
+msgid "Networking"
+msgstr ""
+
+#: resources/ui/window.ui:1634 resources/ui/window-windows.ui:1631
+msgid "Java Port"
+msgstr ""
+
+#: resources/ui/window.ui:1641 resources/ui/window.ui:1661
+#: resources/ui/window-windows.ui:1638 resources/ui/window-windows.ui:1658
+msgid "Port"
+msgstr ""
+
+#: resources/ui/window.ui:1654 resources/ui/window-windows.ui:1651
+msgid "Bedrock Port"
+msgstr ""
+
+#: resources/ui/window.ui:1672 resources/ui/window.ui:1681
+#: resources/ui/window.ui:2153 resources/ui/window-windows.ui:1669
+#: resources/ui/window-windows.ui:1678 resources/ui/window-windows.ui:2150
+#: src/window.c:1705 src/window.c:1717 src/window.c:1756
+msgid "Port must be 1–65535."
+msgstr ""
+
+#: resources/ui/window.ui:1690 resources/ui/window-windows.ui:1687
+msgid "Maximum player count."
+msgstr ""
+
+#: resources/ui/window.ui:1698 resources/ui/window-windows.ui:1695
+msgid "Max players"
+msgstr ""
+
+#: resources/ui/window.ui:1706 resources/ui/window-windows.ui:1703
+#: src/window.c:1729
+msgid "Max players must be at least 1."
+msgstr ""
+
+#: resources/ui/window.ui:1715 resources/ui/window-windows.ui:1712
+msgid "Update rate for stats and player polling (milliseconds)."
+msgstr ""
+
+#: resources/ui/window.ui:1723 resources/ui/window-windows.ui:1720
+msgid "Update rate (ms)"
+msgstr ""
+
+#: resources/ui/window.ui:1731 resources/ui/window-windows.ui:1728
+#: src/window.c:1744
+msgid "Update rate must be between 2ms and 2000ms."
+msgstr ""
+
+#: resources/ui/window.ui:1748 resources/ui/window-windows.ui:1745
+msgid "Domains & DDNS"
+msgstr ""
+
+#: resources/ui/window.ui:1755 resources/ui/window-windows.ui:1752
+msgid ""
+"Set hostnames for this server and optionally keep a Cloudflare DNS record "
+"updated when your home IP changes."
+msgstr ""
+
+#: resources/ui/window.ui:1763 resources/ui/window-windows.ui:1760
+msgid "Domain or subdomain (e.g. pumpkin.rotstein.dev)"
+msgstr ""
+
+#: resources/ui/window.ui:1771 resources/ui/window-windows.ui:1768
+msgid "Dynamic DNS (Cloudflare)"
+msgstr ""
+
+#: resources/ui/window.ui:1781 resources/ui/window-windows.ui:1778
+msgid "Enable DDNS"
+msgstr ""
+
+#: resources/ui/window.ui:1795 resources/ui/window-windows.ui:1792
+msgid "Cloudflare Zone ID (required)"
+msgstr ""
+
+#: resources/ui/window.ui:1800 resources/ui/window-windows.ui:1797
+msgid "Cloudflare API Token (required)"
+msgstr ""
+
+#: resources/ui/window.ui:1805 resources/ui/window-windows.ui:1802
+msgid "Cloudflare Record ID (optional, auto-discovered when empty)"
+msgstr ""
+
+#: resources/ui/window.ui:1813 resources/ui/window-windows.ui:1810
+msgid "Proxied (orange cloud)"
+msgstr ""
+
+#: resources/ui/window.ui:1830 resources/ui/window-windows.ui:1827
+msgid "Interval (30-86400 seconds)"
+msgstr ""
+
+#: resources/ui/window.ui:1850 resources/ui/window-windows.ui:1847
+msgid "Sync now"
+msgstr ""
+
+#: resources/ui/window.ui:1857 resources/ui/window-windows.ui:1854
+#: src/window.c:11744 src/window.c:11795 src/window.c:11869
+msgid "DDNS disabled."
+msgstr ""
+
+#: resources/ui/window.ui:1869 resources/ui/window-windows.ui:1866
+msgid "DNS setup guide"
+msgstr ""
+
+#: resources/ui/window.ui:1876 resources/ui/window-windows.ui:1873
+#: src/window.c:11766
+msgid "Target: your-public-ip (Java:25565, Bedrock:19132)"
+msgstr ""
+
+#: resources/ui/window.ui:1882 resources/ui/window-windows.ui:1879
+msgid "1) Create one A/AAAA record for your domain to your public server IP."
+msgstr ""
+
+#: resources/ui/window.ui:1890 resources/ui/window-windows.ui:1887
+msgid ""
+"2) If Java does not use port 25565, add an SRV record: _minecraft._tcp."
+"<domain> with your Java port."
+msgstr ""
+
+#: resources/ui/window.ui:1898 resources/ui/window-windows.ui:1895
+msgid ""
+"3) For Bedrock on the same domain, add an SRV record: _minecraft._udp."
+"<domain> with your Bedrock port if needed."
+msgstr ""
+
+#: resources/ui/window.ui:1906 resources/ui/window-windows.ui:1903
+msgid "Save Domain & DDNS Settings"
+msgstr ""
+
+#: resources/ui/window.ui:1919 resources/ui/window-windows.ui:1916
+msgid "Performance Limits"
+msgstr ""
+
+#: resources/ui/window.ui:1929 resources/ui/window-windows.ui:1926
+msgid "Max CPU cores"
+msgstr ""
+
+#: resources/ui/window.ui:1934 resources/ui/window-windows.ui:1931
+msgid "Max RAM (MB)"
+msgstr ""
+
+#: resources/ui/window.ui:1941 resources/ui/window-windows.ui:1938
+msgid "Max CPU cores available: --."
+msgstr ""
+
+#: resources/ui/window.ui:1950 resources/ui/window-windows.ui:1947
+msgid "Max RAM available: -- MB."
+msgstr ""
+
+#: resources/ui/window.ui:1959 resources/ui/window-windows.ui:1956
+#: src/window.c:12002
+msgid "Max available: -- cores, -- MB RAM."
+msgstr ""
+
+#: resources/ui/window.ui:1967 resources/ui/window-windows.ui:1964
+msgid "Recommendation: set at least 5 GB RAM."
+msgstr ""
+
+#: resources/ui/window.ui:1979 resources/ui/window-windows.ui:1976
+msgid "Reliability"
+msgstr ""
+
+#: resources/ui/window.ui:1989 resources/ui/window-windows.ui:1986
+msgid "Auto restart"
+msgstr ""
+
+#: resources/ui/window.ui:2006 resources/ui/window-windows.ui:2003
+msgid "Delay (ms)"
+msgstr ""
+
+#: resources/ui/window.ui:2014 resources/ui/window-windows.ui:2011
+msgid "ms"
+msgstr ""
+
+#: resources/ui/window.ui:2022 resources/ui/window-windows.ui:2019
+msgid "The server will restart automatically after this delay if it crashes."
+msgstr ""
+
+#: resources/ui/window.ui:2033 resources/ui/window-windows.ui:2030
+msgid "Auto Update"
+msgstr ""
+
+#: resources/ui/window.ui:2043 resources/ui/window-windows.ui:2040
+msgid "Install updates automatically"
+msgstr ""
+
+#: resources/ui/window.ui:2060 resources/ui/window-windows.ui:2057
+msgid "Use scheduled time"
+msgstr ""
+
+#: resources/ui/window.ui:2077 resources/ui/window-windows.ui:2074
+msgid "HH:MM (24h)"
+msgstr ""
+
+#: resources/ui/window.ui:2085 resources/ui/window-windows.ui:2082
+msgid "Local time"
+msgstr ""
+
+#: resources/ui/window.ui:2093 resources/ui/window-windows.ui:2090
+#: src/window.c:1772
+msgid "Use HH:MM (24h), e.g. 01:00."
+msgstr ""
+
+#: resources/ui/window.ui:2102 resources/ui/window-windows.ui:2099
+msgid ""
+"When enabled, the server announces a 10s update restart and then counts down "
+"3..2..1.. before restarting."
+msgstr ""
+
+#: resources/ui/window.ui:2114 resources/ui/window-windows.ui:2111
+msgid "RCON"
+msgstr ""
+
+#: resources/ui/window.ui:2121 resources/ui/window-windows.ui:2118
+msgid ""
+"RCON (Remote Console) is optional. Use it if you want to control the server "
+"from admin tools or scripts."
+msgstr ""
+
+#: resources/ui/window.ui:2132 resources/ui/window-windows.ui:2129
+msgid "RCON host"
+msgstr ""
+
+#: resources/ui/window.ui:2137 resources/ui/window-windows.ui:2134
+msgid "RCON port"
+msgstr ""
+
+#: resources/ui/window.ui:2144 resources/ui/window-windows.ui:2141
+#: src/window.c:1763
+msgid "Enter a valid IP address."
+msgstr ""
+
+#: resources/ui/window.ui:2162 resources/ui/window-windows.ui:2159
+msgid "RCON password (keep secret)"
+msgstr ""
+
+#: resources/ui/window.ui:2175 resources/ui/window-windows.ui:2172
+msgid "Save Server Settings"
+msgstr ""
+
+#: resources/ui/window.ui:2205 resources/ui/window-windows.ui:2202
+#: src/window.c:2149
+msgid "Logs"
+msgstr ""
+
+#: resources/ui/window.ui:2221 resources/ui/window-windows.ui:2218
+msgid "Today"
+msgstr ""
+
+#: resources/ui/window.ui:2222 resources/ui/window-windows.ui:2219
+msgid "This week"
+msgstr ""
+
+#: resources/ui/window.ui:2234 resources/ui/window-windows.ui:2231
+msgid "All levels"
+msgstr ""
+
+#: resources/ui/window.ui:2247 resources/ui/window-windows.ui:2244
+msgid "Search sessions…"
+msgstr ""
+
+#: resources/ui/window.ui:2254 resources/ui/window-windows.ui:2251
+msgid "Refresh sessions"
+msgstr ""
+
+#: resources/ui/window.ui:2274 resources/ui/window-windows.ui:2271
+msgid "Sessions"
+msgstr ""
+
+#: resources/ui/window.ui:2311 resources/ui/window-windows.ui:2308
+#: src/window.c:13627
+msgid "Session archive"
+msgstr ""
+
+#: resources/ui/window.ui:2319 resources/ui/window-windows.ui:2316
+msgid "Select a server session to view its log"
+msgstr ""
+
+#: resources/ui/window.ui:2355 resources/ui/window-windows.ui:2352
+msgid "Open Logs Folder"
+msgstr ""
+
+#: resources/ui/window.ui:2361 resources/ui/window-windows.ui:2358
+#: src/window.c:14039
+msgid "Clear All Logs"
+msgstr ""
+
+#: resources/ui/window.ui:2383 resources/ui/window-windows.ui:2380
+msgid "Network Details"
+msgstr ""
+
+#: resources/ui/window.ui:2418 resources/ui/window-windows.ui:2415
+msgid "No network selected"
+msgstr ""
+
+#: resources/ui/window.ui:2455 resources/ui/window-windows.ui:2452
+msgid "Start all"
+msgstr ""
+
+#: resources/ui/window.ui:2462 resources/ui/window-windows.ui:2459
+msgid "Stop all"
+msgstr ""
+
+#: resources/ui/window.ui:2469 resources/ui/window-windows.ui:2466
+msgid "Update all"
+msgstr ""
+
+#: resources/ui/window.ui:2476 resources/ui/window-windows.ui:2473
+msgid "Install all"
+msgstr ""
+
+#: resources/ui/window.ui:2490 resources/ui/window-windows.ui:2487
+msgid "Set icon"
+msgstr ""
+
+#: resources/ui/window.ui:2497 resources/ui/window-windows.ui:2494
+msgid "Reset icon"
+msgstr ""
+
+#: resources/ui/window.ui:2504 resources/ui/window-windows.ui:2501
+msgid "Set proxy"
+msgstr ""
+
+#: resources/ui/window.ui:2511 resources/ui/window-windows.ui:2508
+msgid "Clear proxy"
+msgstr ""
+
+#: resources/ui/window.ui:2579 resources/ui/window-windows.ui:2576
+#: src/window.c:7370 src/window.c:13390
+msgid "Delete"
+msgstr ""
+
+#: src/app.c:169
+msgid "Share your feedback"
+msgstr ""
+
+#: src/app.c:171
+msgid "You can rate the app in GNOME Software or KDE Discover."
+msgstr ""
+
+#: src/app.c:173 src/window.c:5716 src/window.c:6199 src/window.c:7120
+msgid "Close"
+msgstr ""
+
+#. Translators: Keep the <ul> and <li> markup in these release notes.
+#: src/app.c:463
+msgid ""
+"<ul><li>Interactive minimap with player markers, viewing direction, player "
+"tracking and world switching.</li><li>Pumpkin Marketplace: browse, install "
+"and update plugins.</li></ul>"
+msgstr ""
+
+#: src/app.c:473
+msgid ""
+"This is an independend tool and is not related to PumpkinMC. The following "
+"links lead to the PumpkinMC project."
+msgstr ""
+
+#: src/app.c:478
+msgid "Website"
+msgstr ""
+
+#: src/app.c:479
+msgid "Contribute"
+msgstr ""
+
+#: src/app.c:481
+msgid "Issues"
+msgstr ""
+
+#. Translators: %s is a display date/time, not persisted build metadata.
+#. Translators: %s is an unmodified build identifier.
+#: src/build-metadata.c:88 src/window.c:2969
+#, c-format
+msgid "Build %s"
+msgstr ""
+
+#. Translators: %s is an unmodified version identifier.
+#: src/build-metadata.c:92
+#, c-format
+msgid "Stable %s"
+msgstr ""
+
+#. Translators: %s is an unmodified nightly build identifier.
+#: src/build-metadata.c:96
+#, c-format
+msgid "Nightly %s"
+msgstr ""
+
+#: src/tray.c:100
+msgid "Open"
+msgstr ""
+
+#: src/tray.c:101
+msgid "Quit"
+msgstr ""
+
+#: src/window.c:146
+msgid "Android preview"
+msgstr ""
+
+#: src/window.c:148
+msgid ""
+"This first Android port currently focuses on GTK UI bring-up. Local Pumpkin "
+"hosting, server installs and server imports are intentionally disabled for "
+"now."
+msgstr ""
+
+#: src/window.c:604 src/window.c:612
+msgid "s"
+msgstr ""
+
+#: src/window.c:671
+msgid "No more servers available"
+msgstr ""
+
+#: src/window.c:721
+msgid "System default"
+msgstr ""
+
+#: src/window.c:745
+msgid "Saved monitor (disconnected)"
+msgstr ""
+
+#: src/window.c:777
+msgid ""
+"For maximized windows, your desktop chooses the monitor. Select fullscreen "
+"to choose one."
+msgstr ""
+
+#: src/window.c:778
+msgid "If the selected monitor is disconnected, the system default is used."
+msgstr ""
+
+#: src/window.c:808 src/window.c:810
+msgid "Failed to save general settings"
+msgstr ""
+
+#: src/window.c:818
+msgid "Language saved. It will take effect on the next application launch."
+msgstr ""
+
+#: src/window.c:887 src/window.c:888
+msgid "General settings saved"
+msgstr ""
+
+#: src/window.c:962
+msgid "Reset General Settings?"
+msgstr ""
+
+#: src/window.c:963
+msgid ""
+"All general settings will be reset to their default values. This cannot be "
+"undone."
+msgstr ""
+
+#: src/window.c:965 src/window.c:1030 src/window.c:1151 src/window.c:1940
+#: src/window.c:2043 src/window.c:4329 src/window.c:7339 src/window.c:7369
+#: src/window.c:7416 src/window.c:7906 src/window.c:10561 src/window.c:10600
+#: src/window.c:10637 src/window.c:10898 src/window.c:12384 src/window.c:12580
+#: src/window.c:13389 src/window.c:13487 src/window.c:14038
+#: src/window-minimap.c:921 src/window-minimap.c:1089 src/window-minimap.c:1149
+#: src/window-minimap.c:1304 src/window-worlds.c:200
+msgid "Cancel"
+msgstr ""
+
+#: src/window.c:966 src/window.c:1031
+msgid "Reset"
+msgstr ""
+
+#: src/window.c:1027
+msgid "Reset Server Settings?"
+msgstr ""
+
+#: src/window.c:1028
+msgid ""
+"All settings for this server will be reset to their default values. This "
+"cannot be undone."
+msgstr ""
+
+#: src/window.c:1123
+msgid "Cache directory does not exist."
+msgstr ""
+
+#: src/window.c:1124
+msgid "Cache is already empty"
+msgstr ""
+
+#: src/window.c:1133
+#, c-format
+msgid "Cache cleared (%.1f MB freed)"
+msgstr ""
+
+#: src/window.c:1135
+#, c-format
+msgid "Cache cleared (%.1f KB freed)"
+msgstr ""
+
+#: src/window.c:1137
+#, c-format
+msgid "Cache cleared (%d bytes freed)"
+msgstr ""
+
+#: src/window.c:1148
+msgid "Clear Download Cache?"
+msgstr ""
+
+#: src/window.c:1149
+msgid ""
+"All cached Pumpkin binaries will be deleted. Future installs will need to "
+"download again."
+msgstr ""
+
+#: src/window.c:1679 src/window.c:1689 src/window.c:1699 src/window.c:1711
+#: src/window.c:1723 src/window.c:1735 src/window.c:1750
+msgid "No negative values allowed."
+msgstr ""
+
+#: src/window.c:1683
+msgid "Above available cores."
+msgstr ""
+
+#: src/window.c:1693
+msgid "Above available RAM."
+msgstr ""
+
+#: src/window.c:1701 src/window.c:1713 src/window.c:1752
+msgid "Port must be a number."
+msgstr ""
+
+#: src/window.c:1725
+msgid "Max players must be a number."
+msgstr ""
+
+#: src/window.c:1737
+msgid "Update rate must be a number."
+msgstr ""
+
+#: src/window.c:1741
+msgid "Update rate is required."
+msgstr ""
+
+#: src/window.c:1832 src/window.c:1841 src/window.c:1868
+msgid "Port is invalid."
+msgstr ""
+
+#: src/window.c:1850
+msgid "Max players is invalid."
+msgstr ""
+
+#: src/window.c:1859
+msgid "Update rate is invalid."
+msgstr ""
+
+#: src/window.c:1877
+msgid "Host is invalid."
+msgstr ""
+
+#: src/window.c:1886
+msgid "Time is invalid."
+msgstr ""
+
+#: src/window.c:1898
+#, c-format
+msgid "Max CPU cores available: %d."
+msgstr ""
+
+#: src/window.c:1911
+#, c-format
+msgid "Max RAM available: %d MB."
+msgstr ""
+
+#: src/window.c:1938
+msgid "Unsaved changes"
+msgstr ""
+
+#: src/window.c:1938
+msgid "Save changes before leaving Settings?"
+msgstr ""
+
+#: src/window.c:1941 src/window.c:14316
+msgid "Discard"
+msgstr ""
+
+#: src/window.c:1942
+msgid "Save"
+msgstr ""
+
+#: src/window.c:2040
+msgid "Update in progress"
+msgstr ""
+
+#: src/window.c:2041
+msgid ""
+"A server update is currently running. Closing now may interrupt the "
+"installation."
+msgstr ""
+
+#: src/window.c:2044
+msgid "Close anyway"
+msgstr ""
+
+#: src/window.c:2149
+msgid "Players"
+msgstr ""
+
+#: src/window.c:2401
+msgid "Server stopped unexpectedly."
+msgstr ""
+
+#: src/window.c:2429
+msgid "Server session started"
+msgstr ""
+
+#: src/window.c:2729
+msgid "Java"
+msgstr ""
+
+#: src/window.c:2732
+msgid "Bedrock"
+msgstr ""
+
+#: src/window.c:2734 src/window.c:3485 src/window.c:4886 src/window.c:4920
+#: src/window.c:4923 src/window-worlds.c:321
+msgid "Unknown"
+msgstr ""
+
+#: src/window.c:2894
+#, c-format
+msgid "%llud %lluh"
+msgstr ""
+
+#: src/window.c:2897
+#, c-format
+msgid "%lluh %llum"
+msgstr ""
+
+#: src/window.c:2900
+#, c-format
+msgid "%llum %llus"
+msgstr ""
+
+#: src/window.c:2902
+#, c-format
+msgid "%llus"
+msgstr ""
+
+#: src/window.c:2909 src/window.c:2913 src/window.c:2922
+msgid "Never"
+msgstr ""
+
+#: src/window.c:2930
+#, c-format
+msgid "%llus ago"
+msgstr ""
+
+#: src/window.c:2933
+#, c-format
+msgid "%llum ago"
+msgstr ""
+
+#: src/window.c:2936
+#, c-format
+msgid "%lluh ago"
+msgstr ""
+
+#: src/window.c:2939
+#, c-format
+msgid "%llud ago"
+msgstr ""
+
+#: src/window.c:2941
+#, c-format
+msgid "%lluy ago"
+msgstr ""
+
+#: src/window.c:2950
+msgid "Installing..."
+msgstr ""
+
+#: src/window.c:2952
+msgid "Not installed"
+msgstr ""
+
+#: src/window.c:3096
+msgid "Custom source"
+msgstr ""
+
+#: src/window.c:3097
+msgid "Custom download URLs are not checked for updates"
+msgstr ""
+
+#: src/window.c:3102
+msgid "Checking..."
+msgstr ""
+
+#: src/window.c:3103
+msgid "Checking for updates..."
+msgstr ""
+
+#: src/window.c:3109
+msgid "Check failed"
+msgstr ""
+
+#: src/window.c:3115
+msgid "Check updates"
+msgstr ""
+
+#: src/window.c:3116 src/window.c:3133
+msgid "Check for updates"
+msgstr ""
+
+#: src/window.c:3128
+msgid "Update available"
+msgstr ""
+
+#: src/window.c:3129
+msgid "Update available. Check again for newer builds"
+msgstr ""
+
+#: src/window.c:3248 src/window.c:3762 src/window.c:13530
+msgid "installed"
+msgstr ""
+
+#: src/window.c:3250 src/window.c:3764 src/window.c:13532
+msgid "latest"
+msgstr ""
+
+#: src/window.c:3251 src/window.c:3765 src/window.c:13533
+#, c-format
+msgid "Updating Pumpkin binary: %s -> %s"
+msgstr ""
+
+#: src/window.c:3690
+msgid "Server name cannot be empty."
+msgstr ""
+
+#: src/window.c:3694
+msgid "Server name already exists."
+msgstr ""
+
+#: src/window.c:3886
+msgid "Local Pumpkin hosting is not available on Android yet."
+msgstr ""
+
+#: src/window.c:4045
+msgid "Recovered server binary from cache"
+msgstr ""
+
+#: src/window.c:4101 src/window.c:13080 src/window.c:13474
+msgid "Install/update already in progress"
+msgstr ""
+
+#: src/window.c:4232
+msgid "Marketplace API key connected"
+msgstr ""
+
+#: src/window.c:4233
+msgid "Add Marketplace API key"
+msgstr ""
+
+#: src/window.c:4264
+msgid "Marketplace connected"
+msgstr ""
+
+#: src/window.c:4264
+msgid "Marketplace connected for this session"
+msgstr ""
+
+#: src/window.c:4280
+msgid ""
+"Marketplace disconnected; the saved key could not be removed from the system "
+"keyring"
+msgstr ""
+
+#: src/window.c:4310
+msgid "Marketplace API key cannot be empty"
+msgstr ""
+
+#: src/window.c:4326
+msgid "Connect Marketplace"
+msgstr ""
+
+#: src/window.c:4327
+msgid "Paste a newly created Marketplace API key."
+msgstr ""
+
+#: src/window.c:4338
+msgid "Connected"
+msgstr ""
+
+#: src/window.c:4340
+msgid "Disconnect"
+msgstr ""
+
+#: src/window.c:4345
+msgid "Marketplace API key"
+msgstr ""
+
+#: src/window.c:4349
+msgid "Connect"
+msgstr ""
+
+#: src/window.c:4470
+msgid ""
+"Could not contact the Marketplace to validate the API key. It was not saved."
+msgstr ""
+
+#: src/window.c:4487
+msgid ""
+"Marketplace API key contains invalid characters or is too long. It was not "
+"saved."
+msgstr ""
+
+#: src/window.c:4491
+msgid "Marketplace API key validation is already in progress."
+msgstr ""
+
+#: src/window.c:4508
+msgid "Could not create the Marketplace API key validation request."
+msgstr ""
+
+#: src/window.c:4516
+msgid "Validating Marketplace API key..."
+msgstr ""
+
+#: src/window.c:5144
+msgid "Marketplace did not provide a stable public plugin ID."
+msgstr ""
+
+#: src/window.c:5156
+msgid "The destination belongs to another plugin. It was not overwritten."
+msgstr ""
+
+#: src/window.c:5185
+msgid "Missing Marketplace plugin metadata."
+msgstr ""
+
+#: src/window.c:5210
+#, c-format
+msgid "Failed to install plugin: %s"
+msgstr ""
+
+#: src/window.c:5217
+#, c-format
+msgid "Failed to prepare plugin update: %s"
+msgstr ""
+
+#: src/window.c:5228
+#, c-format
+msgid "Failed to install plugin; the previous file was restored: %s"
+msgstr ""
+
+#: src/window.c:5259
+msgid ""
+"The installed plugin changed during the download. Retry after the other "
+"operation finishes."
+msgstr ""
+
+#: src/window.c:5271
+msgid ""
+"The plugin's file assignment changed during the download. Retry after the "
+"other operation finishes."
+msgstr ""
+
+#: src/window.c:5281
+msgid "Marketplace returned an invalid WASM plugin."
+msgstr ""
+
+#: src/window.c:5283
+msgid ""
+"The Marketplace rejected this anonymous free download. No API key was sent."
+msgstr ""
+
+#: src/window.c:5285
+msgid "The Marketplace does not currently allow downloading this plugin."
+msgstr ""
+
+#: src/window.c:5323
+#, c-format
+msgid "Installed %s%s%s; restart the server to use it"
+msgstr ""
+
+#: src/window.c:5323
+#, c-format
+msgid "Installed %s%s%s"
+msgstr ""
+
+#: src/window.c:5331
+#, c-format
+msgid "%s; plugin metadata could not be saved: %s"
+msgstr ""
+
+#: src/window.c:5346
+msgid "Select a server before installing a plugin"
+msgstr ""
+
+#: src/window.c:5351
+msgid "Only free Marketplace plugins can be installed for now"
+msgstr ""
+
+#: src/window.c:5367 src/window.c:5384
+msgid "Could not prepare Marketplace installation"
+msgstr ""
+
+#: src/window.c:5394
+msgid "Downloading Marketplace plugin…"
+msgstr ""
+
+#: src/window.c:5408
+msgid "Unavailable"
+msgstr ""
+
+#: src/window.c:5424
+msgid "Only free plugins are available for installation"
+msgstr ""
+
+#: src/window.c:5426
+msgid "Already installed"
+msgstr ""
+
+#: src/window.c:5428
+msgid "Select a server to install plugins"
+msgstr ""
+
+#: src/window.c:5473
+msgid "View plugin details"
+msgstr ""
+
+#: src/window.c:5513 src/window.c:5647
+msgid "Unknown author"
+msgstr ""
+
+#: src/window.c:5615
+msgid "Marketplace Plugin"
+msgstr ""
+
+#: src/window.c:5647
+#, c-format
+msgid "by %s"
+msgstr ""
+
+#: src/window.c:5692
+msgid ""
+"A description and screenshots are not available from the Marketplace API yet."
+msgstr ""
+
+#: src/window.c:5706
+msgid "Version"
+msgstr ""
+
+#: src/window.c:5709 src/window.c:7155
+msgid "Added"
+msgstr ""
+
+#: src/window.c:5796
+msgid "Failed to load Marketplace plugins."
+msgstr ""
+
+#: src/window.c:5832
+msgid "No marketplace plugins found for the current filters."
+msgstr ""
+
+#: src/window.c:5844
+#, c-format
+msgid "Page %u · %u result"
+msgid_plural "Page %u · %u results"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/window.c:5889
+msgid "The Marketplace returned an invalid plugin list."
+msgstr ""
+
+#: src/window.c:6071 src/window.c:10393
+msgid "Sort ascending"
+msgstr ""
+
+#: src/window.c:6196
+msgid "Plugin issue"
+msgstr ""
+
+#: src/window.c:6197
+msgid "Unknown plugin issue."
+msgstr ""
+
+#: src/window.c:6544 src/window.c:13141
+msgid "Waiting for shared download..."
+msgstr ""
+
+#: src/window.c:6605
+msgid "Not set"
+msgstr ""
+
+#: src/window.c:6632
+#, c-format
+msgid "Servers: %u · Running: %u · Players: %u · Proxy: %s"
+msgstr ""
+
+#: src/window.c:6668
+msgid "No servers assigned yet."
+msgstr ""
+
+#: src/window.c:6692
+msgid "Proxy server"
+msgstr ""
+
+#: src/window.c:6752
+msgid "No additional servers could be started."
+msgstr ""
+
+#: src/window.c:6755
+#, c-format
+msgid "Started %u network server."
+msgid_plural "Started %u network servers."
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/window.c:6805
+msgid "No running network servers to stop."
+msgstr ""
+
+#: src/window.c:6808
+#, c-format
+msgid "Stopping %u network server..."
+msgid_plural "Stopping %u network servers..."
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/window.c:6830
+msgid "Latest build not resolved yet. Try again in a moment."
+msgstr ""
+
+#: src/window.c:6859
+msgid "No updates started for this network."
+msgstr ""
+
+#: src/window.c:6862
+#, c-format
+msgid "Preparing updates for %u network server..."
+msgid_plural "Preparing updates for %u network servers..."
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/window.c:6911
+#, c-format
+msgid "Installing Pumpkin on %u network server..."
+msgid_plural "Installing Pumpkin on %u network servers..."
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/window.c:6914
+msgid "All network servers already have Pumpkin installed."
+msgstr ""
+
+#: src/window.c:6916
+msgid "Install-all needs a download URL for some servers."
+msgstr ""
+
+#: src/window.c:6918
+msgid "No installs started."
+msgstr ""
+
+#: src/window.c:7088
+msgid "Add"
+msgstr ""
+
+#: src/window.c:7109
+msgid "No available servers to add."
+msgstr ""
+
+#: src/window.c:7118
+msgid "Add Servers"
+msgstr ""
+
+#: src/window.c:7118
+msgid "Add servers with one click."
+msgstr ""
+
+#: src/window.c:7147
+msgid "Server is already assigned to a different network."
+msgstr ""
+
+#: src/window.c:7149
+msgid "Assigned"
+msgstr ""
+
+#: src/window.c:7168
+#, c-format
+msgid "%s added to network."
+msgstr ""
+
+#: src/window.c:7203
+msgid "Server removed from network."
+msgstr ""
+
+#: src/window.c:7248
+msgid "Proxy server updated."
+msgstr ""
+
+#: src/window.c:7265
+msgid "Proxy cleared."
+msgstr ""
+
+#: src/window.c:7337
+msgid "Set Proxy"
+msgstr ""
+
+#: src/window.c:7337
+msgid "Choose the proxy server for this network."
+msgstr ""
+
+#: src/window.c:7340
+msgid "Set"
+msgstr ""
+
+#: src/window.c:7366 src/window.c:13386
+#, c-format
+msgid "Delete \"%s\"?"
+msgstr ""
+
+#: src/window.c:7367
+msgid "This permanently deletes the network."
+msgstr ""
+
+#: src/window.c:7414
+msgid "Create a folder-like group for multiple servers."
+msgstr ""
+
+#: src/window.c:7417 src/window.c:12385
+msgid "Create"
+msgstr ""
+
+#: src/window.c:7422
+msgid "Network name"
+msgstr ""
+
+#: src/window.c:7443
+msgid "Network name cannot be empty"
+msgstr ""
+
+#: src/window.c:7491 src/window.c:9476
+msgid "Stopped"
+msgstr ""
+
+#: src/window.c:7494
+msgid "Updating"
+msgstr ""
+
+#: src/window.c:7497
+msgid "Maintenance"
+msgstr ""
+
+#: src/window.c:7500 src/window.c:9476
+msgid "Running"
+msgstr ""
+
+#: src/window.c:7525
+#, c-format
+msgid "Build: %s · Players: %d · Size: %s"
+msgstr ""
+
+#: src/window.c:7541
+#, c-format
+msgid "Java:%d · Bedrock:%d"
+msgstr ""
+
+#: src/window.c:7583
+msgid "Updating..."
+msgstr ""
+
+#: src/window.c:7593
+msgid "Delete server"
+msgstr ""
+
+#: src/window.c:7608
+msgid "Remove from network"
+msgstr ""
+
+#: src/window.c:7651
+msgid "No server networks yet. Create one to manage multi-server setups."
+msgstr ""
+
+#: src/window.c:7699
+#, c-format
+msgid "Players: %u"
+msgstr ""
+
+#: src/window.c:7729
+msgid "Delete network"
+msgstr ""
+
+#: src/window.c:7801
+msgid "No standalone servers. Add a server or remove one from a network."
+msgstr ""
+
+#: src/window.c:7854
+msgid ""
+"A plugin file already exists at the target location. It was not overwritten."
+msgstr ""
+
+#: src/window.c:7859
+#, c-format
+msgid "Failed to toggle plugin: %s"
+msgstr ""
+
+#: src/window.c:7868
+msgid "Could not restore the previous plugin filename after a lockfile error."
+msgstr ""
+
+#: src/window.c:7903
+#, c-format
+msgid "Remove plugin \"%s\"?"
+msgstr ""
+
+#: src/window.c:7904
+msgid "This permanently removes the plugin file."
+msgstr ""
+
+#: src/window.c:7907 src/window.c:10899 src/window.c:11135
+msgid "Remove"
+msgstr ""
+
+#: src/window.c:7931
+msgid "Wait for the plugin download to finish before deleting plugins."
+msgstr ""
+
+#: src/window.c:7939
+msgid "Failed to delete plugin."
+msgstr ""
+
+#: src/window.c:7945
+msgid "Could not restore the plugin filename after a lockfile error."
+msgstr ""
+
+#: src/window.c:7951
+msgid ""
+"Plugin disabled and removed from ppm.lock, but its pending-delete backup "
+"could not be deleted."
+msgstr ""
+
+#: src/window.c:8166
+msgid "Sandbox denied"
+msgstr ""
+
+#: src/window.c:8168
+#, c-format
+msgid ""
+"Pumpkin denied this plugin filesystem access while loading.\n"
+"\n"
+"Current upstream WASM plugins only get their own data folder preopened:\n"
+"%s\n"
+"\n"
+"A compatible plugin must use Pumpkin's plugin context/data-folder API "
+"instead of reading or writing arbitrary server paths during load.\n"
+"\n"
+"Log line:\n"
+"%s"
+msgstr ""
+
+#: src/window.c:8174
+msgid "(not available)"
+msgstr ""
+
+#: src/window.c:8185
+msgid "Incompatible plugin API"
+msgstr ""
+
+#: src/window.c:8187
+#, c-format
+msgid ""
+"This plugin was built for a different Pumpkin plugin API. Update it from the "
+"Marketplace or ask its author for a compatible build. Changing Smashed "
+"Pumpkin or filesystem permissions will not fix the binary.\n"
+"\n"
+"Pumpkin log:\n"
+"%s"
+msgstr ""
+
+#: src/window.c:8192 src/window.c:8213
+msgid "Load failed"
+msgstr ""
+
+#: src/window.c:8202
+msgid "Initialization failed"
+msgstr ""
+
+#: src/window.c:8742
+msgid "No data"
+msgstr ""
+
+#: src/window.c:8744
+#, c-format
+msgid "CPU  %.1f%%"
+msgstr ""
+
+#: src/window.c:8748
+#, c-format
+msgid "Memory  %s"
+msgstr ""
+
+#: src/window.c:8750
+#, c-format
+msgid "TPS  %.1f"
+msgstr ""
+
+#: src/window.c:8754
+#, c-format
+msgid "%llds ago"
+msgstr ""
+
+#: src/window.c:8755
+#, c-format
+msgid "%lldm %02llds ago"
+msgstr ""
+
+#: src/window.c:8759
+#, c-format
+msgid ""
+"%s\n"
+"%d player · %s"
+msgid_plural ""
+"%s\n"
+"%d players · %s"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/window.c:8903
+msgid "Now"
+msgstr ""
+
+#: src/window.c:8908
+#, c-format
+msgid "-%dm"
+msgstr ""
+
+#: src/window.c:8910
+#, c-format
+msgid "-%dm%02ds"
+msgstr ""
+
+#: src/window.c:8913
+#, c-format
+msgid "-%ds"
+msgstr ""
+
+#: src/window.c:8942 src/window.c:8973 src/window.c:9017
+msgid "Waiting for data…"
+msgstr ""
+
+#: src/window.c:9249
+#, c-format
+msgid "System RAM: %s / %s"
+msgstr ""
+
+#: src/window.c:9256
+#, c-format
+msgid "System CPU: %.1f%%"
+msgstr ""
+
+#: src/window.c:9350
+#, c-format
+msgid "Pumpkin RAM: %s"
+msgstr ""
+
+#: src/window.c:9359
+#, c-format
+msgid "Pumpkin CPU: %.1f%%"
+msgstr ""
+
+#: src/window.c:9612
+msgid "Remove plugin…"
+msgstr ""
+
+#: src/window.c:9633
+msgid "Market"
+msgstr ""
+
+#: src/window.c:9637
+#, c-format
+msgid "Update %s"
+msgstr ""
+
+#: src/window.c:9643
+msgid "Open the warning button for details"
+msgstr ""
+
+#: src/window.c:9653
+msgid "View in Marketplace"
+msgstr ""
+
+#: src/window.c:9680
+msgid "Open plugins folder"
+msgstr ""
+
+#: src/window.c:9697
+msgid "Plugin actions"
+msgstr ""
+
+#: src/window.c:9856 src/window.c:9883
+#, c-format
+msgid "Played %s"
+msgstr ""
+
+#: src/window.c:9857 src/window.c:9884
+#, c-format
+msgid "Played %s  ·  Last seen %s"
+msgstr ""
+
+#: src/window.c:9879 src/window.c:11047
+msgid "Unknown player"
+msgstr ""
+
+#: src/window.c:9914 src/window.c:10995 src/window.c:11054
+msgid "Edition unknown"
+msgstr ""
+
+#: src/window.c:9918
+msgid ""
+"Pumpkin has not reported this player's edition. It is never guessed from the "
+"username."
+msgstr ""
+
+#: src/window.c:9941 src/window.c:11093
+msgid "Admin"
+msgstr ""
+
+#: src/window.c:9941 src/window.c:11093
+msgid "Operator"
+msgstr ""
+
+#: src/window.c:9942
+msgid "Whitelisted"
+msgstr ""
+
+#: src/window.c:9943
+msgid "Banned"
+msgstr ""
+
+#: src/window.c:9943
+msgid "IP banned"
+msgstr ""
+
+#: src/window.c:9976
+msgid "UUID not yet available"
+msgstr ""
+
+#: src/window.c:9977
+msgid ""
+"\n"
+"Ban: "
+msgstr ""
+
+#: src/window.c:9979
+msgid ""
+"\n"
+"IP ban: "
+msgstr ""
+
+#: src/window.c:10117
+msgid "IP unban requested"
+msgstr ""
+
+#: src/window.c:10129
+msgid "Connections from this address are blocked"
+msgstr ""
+
+#: src/window.c:10131 src/window.c:11126
+msgid "Unban"
+msgstr ""
+
+#: src/window.c:10135
+msgid "Remove this IP ban"
+msgstr ""
+
+#: src/window.c:10135
+msgid "Start the server to remove an IP ban"
+msgstr ""
+
+#: src/window.c:10231
+#, c-format
+msgid "%u of %u account bans  ·  %u of %u IP bans"
+msgstr ""
+
+#: src/window.c:10234
+#, c-format
+msgid "%u of %u whitelisted players  ·  %u online"
+msgstr ""
+
+#: src/window.c:10237
+#, c-format
+msgid "%u of %u players  ·  %u online"
+msgstr ""
+
+#: src/window.c:10240
+#, c-format
+msgid "%u online  ·  %u known player"
+msgid_plural "%u online  ·  %u known players"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/window.c:10288 src/window.c:14497
+msgid "No matching players"
+msgstr ""
+
+#: src/window.c:10289 src/window.c:14499
+msgid "Whitelist is empty"
+msgstr ""
+
+#: src/window.c:10289
+msgid "No account bans"
+msgstr ""
+
+#: src/window.c:10289
+msgid "No players yet"
+msgstr ""
+
+#: src/window.c:10290
+msgid "Try a different search or connection-status filter."
+msgstr ""
+
+#: src/window.c:10291
+msgid "Players allowed by your server whitelist appear here."
+msgstr ""
+
+#: src/window.c:10292
+msgid "Account bans appear here. Address blocks are listed separately below."
+msgstr ""
+
+#: src/window.c:10293
+msgid "Players appear here when they join your server."
+msgstr ""
+
+#: src/window.c:10298
+msgid "No matching IP bans"
+msgstr ""
+
+#: src/window.c:10298
+msgid "No IP bans"
+msgstr ""
+
+#: src/window.c:10298
+msgid "IP bans block an address rather than an individual account."
+msgstr ""
+
+#: src/window.c:10410
+msgid "Search whitelisted players"
+msgstr ""
+
+#: src/window.c:10412
+msgid "Search accounts, addresses or ban reasons"
+msgstr ""
+
+#: src/window.c:10517 src/window.c:10533 src/window.c:10844
+msgid "No server selected."
+msgstr ""
+
+#: src/window.c:10521
+msgid "Failed to delete tracked player data."
+msgstr ""
+
+#: src/window.c:10522
+msgid "Failed to delete tracked player data"
+msgstr ""
+
+#: src/window.c:10525
+#, c-format
+msgid "Deleted tracked player data for %s"
+msgstr ""
+
+#: src/window.c:10526 src/window.c:10680 src/window.c:10739 src/window.c:10805
+msgid "player"
+msgstr ""
+
+#: src/window.c:10539 src/window.c:10770 src/window.c:10848
+msgid "Server is not running."
+msgstr ""
+
+#: src/window.c:10545 src/window.c:10628
+msgid "Player IP is already banned."
+msgstr ""
+
+#: src/window.c:10555
+msgid "No known IP for this player yet; cannot run ban-ip."
+msgstr ""
+
+#: src/window.c:10559 src/window.c:11130
+msgid "Ban IP"
+msgstr ""
+
+#: src/window.c:10559 src/window.c:10635
+msgid "Optional reason shown in ban history."
+msgstr ""
+
+#: src/window.c:10562 src/window.c:10638 src/window.c:11126
+msgid "Ban"
+msgstr ""
+
+#: src/window.c:10568 src/window.c:10644 src/window-minimap.c:924
+msgid "Reason (optional)"
+msgstr ""
+
+#: src/window.c:10583
+msgid "Player IP is not banned."
+msgstr ""
+
+#: src/window.c:10593 src/window.c:10617 src/window.c:10863
+msgid "Failed to run pardon-ip."
+msgstr ""
+
+#: src/window.c:10598
+msgid "Pardon IP"
+msgstr ""
+
+#: src/window.c:10598
+msgid "Enter the IP address to unban."
+msgstr ""
+
+#: src/window.c:10601
+msgid "Pardon"
+msgstr ""
+
+#: src/window.c:10606
+msgid "IP (e.g. 127.0.0.1)"
+msgstr ""
+
+#: src/window.c:10624
+msgid "Player is already banned."
+msgstr ""
+
+#: src/window.c:10632 src/window.c:10664 src/window.c:10687
+msgid "Player name unknown; cannot run command."
+msgstr ""
+
+#: src/window.c:10635 src/window-minimap.c:921
+msgid "Ban Player"
+msgstr ""
+
+#: src/window.c:10660
+msgid "Player is not banned."
+msgstr ""
+
+#: src/window.c:10680
+#, c-format
+msgid "Unbanned %s"
+msgstr ""
+
+#: src/window.c:10716
+msgid "Player is already op."
+msgstr ""
+
+#: src/window.c:10720
+msgid "Player is not op."
+msgstr ""
+
+#: src/window.c:10738
+#, c-format
+msgid "Granted ADMIN to %s"
+msgstr ""
+
+#: src/window.c:10738
+#, c-format
+msgid "Removed ADMIN from %s"
+msgstr ""
+
+#: src/window.c:10765
+msgid "Ban target unknown; cannot run command."
+msgstr ""
+
+#: src/window.c:10805
+#, c-format
+msgid "Banned %s"
+msgstr ""
+
+#: src/window.c:10858
+msgid "IP address required for pardon-ip."
+msgstr ""
+
+#: src/window.c:10873
+msgid "Not available"
+msgstr ""
+
+#: src/window.c:10895
+msgid "Remove player from history?"
+msgstr ""
+
+#: src/window.c:10896
+msgid ""
+"This removes Smashed Pumpkin's activity history, not the player's world "
+"data. The player will appear again when they join."
+msgstr ""
+
+#: src/window.c:10990 src/window.c:11084
+msgid "Online now"
+msgstr ""
+
+#: src/window.c:11022
+msgid "Player Details"
+msgstr ""
+
+#: src/window.c:11076
+msgid "Manage"
+msgstr ""
+
+#: src/window.c:11079
+msgid "Activity"
+msgstr ""
+
+#: src/window.c:11089
+msgid "Identity"
+msgstr ""
+
+#: src/window.c:11090
+msgid "UUID"
+msgstr ""
+
+#: src/window.c:11091
+msgid "Last IP address"
+msgstr ""
+
+#: src/window.c:11092
+msgid "Permissions"
+msgstr ""
+
+#: src/window.c:11092
+msgid "Player"
+msgstr ""
+
+#: src/window.c:11096
+msgid "The server has not reported an edition for this player."
+msgstr ""
+
+#: src/window.c:11100
+msgid "Pumpkin does not expose native Bedrock skins here yet."
+msgstr ""
+
+#: src/window.c:11115
+msgid "Manage player"
+msgstr ""
+
+#: src/window.c:11117
+msgid "Start the server to use moderation actions."
+msgstr ""
+
+#: src/window.c:11118
+msgid "Disconnect player"
+msgstr ""
+
+#: src/window.c:11118
+msgid "The player can reconnect."
+msgstr ""
+
+#: src/window.c:11119
+msgid "Kick"
+msgstr ""
+
+#: src/window.c:11120
+msgid "Operator permissions"
+msgstr ""
+
+#: src/window.c:11121
+msgid "Remove elevated server permissions."
+msgstr ""
+
+#: src/window.c:11121
+msgid "Grant elevated server permissions."
+msgstr ""
+
+#: src/window.c:11122
+msgid "Revoke"
+msgstr ""
+
+#: src/window.c:11122
+msgid "Grant"
+msgstr ""
+
+#: src/window.c:11124
+msgid "Player ban"
+msgstr ""
+
+#: src/window.c:11125
+msgid "Allow this account to rejoin."
+msgstr ""
+
+#: src/window.c:11125
+msgid "Block this account from joining."
+msgstr ""
+
+#: src/window.c:11128
+msgid "IP ban"
+msgstr ""
+
+#: src/window.c:11129
+msgid "Allow connections from this address."
+msgstr ""
+
+#: src/window.c:11129
+msgid "Block connections from this address."
+msgstr ""
+
+#: src/window.c:11130
+msgid "Unban IP"
+msgstr ""
+
+#: src/window.c:11134
+msgid "Remove from history"
+msgstr ""
+
+#: src/window.c:11135
+msgid "Only clears tracking; world data is kept."
+msgstr ""
+
+#: src/window.c:11389
+#, c-format
+msgid "Invalid HTTP request."
+msgstr ""
+
+#: src/window.c:11395
+#, c-format
+msgid "Failed to create HTTP request."
+msgstr ""
+
+#: src/window.c:11436
+msgid "DDNS sync failed: missing data."
+msgstr ""
+
+#: src/window.c:11440
+msgid "DDNS sync failed: unsupported provider."
+msgstr ""
+
+#: src/window.c:11444
+msgid "DDNS sync failed: domain is empty."
+msgstr ""
+
+#: src/window.c:11448
+msgid "DDNS sync failed: Cloudflare Zone ID is missing."
+msgstr ""
+
+#: src/window.c:11452
+msgid "DDNS sync failed: Cloudflare API token is missing."
+msgstr ""
+
+#: src/window.c:11471 src/window.c:11516
+#, c-format
+msgid "DDNS sync failed: %s"
+msgstr ""
+
+#: src/window.c:11471 src/window.c:11516 src/window.c:11558
+msgid "request error"
+msgstr ""
+
+#: src/window.c:11475
+#, c-format
+msgid "DDNS sync failed: Cloudflare list returned HTTP %u."
+msgstr ""
+
+#: src/window.c:11490
+#, c-format
+msgid "DDNS up to date (%s)"
+msgstr ""
+
+#: src/window.c:11520
+#, c-format
+msgid "DDNS sync failed: Cloudflare update returned HTTP %u."
+msgstr ""
+
+#: src/window.c:11532
+#, c-format
+msgid "DDNS updated to %s"
+msgstr ""
+
+#: src/window.c:11557
+#, c-format
+msgid "DDNS failed to get public IP: %s"
+msgstr ""
+
+#: src/window.c:11564
+#, c-format
+msgid "DDNS failed to get public IP (HTTP %u)."
+msgstr ""
+
+#: src/window.c:11571
+msgid "DDNS failed: invalid public IPv4 response."
+msgstr ""
+
+#: src/window.c:11600
+msgid "DDNS sync failed."
+msgstr ""
+
+#: src/window.c:11606
+msgid "DDNS sync failed"
+msgstr ""
+
+#: src/window.c:11648
+msgid "DDNS sync already running..."
+msgstr ""
+
+#: src/window.c:11704
+msgid "Nothing to sync. Enable DDNS and fill Domain, Zone ID and API token."
+msgstr ""
+
+#: src/window.c:11712
+msgid "Syncing DDNS..."
+msgstr ""
+
+#: src/window.c:11816
+#, c-format
+msgid "Target: your-public-ip (Java:%d, Bedrock:%d)"
+msgstr ""
+
+#: src/window.c:11867
+msgid "DDNS enabled. Waiting for next sync..."
+msgstr ""
+
+#: src/window.c:11906
+msgid "DDNS interval must be a valid number."
+msgstr ""
+
+#: src/window.c:11914
+#, c-format
+msgid "DDNS interval must be between %d and %d seconds."
+msgstr ""
+
+#: src/window.c:11924
+msgid "Domain is required when DDNS is enabled."
+msgstr ""
+
+#: src/window.c:11928
+msgid "Cloudflare Zone ID is required when DDNS is enabled."
+msgstr ""
+
+#: src/window.c:11932
+msgid "Cloudflare API token is required when DDNS is enabled."
+msgstr ""
+
+#: src/window.c:11951
+msgid "Failed to save domain/DDNS settings"
+msgstr ""
+
+#: src/window.c:11959
+msgid "Domain and DDNS settings saved"
+msgstr ""
+
+#: src/window.c:11960
+msgid "Domain and DDNS settings saved."
+msgstr ""
+
+#: src/window.c:12090
+#, c-format
+msgid "Max available: %s cores, %s MB RAM."
+msgstr ""
+
+#: src/window.c:12382
+msgid "New Server"
+msgstr ""
+
+#: src/window.c:12382
+msgid "Choose a unique server name."
+msgstr ""
+
+#: src/window.c:12390
+msgid "Server name"
+msgstr ""
+
+#: src/window.c:12429
+#, c-format
+msgid "Source is not a directory"
+msgstr ""
+
+#: src/window.c:12435
+#, c-format
+msgid "Failed to create directory %s"
+msgstr ""
+
+#: src/window.c:12556
+msgid "Only local files can be imported."
+msgstr ""
+
+#: src/window.c:12560
+msgid "Plugins must be .so or .wasm files."
+msgstr ""
+
+#: src/window.c:12564
+msgid "Only .so or .wasm files can be imported as plugins."
+msgstr ""
+
+#: src/window.c:12577
+#, c-format
+msgid "Overwrite plugin \"%s\"?"
+msgstr ""
+
+#: src/window.c:12578
+msgid "A plugin with the same name already exists."
+msgstr ""
+
+#: src/window.c:12581 src/window.c:13488
+msgid "Overwrite"
+msgstr ""
+
+#: src/window.c:12627
+msgid "Import Server Folder"
+msgstr ""
+
+#: src/window.c:12649
+msgid "Missing base directory"
+msgstr ""
+
+#: src/window.c:12785
+msgid "Server icon updated"
+msgstr ""
+
+#: src/window.c:12802
+msgid "PNG images"
+msgstr ""
+
+#: src/window.c:12820
+msgid "Server icon reset to default"
+msgstr ""
+
+#: src/window.c:12916
+msgid ""
+"Installation complete. The previous executable is retained as .previous."
+msgstr ""
+
+#: src/window.c:12917
+msgid "Installation complete."
+msgstr ""
+
+#: src/window.c:12928
+msgid ""
+"Update installed, but the server could not be restarted. See the console for "
+"details."
+msgstr ""
+
+#: src/window.c:12933
+msgid "Installation complete"
+msgstr ""
+
+#: src/window.c:12934
+msgid "Installed, but installation metadata could not be saved"
+msgstr ""
+
+#: src/window.c:12966
+msgid "Downloaded binary is invalid; the existing installation was not changed"
+msgstr ""
+
+#: src/window.c:12980
+msgid "Download verified; stopping safely before installation."
+msgstr ""
+
+#: src/window.c:13056
+msgid "Shared cache timed out, downloading directly..."
+msgstr ""
+
+#: src/window.c:13076
+msgid "Wait for server maintenance to finish"
+msgstr ""
+
+#: src/window.c:13113
+msgid "Ignoring invalid cached binary"
+msgstr ""
+
+#: src/window.c:13170
+msgid "Downloading Pumpkin binary..."
+msgstr ""
+
+#: src/window.c:13191
+msgid "Downloaded binary is invalid; the server was not stopped"
+msgstr ""
+
+#: src/window.c:13198
+#, c-format
+msgid "Cannot store downloaded binary in cache: %s"
+msgstr ""
+
+#: src/window.c:13239
+msgid "Finish the current install or update before changing release channels"
+msgstr ""
+
+#: src/window.c:13298
+msgid "Resolver returned no download URL"
+msgstr ""
+
+#: src/window.c:13300
+#, c-format
+msgid "Update check failed: %s"
+msgstr ""
+
+#: src/window.c:13382
+msgid "Stop the server and finish maintenance before deleting it"
+msgstr ""
+
+#: src/window.c:13387
+msgid "This permanently deletes the server and its data."
+msgstr ""
+
+#: src/window.c:13412
+msgid "Server deletion cancelled: the server or maintenance is now running"
+msgstr ""
+
+#: src/window.c:13478
+msgid "Stop the server before installing."
+msgstr ""
+
+#: src/window.c:13484
+msgid "Overwrite existing installation?"
+msgstr ""
+
+#: src/window.c:13485
+msgid "This will replace the current Pumpkin binary."
+msgstr ""
+
+#: src/window.c:13628
+msgid "No sessions match your filters"
+msgstr ""
+
+#: src/window.c:13701
+msgid "Log file"
+msgstr ""
+
+#: src/window.c:13918
+msgid "Plugin import finished"
+msgstr ""
+
+#: src/window.c:13932
+msgid "Import Plugins"
+msgstr ""
+
+#: src/window.c:13934
+msgid "Pumpkin plugins"
+msgstr ""
+
+#: src/window.c:13982
+msgid "No log folder found"
+msgstr ""
+
+#: src/window.c:14015
+msgid "No log files removed"
+msgstr ""
+
+#: src/window.c:14021
+#, c-format
+msgid "Removed %u log file (%s)"
+msgid_plural "Removed %u log files (%s)"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/window.c:14035
+msgid "Clear All Logs?"
+msgstr ""
+
+#: src/window.c:14036
+msgid "This deletes all log files in the selected server logs folder."
+msgstr ""
+
+#: src/window.c:14138 src/window.c:14139 src/window.c:14211 src/window.c:14212
+msgid "Settings saved"
+msgstr ""
+
+#: src/window.c:14201 src/window.c:14202
+msgid "Failed to save settings"
+msgstr ""
+
+#: src/window.c:14208 src/window.c:14209
+msgid "Settings saved, restarting server..."
+msgstr ""
+
+#: src/window.c:14305
+msgid "Fix invalid settings first"
+msgstr ""
+
+#: src/window.c:14313
+msgid "Restart Required"
+msgstr ""
+
+#: src/window.c:14314
+msgid ""
+"These changes require a server restart. Discard changes or save and restart "
+"now?"
+msgstr ""
+
+#: src/window.c:14317
+msgid "Save & Restart"
+msgstr ""
+
+#: src/window.c:14498
+msgid ""
+"Players appear here when they join your server. Try changing the search or "
+"status filter."
+msgstr ""
+
+#: src/window.c:14500
+msgid "Whitelisted players will appear here."
+msgstr ""
+
+#: src/window.c:14501
+msgid "No banned players"
+msgstr ""
+
+#: src/window.c:14502
+msgid "Player and IP bans will appear here."
+msgstr ""
+
+#: src/window.c:14671
+msgid "System language"
+msgstr ""
+
+#: src/window.c:14723
+msgid "No sessions found"
+msgstr ""
+
+#: src/window.c:14912
+msgid "CPU usage history"
+msgstr ""
+
+#: src/window.c:14917
+msgid "Memory usage history"
+msgstr ""
+
+#: src/window.c:15348
+msgid "Auto-start skipped: Pumpkin is not installed."
+msgstr ""
+
+#: src/window.c:15365
+msgid "Started automatically on launch."
+msgstr ""
+
+#: src/window-lifecycle.c:50
+msgid "Cannot start: Pumpkin is not installed."
+msgstr ""
+
+#: src/window-lifecycle.c:53
+msgid "Install Pumpkin before starting."
+msgstr ""
+
+#: src/window-lifecycle.c:71
+msgid "Invalid server port."
+msgstr ""
+
+#: src/window-lifecycle.c:81
+#, c-format
+msgid "Port %d may already be in use (%s). Trying to start anyway."
+msgstr ""
+
+#: src/window-lifecycle.c:85
+#, c-format
+msgid "Port %d may already be in use. Trying to start anyway."
+msgstr ""
+
+#: src/window-lifecycle.c:98 src/window-lifecycle.c:99
+msgid "Failed to start server."
+msgstr ""
+
+#: src/window-lifecycle.c:106
+msgid "Started by network action."
+msgstr ""
+
+#: src/window-lifecycle.c:227
+msgid "Force stop server?"
+msgstr ""
+
+#: src/window-lifecycle.c:228
+msgid ""
+"The server has not finished shutting down. Force stopping may lose unsaved "
+"world or plugin data."
+msgstr ""
+
+#: src/window-lifecycle.c:229
+msgid "Keep Waiting"
+msgstr ""
+
+#: src/window-lifecycle.c:229
+msgid "Force Stop"
+msgstr ""
+
+#: src/window-minimap.c:154
+msgid "Overworld"
+msgstr ""
+
+#: src/window-minimap.c:155
+msgid "Nether"
+msgstr ""
+
+#: src/window-minimap.c:156
+msgid "End"
+msgstr ""
+
+#: src/window-minimap.c:178
+msgid "No saved chunks"
+msgstr ""
+
+#: src/window-minimap.c:321
+#, c-format
+msgid "%.0f block"
+msgid_plural "%.0f blocks"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/window-minimap.c:333
+#, c-format
+msgid ""
+"%u ms ping\n"
+"X %.1f   Y %.1f   Z %.1f"
+msgstr ""
+
+#: src/window-minimap.c:358
+msgid ""
+"This player's world has no saved chunks or cannot be identified unambiguously"
+msgstr ""
+
+#: src/window-minimap.c:369
+msgid "No players online"
+msgstr ""
+
+#: src/window-minimap.c:369
+msgid "Live data unavailable"
+msgstr ""
+
+#: src/window-minimap.c:547
+msgid "Discovering saved worlds..."
+msgstr ""
+
+#: src/window-minimap.c:547
+msgid "No saved terrain yet / chunks appear after the server saves them"
+msgstr ""
+
+#: src/window-minimap.c:551
+msgid "Live chunk positions / terrain has not been saved yet"
+msgstr ""
+
+#: src/window-minimap.c:610
+#, c-format
+msgid ""
+"Terrain / %u chunk / some saved chunks could not be decoded / zoom in for "
+"full detail"
+msgid_plural ""
+"Terrain / %u chunks / some saved chunks could not be decoded / zoom in for "
+"full detail"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/window-minimap.c:613
+#, c-format
+msgid "Terrain / %u chunk / some saved chunks could not be decoded"
+msgid_plural "Terrain / %u chunks / some saved chunks could not be decoded"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/window-minimap.c:617
+#, c-format
+msgid "Terrain / %u chunk / zoom in for full detail"
+msgid_plural "Terrain / %u chunks / zoom in for full detail"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/window-minimap.c:619
+#, c-format
+msgid "Terrain / %u chunk"
+msgid_plural "Terrain / %u chunks"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/window-minimap.c:622
+#, c-format
+msgid "Loading terrain / %u of %u chunk"
+msgid_plural "Loading terrain / %u of %u chunks"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/window-minimap.c:793
+msgid "Map action finished"
+msgstr ""
+
+#: src/window-minimap.c:798
+msgid "Player positions unavailable / saved terrain only"
+msgstr ""
+
+#: src/window-minimap.c:798
+msgid "Server stopped / saved terrain"
+msgstr ""
+
+#: src/window-minimap.c:801
+#, c-format
+msgid "Live / %u online"
+msgstr ""
+
+#: src/window-minimap.c:832
+msgid "Map action was not acknowledged; check server logs before retrying"
+msgstr ""
+
+#: src/window-minimap.c:918
+#, c-format
+msgid "Ban %s?"
+msgstr ""
+
+#: src/window-minimap.c:918
+#, c-format
+msgid "Kick %s?"
+msgstr ""
+
+#: src/window-minimap.c:920
+msgid "This player will be disconnected and prevented from joining again."
+msgstr ""
+
+#: src/window-minimap.c:920
+msgid "This player can reconnect after being disconnected."
+msgstr ""
+
+#: src/window-minimap.c:921
+msgid "Kick Player"
+msgstr ""
+
+#: src/window-minimap.c:963
+msgid "Map Bridge is already installed; it has not been overwritten"
+msgstr ""
+
+#: src/window-minimap.c:966
+msgid "Plugin folder must be an ordinary local directory"
+msgstr ""
+
+#: src/window-minimap.c:999
+#, c-format
+msgid ""
+"Could not update Minimap Bridge: %s. Retry below while the server is stopped."
+msgstr ""
+
+#: src/window-minimap.c:1002
+msgid "Map Bridge installed."
+msgstr ""
+
+#: src/window-minimap.c:1053
+#, c-format
+msgid "Could not update Minimap Bridge: %s"
+msgstr ""
+
+#: src/window-minimap.c:1055
+msgid "Minimap Bridge updated to the version bundled with this app."
+msgstr ""
+
+#: src/window-minimap.c:1056
+#, c-format
+msgid "Minimap Bridge update failed; the existing plugin was retained: %s"
+msgstr ""
+
+#: src/window-minimap.c:1085
+msgid "Update Map Bridge?"
+msgstr ""
+
+#: src/window-minimap.c:1085
+msgid "Install Map Bridge?"
+msgstr ""
+
+#: src/window-minimap.c:1086
+msgid ""
+"This optional plugin reads live player coordinates and ping. It can kick or "
+"ban a player only when you confirm an action. It requires access to its own "
+"data folder, not networking. After installation, use Allow Data Access here "
+"while the server is stopped. Existing signature checks are not disabled. "
+"Other Pumpkin builds may require a matching Bridge API version."
+msgstr ""
+
+#: src/window-minimap.c:1118
+msgid "Map Bridge data access allowed."
+msgstr ""
+
+#: src/window-minimap.c:1143
+msgid "Allow Map Bridge Data Access?"
+msgstr ""
+
+#. Translators: Keep the permission identifier fs.write.data unchanged.
+#: src/window-minimap.c:1145
+msgid ""
+"Allow fs.write.data for the exact Map Bridge bundled with Smashed Pumpkin? "
+"This lets it exchange live player positions, ping and confirmed moderation "
+"actions with this app through its own data folder. No network permission is "
+"granted. Only this plugin's saved permission decision is updated; other "
+"plugins, blocked permissions and signature checks stay unchanged."
+msgstr ""
+
+#: src/window-minimap.c:1149
+msgid "Allow Data Access"
+msgstr ""
+
+#: src/window-minimap.c:1164
+msgid ""
+"Pumpkin denied Map Bridge data access. Stop the server, allow access below, "
+"then start it again."
+msgstr ""
+
+#: src/window-minimap.c:1166
+msgid ""
+"Map Bridge is incompatible with this Pumpkin build. Rebuild it against the "
+"matching plugin API."
+msgstr ""
+
+#: src/window-minimap.c:1167
+msgid ""
+"Map Bridge failed to load. Check plugin permissions, signature policy and "
+"the server console."
+msgstr ""
+
+#: src/window-minimap.c:1211
+msgid "Update Map Bridge..."
+msgstr ""
+
+#: src/window-minimap.c:1211 src/window-minimap.c:1443
+msgid "Install Map Bridge..."
+msgstr ""
+
+#: src/window-minimap.c:1217
+msgid "Stop the server before allowing data access"
+msgstr ""
+
+#: src/window-minimap.c:1218
+msgid "Allow only the bundled Map Bridge to use its own data folder"
+msgstr ""
+
+#: src/window-minimap.c:1219
+msgid "Stop the server before installing Map Bridge"
+msgstr ""
+
+#: src/window-minimap.c:1219
+msgid "Install the optional live-player bridge"
+msgstr ""
+
+#: src/window-minimap.c:1224
+msgid ""
+"Map Bridge data access was denied. Stop the server and allow access below."
+msgstr ""
+
+#: src/window-minimap.c:1225
+msgid ""
+"Map Bridge permission cache could not be read safely. Check server logs and "
+"permissions."
+msgstr ""
+
+#: src/window-minimap.c:1226
+msgid "Updating Minimap Bridge..."
+msgstr ""
+
+#: src/window-minimap.c:1227
+msgid "Minimap Bridge will update automatically before the next server start."
+msgstr ""
+
+#: src/window-minimap.c:1228
+msgid ""
+"Installed Map Bridge differs from the bundled version. Check plugin "
+"compatibility and permissions."
+msgstr ""
+
+#: src/window-minimap.c:1229
+msgid ""
+"Map Bridge is not installed. Stop the server to install it and enable live "
+"players."
+msgstr ""
+
+#: src/window-minimap.c:1230
+msgid "Map Bridge is not installed. Install it below to enable live players."
+msgstr ""
+
+#: src/window-minimap.c:1231
+msgid ""
+"Map Bridge needs data access. Stop the server and use Allow Data Access "
+"below."
+msgstr ""
+
+#: src/window-minimap.c:1232
+msgid ""
+"Map Bridge has not provided live data. Check the server console for "
+"compatibility or blocked permissions."
+msgstr ""
+
+#: src/window-minimap.c:1297
+msgid "Enable the Minimap?"
+msgstr ""
+
+#: src/window-minimap.c:1298
+msgid ""
+"The minimap increases CPU, memory and disk activity. Higher player update "
+"rates use more resources. It uses the local Map Bridge plugin to send player "
+"names, positions, viewing direction, ping and world information to Smashed "
+"Pumpkin through the plugin's own data folder. This data stays on this "
+"computer; it is not sent to an external service. The map reads saved terrain "
+"without generating or loading server chunks. Bridge installation and data "
+"access are confirmed separately while the server is stopped. You can disable "
+"the minimap at any time in Settings."
+msgstr ""
+
+#: src/window-minimap.c:1304
+msgid "Agree and Enable"
+msgstr ""
+
+#: src/window-minimap.c:1394
+msgid "Live players require Map Bridge"
+msgstr ""
+
+#: src/window-minimap.c:1411
+msgid "World and dimension"
+msgstr ""
+
+#: src/window-minimap.c:1413
+msgid "Stop following player"
+msgstr ""
+
+#: src/window-minimap.c:1417
+msgid "Locate online player"
+msgstr ""
+
+#: src/window-minimap.c:1433
+msgid "Saved terrain and online player map"
+msgstr ""
+
+#: src/window-minimap.c:1438
+msgid "Saved terrain / Map Bridge is required for live players"
+msgstr ""
+
+#: src/window-minimap.c:1445
+msgid "Allow Data Access..."
+msgstr ""
+
+#: src/window-minimap.c:1448
+msgid "Loading saved terrain..."
+msgstr ""
+
+#: src/window-minimap.c:1460
+msgid "Minimap is Disabled"
+msgstr ""
+
+#: src/window-minimap.c:1462
+msgid ""
+"Explore saved chunks without generating terrain. Enable the minimap here or "
+"in Settings. Live players require the optional Map Bridge plugin."
+msgstr ""
+
+#: src/window-minimap.c:1463
+msgid ""
+"The minimap requires a locally hosted server, which is not supported on this "
+"platform."
+msgstr ""
+
+#: src/window-minimap.c:1464
+msgid "Enable Minimap"
+msgstr ""
+
+#: src/window-minimap.c:1481
+msgid "Follow Player"
+msgstr ""
+
+#: src/window-minimap.c:1482
+msgid "Kick..."
+msgstr ""
+
+#: src/window-minimap.c:1482
+msgid "Ban..."
+msgstr ""
+
+#: src/window-minimap.c:1487
+msgid "Enable minimap"
+msgstr ""
+
+#: src/window-minimap.c:1488
+msgid ""
+"Turn off to release map memory and unload the local bridge from all servers."
+msgstr ""
+
+#: src/window-minimap.c:1493
+msgid "Player update rate"
+msgstr ""
+
+#: src/window-minimap.c:1494
+msgid "Updates per second. Higher rates use more resources."
+msgstr ""
+
+#: src/window-minimap.c:1501
+msgid "Minimap player updates per second"
+msgstr ""
+
+#: src/window-server-actions.c:30
+msgid "Force Stop..."
+msgstr ""
+
+#: src/window-server-actions.c:30
+msgid "Stopping..."
+msgstr ""
+
+#: src/window-server-actions.c:37
+msgid "Force termination can lose unsaved data"
+msgstr ""
+
+#: src/window-server-actions.c:37
+msgid "Save data and stop the server"
+msgstr ""
+
+#: src/window-server-actions.c:39
+msgid "Download first, then safely stop, install and restart"
+msgstr ""
+
+#: src/window-server-actions.c:39
+msgid "Update the installed server"
+msgstr ""
+
+#: src/window-worlds.c:109
+#, c-format
+msgid "%u world"
+msgstr ""
+
+#: src/window-worlds.c:109
+#, c-format
+msgid "%u worlds"
+msgstr ""
+
+#: src/window-worlds.c:110
+#, c-format
+msgid "%u of %u worlds"
+msgstr ""
+
+#: src/window-worlds.c:154
+msgid "World imported. The configured world has not been changed."
+msgstr ""
+
+#: src/window-worlds.c:154
+msgid "World removed"
+msgstr ""
+
+#: src/window-worlds.c:164
+msgid "Stop the server and finish maintenance before modifying worlds."
+msgstr ""
+
+#: src/window-worlds.c:177
+msgid "Importing world..."
+msgstr ""
+
+#: src/window-worlds.c:177
+msgid "Removing world..."
+msgstr ""
+
+#: src/window-worlds.c:194
+#, c-format
+msgid "Remove \"%s\"?"
+msgstr ""
+
+#: src/window-worlds.c:197
+msgid ""
+"This is the configured world. Removing it permanently deletes its data. The "
+"server may generate a new world on its next start. Make a backup first."
+msgstr ""
+
+#: src/window-worlds.c:198
+msgid ""
+"This permanently deletes the world folder. Make a backup before continuing."
+msgstr ""
+
+#: src/window-worlds.c:200
+msgid "Remove World"
+msgstr ""
+
+#: src/window-worlds.c:219
+msgid "Only local world folders can be imported."
+msgstr ""
+
+#: src/window-worlds.c:228
+msgid "Import World Folder"
+msgstr ""
+
+#: src/window-worlds.c:240
+msgid "Stop the server before importing worlds"
+msgstr ""
+
+#: src/window-worlds.c:246
+msgid "Import one world folder at a time"
+msgstr ""
+
+#: src/window-worlds.c:251
+msgid "Only local world folders can be imported"
+msgstr ""
+
+#: src/window-worlds.c:319
+msgid "Size unavailable"
+msgstr ""
+
+#: src/window-worlds.c:322
+msgid "Linked or external folder · Read-only"
+msgstr ""
+
+#: src/window-worlds.c:323
+msgid "No level.dat found · Read-only"
+msgstr ""
+
+#: src/window-worlds.c:324
+msgid "Configured world · Used on server start"
+msgstr ""
+
+#: src/window-worlds.c:324
+msgid "Stored world · Not configured"
+msgstr ""
+
+#: src/window-worlds.c:325
+#, c-format
+msgid ""
+"%s · Modified %s\n"
+"%s"
+msgstr ""
+
+#: src/window-worlds.c:331
+msgid "Configured"
+msgstr ""
+
+#: src/window-worlds.c:341
+msgid "World actions"
+msgstr ""
+
+#: src/window-worlds.c:344
+msgid "Open Folder"
+msgstr ""
+
+#: src/window-worlds.c:351
+msgid "Remove World..."
+msgstr ""
+
+#: src/window-worlds.c:384
+msgid "Could Not Load Worlds"
+msgstr ""
+
+#: src/window-worlds.c:385
+msgid "Reload to try again"
+msgstr ""
+
+#: src/window-worlds.c:389
+msgid "No Worlds Yet"
+msgstr ""
+
+#: src/window-worlds.c:390
+msgid ""
+"Start the server to generate its configured world, or import a folder "
+"containing level.dat."
+msgstr ""
+
+#: src/window-worlds.c:414
+msgid "Select a Server"
+msgstr ""
+
+#: src/window-worlds.c:414
+msgid "Its worlds will appear here."
+msgstr ""
+
+#: src/window-worlds.c:417
+msgid "Loading Worlds"
+msgstr ""
+
+#: src/window-worlds.c:417
+msgid "Reading world folders and calculating their sizes..."
+msgstr ""
+
+#: src/window-worlds.c:418
+msgid "Loading..."
+msgstr ""
+
+#: src/window-worlds.c:438
+msgid ""
+"Copy a world into this server's storage without replacing its configured "
+"world"
+msgstr ""
+
+#: src/window-worlds.c:439
+msgid "Stop the server and finish maintenance before importing worlds"
+msgstr ""
+
+#: src/window-worlds.c:469
+msgid "Search worlds"
+msgstr ""
+
+#: src/window-worlds.c:471
+msgid "Import World..."
+msgstr ""
+
+#: src/window-worlds.c:474
+msgid "Reload worlds"
+msgstr ""
+
+#: src/window-worlds.c:478
+msgid "Open server data folder"
+msgstr ""
+
+#: src/window-worlds.c:496
+msgid "No matching worlds"
+msgstr ""
+
+#: src/window-worlds.c:501
+msgid ""
+"Imported worlds are stored separately. Importing does not change the world's "
+"server configuration."
+msgstr ""

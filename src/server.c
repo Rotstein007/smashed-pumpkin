@@ -109,7 +109,10 @@ G_DEFINE_FINAL_TYPE(PumpkinServer, pumpkin_server, G_TYPE_OBJECT)
 
 enum {
   LOG_LINE,
+  CONSOLE_NOTICE,
   SESSION_STARTED,
+  PROCESS_EXITED,
+  RESTART_SCHEDULED,
   STATE_CHANGED,
   PREPARE_START,
   LAST_SIGNAL
@@ -197,8 +200,14 @@ pumpkin_server_class_init(PumpkinServerClass *class)
     1,
     G_TYPE_STRING
   );
+  signals[CONSOLE_NOTICE] = g_signal_new("console-notice", G_TYPE_FROM_CLASS(class),
+    G_SIGNAL_RUN_LAST, 0, NULL, NULL, g_cclosure_marshal_VOID__STRING, G_TYPE_NONE, 1, G_TYPE_STRING);
   signals[SESSION_STARTED] = g_signal_new("session-started", G_TYPE_FROM_CLASS(class),
     G_SIGNAL_RUN_LAST, 0, NULL, NULL, g_cclosure_marshal_VOID__VOID, G_TYPE_NONE, 0);
+  signals[PROCESS_EXITED] = g_signal_new("process-exited", G_TYPE_FROM_CLASS(class),
+    G_SIGNAL_RUN_LAST, 0, NULL, NULL, g_cclosure_marshal_VOID__VOID, G_TYPE_NONE, 0);
+  signals[RESTART_SCHEDULED] = g_signal_new("restart-scheduled", G_TYPE_FROM_CLASS(class),
+    G_SIGNAL_RUN_LAST, 0, NULL, NULL, g_cclosure_marshal_VOID__UINT, G_TYPE_NONE, 1, G_TYPE_UINT);
   signals[STATE_CHANGED] = g_signal_new("state-changed", G_TYPE_FROM_CLASS(class),
     G_SIGNAL_RUN_LAST, 0, NULL, NULL, g_cclosure_marshal_VOID__VOID, G_TYPE_NONE, 0);
   signals[PREPARE_START] = g_signal_new("prepare-start", G_TYPE_FROM_CLASS(class),
@@ -1312,7 +1321,7 @@ auto_restart_cb(gpointer data)
   g_autoptr(GError) err = NULL;
   if (!pumpkin_server_start(srv, &err)) {
     if (err != NULL) {
-      g_signal_emit(srv, signals[LOG_LINE], 0, err->message);
+      g_signal_emit(srv, signals[CONSOLE_NOTICE], 0, err->message);
     }
   }
   return G_SOURCE_REMOVE;
@@ -1379,7 +1388,7 @@ emit_server_notice(PumpkinServer *self, const char *level, const char *message)
   g_autofree char *archived = g_strdup_printf("%s %s smashed_pumpkin: %s", timestamp, level, message);
   append_log_line(self, archived);
   g_autofree char *console = g_strdup_printf("[SMPK] [%s] %s", level, message);
-  g_signal_emit(self, signals[LOG_LINE], 0, console);
+  g_signal_emit(self, signals[CONSOLE_NOTICE], 0, console);
 }
 
 static void
@@ -1391,7 +1400,7 @@ begin_log_session(PumpkinServer *self)
   /* Reset attached consoles before any output from the new process is delivered. */
   g_signal_emit(self, signals[SESSION_STARTED], 0);
   if (self->log_stream == NULL) {
-    g_signal_emit(self, signals[LOG_LINE], 0,
+    g_signal_emit(self, signals[CONSOLE_NOTICE], 0,
       "[WARN] Session logging is unavailable. Check the logs folder permissions.");
   }
 }
@@ -1527,10 +1536,10 @@ pumpkin_server_attach_output(PumpkinServer *self)
 
 #if defined(G_OS_WIN32)
 static void
-pumpkin_server_handle_exit(PumpkinServer *self, const char *message)
+pumpkin_server_handle_exit(PumpkinServer *self)
 {
   clear_stop_request(self);
-  log_session_event(self, message != NULL ? message : "Server process exited");
+  log_session_event(self, "Server process exited");
   g_clear_object(&self->process);
   g_clear_object(&self->stdout_dis);
   g_clear_object(&self->stderr_dis);
@@ -1560,13 +1569,13 @@ pumpkin_server_handle_exit(PumpkinServer *self, const char *message)
 
   if (self->auto_restart && !self->stop_requested) {
     guint delay = self->auto_restart_delay > 0 ? (guint)self->auto_restart_delay : PUMPKIN_AUTO_RESTART_DELAY_DEFAULT_MS;
-    g_signal_emit(self, signals[LOG_LINE], 0, "Auto-restart scheduled");
     self->restart_source_id = g_timeout_add_full(G_PRIORITY_DEFAULT, delay,
       auto_restart_cb, g_object_ref(self), g_object_unref);
+    g_signal_emit(self, signals[RESTART_SCHEDULED], 0, delay);
   }
 
+  g_signal_emit(self, signals[PROCESS_EXITED], 0);
   g_signal_emit(self, signals[STATE_CHANGED], 0);
-  g_signal_emit(self, signals[LOG_LINE], 0, message != NULL ? message : "Server process exited");
 }
 
 static gboolean
@@ -1585,7 +1594,7 @@ process_watch_cb(gpointer data)
   }
 
   self->process_watch_source_id = 0;
-  pumpkin_server_handle_exit(self, "Server process exited");
+  pumpkin_server_handle_exit(self);
   g_object_unref(self);
   return G_SOURCE_REMOVE;
 }
@@ -1738,6 +1747,10 @@ process_wait_cb(GObject *source, GAsyncResult *res, gpointer user_data)
   log_session_event(self, "Server process exited");
 
   g_clear_object(&self->process);
+  /* Buffered output may arrive after this callback. Detach its live identity;
+   * OutputReader still drains it into the original session's log stream. */
+  g_clear_object(&self->stdout_dis);
+  g_clear_object(&self->stderr_dis);
   g_clear_object(&self->stdin_stream);
   self->pid = 0;
   if (self->log_stream != NULL) {
@@ -1752,18 +1765,17 @@ process_wait_cb(GObject *source, GAsyncResult *res, gpointer user_data)
 
   if (self->auto_restart && !self->stop_requested) {
     guint delay = self->auto_restart_delay > 0 ? (guint)self->auto_restart_delay : PUMPKIN_AUTO_RESTART_DELAY_DEFAULT_MS;
-    g_signal_emit(self, signals[LOG_LINE], 0, "Auto-restart scheduled");
     self->restart_source_id = g_timeout_add_full(G_PRIORITY_DEFAULT, delay,
       auto_restart_cb, g_object_ref(self), g_object_unref);
+    g_signal_emit(self, signals[RESTART_SCHEDULED], 0, delay);
   }
 
   if (!waited) {
     if (error != NULL) {
-      g_signal_emit(self, signals[LOG_LINE], 0, error->message);
+      g_signal_emit(self, signals[CONSOLE_NOTICE], 0, error->message);
     }
-  } else {
-    g_signal_emit(self, signals[LOG_LINE], 0, "Server process exited");
   }
+  g_signal_emit(self, signals[PROCESS_EXITED], 0);
   g_signal_emit(self, signals[STATE_CHANGED], 0);
   g_object_unref(self);
 }

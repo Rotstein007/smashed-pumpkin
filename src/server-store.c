@@ -44,15 +44,17 @@ pumpkin_server_store_init(PumpkinServerStore *self)
   } else {
     self->base_dir = g_build_filename(g_get_user_data_dir(), "smashed-pumpkin", "servers", NULL);
   }
-  g_mkdir_with_parents(self->base_dir, 0755);
+  if (g_mkdir_with_parents(self->base_dir, 0755) != 0 && errno != EEXIST) {
+    g_warning("Cannot create server directory %s: %s", self->base_dir, g_strerror(errno));
+  }
 
   GDir *dir = g_dir_open(self->base_dir, 0, NULL);
   if (dir != NULL) {
     const char *entry = NULL;
     while ((entry = g_dir_read_name(dir)) != NULL) {
       g_autofree char *server_dir = g_build_filename(self->base_dir, entry, NULL);
-      g_autoptr(GError) error = NULL;
-      PumpkinServer *server = pumpkin_server_load(server_dir, &error);
+      g_autoptr(GError) load_error = NULL;
+      PumpkinServer *server = pumpkin_server_load(server_dir, &load_error);
       if (server != NULL) {
         g_list_store_append(self->model, server);
         g_object_unref(server);
@@ -62,8 +64,10 @@ pumpkin_server_store_init(PumpkinServerStore *self)
   }
 
   if (g_list_model_get_n_items(G_LIST_MODEL(self->model)) == 0) {
-    g_autoptr(GError) error = NULL;
-    pumpkin_server_store_add(self, "My Pumpkin Server", &error);
+    g_autoptr(GError) add_error = NULL;
+    g_autoptr(PumpkinServer) server = pumpkin_server_store_add(self, "My Pumpkin Server", &add_error);
+    if (add_error != NULL)
+      g_warning("Cannot create the default server: %s", add_error->message);
   }
 }
 
@@ -206,69 +210,92 @@ pumpkin_server_store_import(PumpkinServerStore *self, const char *dir, GError **
 }
 
 static gboolean
-remove_tree(const char *path, GError **error)
+remove_file_tree_typed(GFile *file, GFileType type, GError **error)
 {
-  GDir *dir = g_dir_open(path, 0, error);
-  if (dir == NULL) {
-    return FALSE;
-  }
-
-  const char *entry = NULL;
-  while ((entry = g_dir_read_name(dir)) != NULL) {
-    g_autofree char *child = g_build_filename(path, entry, NULL);
-    if (g_file_test(child, G_FILE_TEST_IS_DIR)) {
-      if (!remove_tree(child, error)) {
-        g_dir_close(dir);
-        return FALSE;
+  /* Linked worlds and other symlinks belong to the tree as links, not as targets. */
+  if (type == G_FILE_TYPE_DIRECTORY) {
+    g_autoptr(GFileEnumerator) children = g_file_enumerate_children(file,
+      G_FILE_ATTRIBUTE_STANDARD_NAME "," G_FILE_ATTRIBUTE_STANDARD_TYPE,
+      G_FILE_QUERY_INFO_NOFOLLOW_SYMLINKS, NULL, error);
+    if (children == NULL) {
+      return FALSE;
+    }
+    while (TRUE) {
+      g_autoptr(GError) next_error = NULL;
+      g_autoptr(GFileInfo) child_info = g_file_enumerator_next_file(children, NULL, &next_error);
+      if (child_info == NULL) {
+        if (next_error != NULL) {
+          g_propagate_error(error, g_steal_pointer(&next_error));
+          return FALSE;
+        }
+        break;
       }
-    } else {
-      if (g_unlink(child) != 0) {
-        g_set_error(error, G_IO_ERROR, g_io_error_from_errno(errno), "Failed to remove %s", child);
-        g_dir_close(dir);
+      g_autoptr(GFile) child = g_file_enumerator_get_child(children, child_info);
+      if (!remove_file_tree_typed(child, g_file_info_get_file_type(child_info), error)) {
         return FALSE;
       }
     }
+    if (!g_file_enumerator_close(children, NULL, error)) {
+      return FALSE;
+    }
   }
-  g_dir_close(dir);
 
-  if (g_rmdir(path) != 0) {
-    g_set_error(error, G_IO_ERROR, g_io_error_from_errno(errno), "Failed to remove %s", path);
+  return g_file_delete(file, NULL, error);
+}
+
+static gboolean
+remove_file_tree(GFile *file, GError **error)
+{
+  g_autoptr(GFileInfo) info = g_file_query_info(file, G_FILE_ATTRIBUTE_STANDARD_TYPE,
+    G_FILE_QUERY_INFO_NOFOLLOW_SYMLINKS, NULL, error);
+  if (info == NULL) {
     return FALSE;
   }
-
-  return TRUE;
+  return remove_file_tree_typed(file, g_file_info_get_file_type(info), error);
 }
 
 gboolean
 pumpkin_server_store_remove_tree(const char *path, GError **error)
 {
-  return remove_tree(path, error);
+  if (path == NULL || *path == '\0') {
+    g_set_error_literal(error, G_IO_ERROR, G_IO_ERROR_INVALID_ARGUMENT, "Invalid server directory");
+    return FALSE;
+  }
+  g_autoptr(GFile) file = g_file_new_for_path(path);
+  return remove_file_tree(file, error);
 }
 
-void
-pumpkin_server_store_remove_selected(PumpkinServerStore *self)
+gboolean
+pumpkin_server_store_remove_selected(PumpkinServerStore *self, GError **error)
 {
   if (self->selected == NULL) {
-    return;
+    return TRUE;
   }
 
   guint n = g_list_model_get_n_items(G_LIST_MODEL(self->model));
   for (guint i = 0; i < n; i++) {
-    PumpkinServer *server = g_list_model_get_item(G_LIST_MODEL(self->model), i);
+    g_autoptr(PumpkinServer) server = g_list_model_get_item(G_LIST_MODEL(self->model), i);
     if (server == self->selected) {
       const char *root = pumpkin_server_get_root_dir(server);
-      if (root != NULL) {
+      if (root != NULL && *root != '\0') {
         g_autoptr(GError) rm_error = NULL;
-        if (!remove_tree(root, &rm_error)) {
-          g_clear_error(&rm_error);
+        if (!pumpkin_server_store_remove_tree(root, &rm_error)) {
+          /* An already vanished directory must not block removing the list
+           * entry: retrying would report NOT_FOUND forever and leave a dead
+           * row that can neither run nor be removed. */
+          if (!g_error_matches(rm_error, G_IO_ERROR, G_IO_ERROR_NOT_FOUND)) {
+            g_propagate_error(error, g_steal_pointer(&rm_error));
+            return FALSE;
+          }
         }
       }
       g_list_store_remove(self->model, i);
-      g_object_unref(server);
-      break;
+      g_clear_object(&self->selected);
+      return TRUE;
     }
-    g_object_unref(server);
   }
 
-  g_clear_object(&self->selected);
+  g_set_error_literal(error, G_IO_ERROR, G_IO_ERROR_NOT_FOUND,
+                      "The selected server is no longer in the server list");
+  return FALSE;
 }

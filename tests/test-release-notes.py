@@ -23,8 +23,13 @@ class ReleaseNotesTest(unittest.TestCase):
         notes_version = re.search(
             r'adw_about_dialog_set_release_notes_version\(about, "([^"]+)"\)', about)
         self.assertEqual(notes_version.group(1), version)
-        markups = re.findall(
-            r'adw_about_dialog_set_release_notes\(\s*about,\s*((?:"[^"]*"\s*)+)\);', about)
+        # English source notes may be wrapped in gettext and preceded by
+        # translator comments; still compare the unchanged bilingual literals.
+        markups = [match.group("markup") for match in re.finditer(
+            r'adw_about_dialog_set_release_notes\(\s*about,\s*'
+            r'(?:/\*.*?\*/\s*)*'
+            r'(?P<translated>_\(\s*)?(?P<markup>(?:"[^"]*"\s*)+)'
+            r'(?(translated)\))\s*\);', about, re.DOTALL)]
         self.assertEqual(len(markups), 2)
         for heading, markup in zip(("Deutsch", "English"), markups):
             section = notes.split(f"## {heading}\n\n", 1)[1].split("\n\n", 1)[0]

@@ -1,8 +1,10 @@
 #include "window-minimap.h"
+#include "i18n.h"
 #include "minimap-store.h"
 #include "minimap-bridge-control.h"
 #include "minimap-terrain.h"
 #include "minimap-cache.h"
+#include "minimap-memory-cache.h"
 #include "minimap-motion.h"
 #include "minimap-render.h"
 #include "vendor/cjson/cJSON.h"
@@ -150,9 +152,9 @@ static void update_choices(MapPage *page, const char *previous_id)
     PumpkinMapWorld *world = i < page->regions->len ? g_ptr_array_index(page->regions, i) :
       g_ptr_array_index(page->virtual_worlds, i - page->regions->len);
     g_ptr_array_add(page->choices, world);
-    const char *dimension = g_strcmp0(world->dimension, "minecraft:overworld") == 0 ? "Overworld" :
-      g_strcmp0(world->dimension, "minecraft:the_nether") == 0 ? "Nether" :
-      g_strcmp0(world->dimension, "minecraft:the_end") == 0 ? "End" : world->dimension;
+    const char *dimension = g_strcmp0(world->dimension, "minecraft:overworld") == 0 ? _("Overworld") :
+      g_strcmp0(world->dimension, "minecraft:the_nether") == 0 ? _("Nether") :
+      g_strcmp0(world->dimension, "minecraft:the_end") == 0 ? _("End") : world->dimension;
     gboolean multiple_roots = FALSE;
     for (guint j = 0; j < available; j++) {
       PumpkinMapWorld *other = j < page->regions->len ? g_ptr_array_index(page->regions, j) :
@@ -174,7 +176,7 @@ static void update_choices(MapPage *page, const char *previous_id)
     }
     if (g_strcmp0(world->id, id) == 0) selected = i;
   }
-  if (page->choices->len == 0) gtk_string_list_append(labels, "No saved chunks");
+  if (page->choices->len == 0) gtk_string_list_append(labels, _("No saved chunks"));
   gtk_drop_down_set_model(page->world_choice, G_LIST_MODEL(labels));
   g_object_unref(labels);
   gtk_drop_down_set_selected(page->world_choice, selected);
@@ -316,7 +318,8 @@ static void map_draw(GtkDrawingArea *area, cairo_t *cr, int width, int height, g
   double blocks = pow(2, floor(log2(90 / page->scale)));
   double length = blocks * page->scale;
   cairo_set_line_width(cr, 2); cairo_move_to(cr, 18, height - 22); cairo_line_to(cr, 18 + length, height - 22); cairo_stroke(cr);
-  g_autofree char *scale = g_strdup_printf("%.0f blocks", blocks);
+  g_autofree char *scale = g_strdup_printf(g_dngettext(GETTEXT_PACKAGE,
+    "%.0f block", "%.0f blocks", (gulong)blocks), blocks);
   cairo_move_to(cr, 18, height - 32); cairo_show_text(cr, scale);
 }
 
@@ -328,7 +331,7 @@ static void update_player_card(MapPage *page)
     gtk_popover_popdown(page->popover); return;
   }
   gtk_label_set_text(page->player_name, player->name);
-  g_autofree char *info = g_strdup_printf("%u ms ping\nX %.1f   Y %.1f   Z %.1f", player->ping, player->x, player->y, player->z);
+  g_autofree char *info = g_strdup_printf(_("%u ms ping\nX %.1f   Y %.1f   Z %.1f"), player->ping, player->x, player->y, player->z);
   gtk_label_set_text(page->player_info, info);
 }
 static void locate_player(GtkButton *button, MapPage *page)
@@ -353,7 +356,7 @@ static void locate_player(GtkButton *button, MapPage *page)
     gtk_widget_queue_draw(GTK_WIDGET(page->canvas));
     return;
   }
-  set_details_status(page->window, "This player's world has no saved chunks or cannot be identified unambiguously", 5);
+  set_details_status(page->window, _("This player's world has no saved chunks or cannot be identified unambiguously"), 5);
 }
 static void players_menu_opened(GObject *object, GParamSpec *pspec, MapPage *page)
 {
@@ -364,7 +367,7 @@ static void players_menu_opened(GObject *object, GParamSpec *pspec, MapPage *pag
     gtk_box_remove(page->player_choices, child);
   gboolean fresh = pumpkin_map_snapshot_fresh(page->live, now_ms());
   guint count = fresh ? page->live->players->len : 0;
-  if (count == 0) gtk_box_append(page->player_choices, gtk_label_new(fresh ? "No players online" : "Live data unavailable"));
+  if (count == 0) gtk_box_append(page->player_choices, gtk_label_new(fresh ? _("No players online") : _("Live data unavailable")));
   for (guint i = 0; i < count; i++) {
     PumpkinMapPlayer *player = g_ptr_array_index(page->live->players, i);
     GtkWidget *entry = gtk_button_new_with_label(player->name);
@@ -447,6 +450,12 @@ static void terrain_tile_free(gpointer data)
   if (tile->surface != NULL) cairo_surface_destroy(tile->surface);
   g_free(tile->region); g_free(tile);
 }
+static gint64 terrain_tile_used(gconstpointer data, gpointer user_data)
+{
+  (void)user_data;
+  const TerrainTile *tile = data;
+  return tile->used;
+}
 static void terrain_task_free(gpointer data)
 {
   TerrainTask *task = data;
@@ -506,14 +515,11 @@ static void terrain_finished(GObject *source, GAsyncResult *result, gpointer dat
     g_ptr_array_index(task->tiles, i) = NULL;
     g_hash_table_replace(page->terrain, g_steal_pointer(&key), tile);
   }
-  while (g_hash_table_size(page->terrain) > 32768) {
-    GHashTableIter iter; gpointer key, value, oldest = NULL; gint64 time = G_MAXINT64;
-    g_hash_table_iter_init(&iter, page->terrain);
-    while (g_hash_table_iter_next(&iter, &key, &value)) {
-      TerrainTile *tile = value; if (tile->used < time) { oldest = key; time = tile->used; }
-    }
-    if (oldest == NULL) break;
-    g_hash_table_remove(page->terrain, oldest);
+  /* Hysteresis: a full snapshot + sort costs a few milliseconds and most
+   * batches only overshoot by a few tiles. Trim only when the cache exceeds
+   * the limit by a whole batch, then bring it back down to the limit. */
+  if (g_hash_table_size(page->terrain) > 32768 + 1024) {
+    pumpkin_map_memory_cache_trim(page->terrain, 32768, terrain_tile_used, NULL);
   }
   gtk_widget_set_tooltip_text(GTK_WIDGET(page->terrain_status), task->error);
   gtk_widget_queue_draw(GTK_WIDGET(page->canvas));
@@ -542,11 +548,11 @@ static void load_terrain(MapPage *page)
   PumpkinMapWorld *world = chosen(page);
   if (world == NULL) {
     gtk_label_set_text(page->terrain_status, page->scan_busy || page->last_scan == 0 ?
-      "Discovering saved worlds..." : "No saved terrain yet / chunks appear after the server saves them");
+      _("Discovering saved worlds...") : _("No saved terrain yet / chunks appear after the server saves them"));
     return;
   }
   if (world->region == NULL) {
-    gtk_label_set_text(page->terrain_status, "Live chunk positions / terrain has not been saved yet");
+    gtk_label_set_text(page->terrain_status, _("Live chunk positions / terrain has not been saved yet"));
     return;
   }
   double half_x = gtk_widget_get_width(GTK_WIDGET(page->canvas)) / (2 * page->scale) + 16;
@@ -602,9 +608,23 @@ static void load_terrain(MapPage *page)
   for (guint i = 0; i < refresh->len && chunks->len < 64; i++) {
     TerrainRequest request = g_array_index(refresh, TerrainRequest, i); g_array_append_val(chunks, request);
   }
-  g_autofree char *message = chunks->len != 0 ? g_strdup_printf("Loading terrain / %u of %u chunks", ready, wanted) :
-    g_strdup_printf("Terrain / %u chunks%s%s", ready, failed != 0 ? " / some saved chunks could not be decoded" : "",
-                    candidates->len > wanted ? " / zoom in for full detail" : "");
+  const char *terrain_format = failed != 0 ?
+    (candidates->len > wanted ?
+      g_dngettext(GETTEXT_PACKAGE,
+        "Terrain / %u chunk / some saved chunks could not be decoded / zoom in for full detail",
+        "Terrain / %u chunks / some saved chunks could not be decoded / zoom in for full detail", ready) :
+      g_dngettext(GETTEXT_PACKAGE,
+        "Terrain / %u chunk / some saved chunks could not be decoded",
+        "Terrain / %u chunks / some saved chunks could not be decoded", ready)) :
+    (candidates->len > wanted ?
+      g_dngettext(GETTEXT_PACKAGE,
+        "Terrain / %u chunk / zoom in for full detail",
+        "Terrain / %u chunks / zoom in for full detail", ready) :
+      g_dngettext(GETTEXT_PACKAGE, "Terrain / %u chunk", "Terrain / %u chunks", ready));
+  g_autofree char *message = chunks->len != 0 ?
+    g_strdup_printf(g_dngettext(GETTEXT_PACKAGE,
+      "Loading terrain / %u of %u chunk", "Loading terrain / %u of %u chunks", wanted), ready, wanted) :
+    g_strdup_printf(terrain_format, ready);
   gtk_label_set_text(page->terrain_status, message);
   gboolean cache_only = cached->len != 0;
   if (cache_only) { g_array_unref(chunks); chunks = g_steal_pointer(&cached); }
@@ -774,15 +794,15 @@ static void map_finished(GObject *source, GAsyncResult *result, gpointer data)
     }
   }
   if (page->action_id != NULL && page->live != NULL && g_strcmp0(page->live->action_id, page->action_id) == 0) {
-    set_details_status(self, page->live->action_message != NULL ? page->live->action_message : "Map action finished", 5);
+    set_details_status(self, page->live->action_message != NULL ? page->live->action_message : _("Map action finished"), 5);
     g_clear_pointer(&page->action_id, g_free); g_clear_pointer(&page->action_json, g_free);
   }
   if (page->scan_error != NULL) gtk_label_set_text(page->status, page->scan_error);
   else if (page->live == NULL) gtk_label_set_text(page->status, page->bridge_error != NULL ? page->bridge_error :
-    task->running ? "Player positions unavailable / saved terrain only" : "Server stopped / saved terrain");
+    task->running ? _("Player positions unavailable / saved terrain only") : _("Server stopped / saved terrain"));
   else {
     g_clear_pointer(&page->bridge_error, g_free);
-    g_autofree char *status = g_strdup_printf("Live / %u online", page->live->players->len);
+    g_autofree char *status = g_strdup_printf(_("Live / %u online"), page->live->players->len);
     gtk_label_set_text(page->status, status);
   }
   gtk_widget_set_tooltip_text(GTK_WIDGET(page->status), task->live_error);
@@ -813,7 +833,7 @@ static gboolean poll_map(gpointer data)
   pumpkin_window_minimap_update(page->window);
   if (page->server == NULL) return G_SOURCE_CONTINUE;
   if (page->action_id != NULL && g_get_monotonic_time() - page->action_started > 10 * G_USEC_PER_SEC) {
-    set_details_status(page->window, "Map action was not acknowledged; check server logs before retrying", 6);
+    set_details_status(page->window, _("Map action was not acknowledged; check server logs before retrying"), 6);
     g_clear_pointer(&page->action_id, g_free); g_clear_pointer(&page->action_json, g_free);
   }
   if (page->live != NULL && !pumpkin_map_snapshot_fresh(page->live, now_ms())) {
@@ -899,13 +919,13 @@ static void moderate_clicked(GtkButton *button, MapPage *page)
   context->window = g_object_ref(page->window); context->server = g_object_ref(page->server);
   context->id = g_strdup(player->id); context->name = g_strdup(player->name);
   context->ban = GPOINTER_TO_INT(g_object_get_data(G_OBJECT(button), "map-ban"));
-  g_autofree char *title = g_strdup_printf("%s %s?", context->ban ? "Ban" : "Kick", player->name);
+  g_autofree char *title = g_strdup_printf(context->ban ? _("Ban %s?") : _("Kick %s?"), player->name);
   AdwAlertDialog *dialog = ADW_ALERT_DIALOG(adw_alert_dialog_new(title, context->ban ?
-    "This player will be disconnected and prevented from joining again." : "This player can reconnect after being disconnected."));
-  adw_alert_dialog_add_responses(dialog, "cancel", "Cancel", "apply", context->ban ? "Ban Player" : "Kick Player", NULL);
+    _("This player will be disconnected and prevented from joining again.") : _("This player can reconnect after being disconnected.")));
+  adw_alert_dialog_add_responses(dialog, "cancel", _("Cancel"), "apply", context->ban ? _("Ban Player") : _("Kick Player"), NULL);
   adw_alert_dialog_set_close_response(dialog, "cancel"); adw_alert_dialog_set_default_response(dialog, "cancel");
   adw_alert_dialog_set_response_appearance(dialog, "apply", ADW_RESPONSE_DESTRUCTIVE);
-  GtkWidget *entry = gtk_entry_new(); gtk_entry_set_placeholder_text(GTK_ENTRY(entry), "Reason (optional)");
+  GtkWidget *entry = gtk_entry_new(); gtk_entry_set_placeholder_text(GTK_ENTRY(entry), _("Reason (optional)"));
   gtk_entry_set_max_length(GTK_ENTRY(entry), 120); adw_alert_dialog_set_extra_child(dialog, entry);
   g_object_set_data(G_OBJECT(dialog), "map-reason", entry);
   gtk_popover_popdown(page->popover);
@@ -944,10 +964,15 @@ static void install_worker(GTask *result, gpointer source, gpointer data, GCance
   g_autofree char *path = g_build_filename(folder, PUMPKIN_MAP_BRIDGE_FILENAME, NULL);
   g_autofree char *data_dir = pumpkin_server_get_data_dir(task->server);
   if (pumpkin_map_bridge_present(data_dir)) {
-    g_task_return_new_error(result, G_IO_ERROR, G_IO_ERROR_EXISTS, "Map Bridge is already installed; it has not been overwritten"); return;
+    /* Error messages stay in source English; user-facing prefixes translate. */
+    g_task_return_new_error(result, G_IO_ERROR, G_IO_ERROR_EXISTS,
+                            "Map Bridge is already installed; it has not been overwritten");
+    return;
   }
   if (g_file_test(folder, G_FILE_TEST_IS_SYMLINK) || !g_file_test(folder, G_FILE_TEST_IS_DIR)) {
-    g_task_return_new_error(result, G_IO_ERROR, G_IO_ERROR_PERMISSION_DENIED, "Plugin folder must be an ordinary local directory"); return;
+    g_task_return_new_error(result, G_IO_ERROR, G_IO_ERROR_PERMISSION_DENIED,
+                            "Plugin folder must be an ordinary local directory");
+    return;
   }
   g_autofree char *uuid = g_uuid_string_random();
   g_autofree char *temporary = g_strdup_printf("%s/.map-bridge-%s.tmp", folder, uuid);
@@ -980,10 +1005,10 @@ static void install_finished(GObject *source, GAsyncResult *result, gpointer dat
       g_clear_pointer(&page->bridge_error, g_free);
     } else if (task->automatic) {
       g_free(page->bridge_error);
-      page->bridge_error = g_strdup_printf("Could not update Minimap Bridge: %s. Retry below while the server is stopped.", error->message);
+      page->bridge_error = g_strdup_printf(_("Could not update Minimap Bridge: %s. Retry below while the server is stopped."), error->message);
     }
     if (!task->automatic || !ok)
-      set_details_status(task->window, ok ? "Map Bridge installed." : error->message, 6);
+      set_details_status(task->window, ok ? _("Map Bridge installed.") : error->message, 6);
     pumpkin_window_minimap_update(task->window);
   }
 }
@@ -1034,10 +1059,11 @@ gboolean pumpkin_window_minimap_prepare_start(PumpkinWindow *self, PumpkinServer
     page->bridge_updating = FALSE; page->last_scan = 0;
     g_clear_pointer(&page->bridge_error, g_free);
     if (ok) page->bridge_access = PUMPKIN_MAP_BRIDGE_UNKNOWN;
-    else page->bridge_error = g_strdup_printf("Could not update Minimap Bridge: %s", error->message);
+    else page->bridge_error = g_strdup_printf(_("Could not update Minimap Bridge: %s"), error->message);
   }
-  g_autofree char *message = ok ? g_strdup("[SMPK] Minimap Bridge updated to the version bundled with this app.") :
-    g_strdup_printf("[SMPK] Minimap Bridge update failed; the existing plugin was retained: %s", error->message);
+  g_autofree char *notice = ok ? g_strdup(_("Minimap Bridge updated to the version bundled with this app.")) :
+    g_strdup_printf(_("Minimap Bridge update failed; the existing plugin was retained: %s"), error->message);
+  g_autofree char *message = g_strdup_printf("[SMPK] %s", notice);
   append_log_for_server(self, server, message);
   /* A map-helper failure must not prevent an otherwise valid server from starting. */
   return TRUE;
@@ -1065,11 +1091,11 @@ static void install_clicked(GtkButton *button, MapPage *page)
   (void)button;
   if (!can_install_bridge(page)) return;
   gboolean upgrade = page->bridge_access == PUMPKIN_MAP_BRIDGE_OUTDATED;
-  AdwAlertDialog *dialog = ADW_ALERT_DIALOG(adw_alert_dialog_new(upgrade ? "Update Map Bridge?" : "Install Map Bridge?",
-    "This optional plugin reads live player coordinates and ping. It can kick or ban a player only when you confirm an action. "
-    "It requires access to its own data folder, not networking. After installation, use Allow Data Access here while the server is stopped. "
-    "Existing signature checks are not disabled. Other Pumpkin builds may require a matching Bridge API version."));
-  adw_alert_dialog_add_responses(dialog, "cancel", "Cancel", "install", upgrade ? "Update" : "Install", NULL);
+  AdwAlertDialog *dialog = ADW_ALERT_DIALOG(adw_alert_dialog_new(upgrade ? _("Update Map Bridge?") : _("Install Map Bridge?"),
+    _("This optional plugin reads live player coordinates and ping. It can kick or ban a player only when you confirm an action. "
+      "It requires access to its own data folder, not networking. After installation, use Allow Data Access here while the server is stopped. "
+      "Existing signature checks are not disabled. Other Pumpkin builds may require a matching Bridge API version.")));
+  adw_alert_dialog_add_responses(dialog, "cancel", _("Cancel"), "install", upgrade ? _("Update") : _("Install"), NULL);
   adw_alert_dialog_set_close_response(dialog, "cancel"); adw_alert_dialog_set_default_response(dialog, "cancel");
   g_object_set_data_full(G_OBJECT(dialog), "map-server", g_object_ref(page->server), g_object_unref);
   g_object_set_data(G_OBJECT(dialog), "map-upgrade", GINT_TO_POINTER(upgrade));
@@ -1098,7 +1124,7 @@ static void approve_finished(GObject *source, GAsyncResult *result, gpointer dat
     page->bridge_access = PUMPKIN_MAP_BRIDGE_APPROVED;
     g_clear_pointer(&page->bridge_error, g_free); page->last_scan = 0;
   }
-  set_details_status(task->window, ok ? "Map Bridge data access allowed." : error->message, 6);
+  set_details_status(task->window, ok ? _("Map Bridge data access allowed.") : error->message, 6);
   pumpkin_window_minimap_update(task->window);
 }
 static void approve_confirmed(GObject *source, GAsyncResult *result, gpointer data)
@@ -1122,12 +1148,14 @@ static void approve_clicked(GtkButton *button, MapPage *page)
 {
   (void)button;
   if (!can_install_bridge(page)) return;
-  AdwAlertDialog *dialog = ADW_ALERT_DIALOG(adw_alert_dialog_new("Allow Map Bridge Data Access?",
-    "Allow fs.write.data for the exact Map Bridge bundled with Smashed Pumpkin? "
-    "This lets it exchange live player positions, ping and confirmed moderation actions with this app through its own data folder. "
-    "No network permission is granted. Only this plugin's saved permission decision is updated; other plugins, blocked permissions "
-    "and signature checks stay unchanged."));
-  adw_alert_dialog_add_responses(dialog, "cancel", "Cancel", "allow", "Allow Data Access", NULL);
+  AdwAlertDialog *dialog = ADW_ALERT_DIALOG(adw_alert_dialog_new(
+    _("Allow Map Bridge Data Access?"),
+    /* Translators: Keep the permission identifier fs.write.data unchanged. */
+    _("Allow fs.write.data for the exact Map Bridge bundled with Smashed Pumpkin? "
+      "This lets it exchange live player positions, ping and confirmed moderation actions with this app through its own data folder. "
+      "No network permission is granted. Only this plugin's saved permission decision is updated; other plugins, blocked permissions "
+      "and signature checks stay unchanged.")));
+  adw_alert_dialog_add_responses(dialog, "cancel", _("Cancel"), "allow", _("Allow Data Access"), NULL);
   adw_alert_dialog_set_close_response(dialog, "cancel"); adw_alert_dialog_set_default_response(dialog, "cancel");
   adw_alert_dialog_set_response_appearance(dialog, "allow", ADW_RESPONSE_SUGGESTED);
   g_object_set_data_full(G_OBJECT(dialog), "map-server", g_object_ref(page->server), g_object_unref);
@@ -1142,10 +1170,10 @@ static void bridge_log_line(PumpkinServer *server, const char *line, MapPage *pa
   if (!denied && strstr(line, "Failed to load plugin") == NULL) return;
   if (denied) page->bridge_access = PUMPKIN_MAP_BRIDGE_DENIED;
   g_free(page->bridge_error);
-  page->bridge_error = g_strdup(denied ? "Pumpkin denied Map Bridge data access. Stop the server, allow access below, then start it again." :
+  page->bridge_error = g_strdup(denied ? _("Pumpkin denied Map Bridge data access. Stop the server, allow access below, then start it again.") :
     strstr(line, "different iteration of the API") != NULL ?
-    "Map Bridge is incompatible with this Pumpkin build. Rebuild it against the matching plugin API." :
-    "Map Bridge failed to load. Check plugin permissions, signature policy and the server console.");
+    _("Map Bridge is incompatible with this Pumpkin build. Rebuild it against the matching plugin API.") :
+    _("Map Bridge failed to load. Check plugin permissions, signature policy and the server console."));
   if (active(page)) gtk_label_set_text(page->status, page->bridge_error);
 }
 void pumpkin_window_minimap_update(PumpkinWindow *self)
@@ -1189,28 +1217,28 @@ void pumpkin_window_minimap_update(PumpkinWindow *self)
     gboolean live = pumpkin_map_snapshot_fresh(page->live, now_ms());
     gboolean running = pumpkin_server_get_running(page->server);
     gboolean outdated = page->bridge_access == PUMPKIN_MAP_BRIDGE_OUTDATED;
-    gtk_button_set_label(GTK_BUTTON(page->install), outdated ? "Update Map Bridge..." : "Install Map Bridge...");
+    gtk_button_set_label(GTK_BUTTON(page->install), outdated ? _("Update Map Bridge...") : _("Install Map Bridge..."));
     gtk_widget_set_visible(page->install, (outdated && page->bridge_update_attempted && !page->bridge_updating && !running) || (!installed && !live));
     gboolean needs_access = installed && !live && (page->bridge_access == PUMPKIN_MAP_BRIDGE_UNKNOWN ||
       page->bridge_access == PUMPKIN_MAP_BRIDGE_DENIED);
     gtk_widget_set_visible(page->approve, needs_access);
     gtk_widget_set_visible(page->footer, gtk_widget_get_visible(page->install) || needs_access);
-    gtk_widget_set_tooltip_text(page->approve, running ? "Stop the server before allowing data access" :
-      "Allow only the bundled Map Bridge to use its own data folder");
-    gtk_widget_set_tooltip_text(page->install, running ? "Stop the server before installing Map Bridge" : "Install the optional live-player bridge");
+    gtk_widget_set_tooltip_text(page->approve, running ? _("Stop the server before allowing data access") :
+      _("Allow only the bundled Map Bridge to use its own data folder"));
+    gtk_widget_set_tooltip_text(page->install, running ? _("Stop the server before installing Map Bridge") : _("Install the optional live-player bridge"));
     gboolean show_banner = outdated || (!live && running) || needs_access || !installed || page->bridge_error != NULL;
     adw_banner_set_revealed(page->bridge_banner, show_banner);
     gtk_widget_set_margin_bottom(GTK_WIDGET(page->bridge_banner), show_banner ? 10 : 0);
     adw_banner_set_title(page->bridge_banner, page->bridge_error != NULL ? page->bridge_error :
-      page->bridge_access == PUMPKIN_MAP_BRIDGE_DENIED ? "Map Bridge data access was denied. Stop the server and allow access below." :
-      page->bridge_access == PUMPKIN_MAP_BRIDGE_INVALID ? "Map Bridge permission cache could not be read safely. Check server logs and permissions." :
-      outdated ? (page->bridge_updating ? "Updating Minimap Bridge..." :
-        "Minimap Bridge will update automatically before the next server start.") :
-      page->bridge_access == PUMPKIN_MAP_BRIDGE_UNTRUSTED ? "Installed Map Bridge differs from the bundled version. Check plugin compatibility and permissions." : !installed ?
-      (running ? "Map Bridge is not installed. Stop the server to install it and enable live players." :
-                 "Map Bridge is not installed. Install it below to enable live players.") :
-      needs_access ? "Map Bridge needs data access. Stop the server and use Allow Data Access below." :
-      "Map Bridge has not provided live data. Check the server console for compatibility or blocked permissions.");
+      page->bridge_access == PUMPKIN_MAP_BRIDGE_DENIED ? _("Map Bridge data access was denied. Stop the server and allow access below.") :
+      page->bridge_access == PUMPKIN_MAP_BRIDGE_INVALID ? _("Map Bridge permission cache could not be read safely. Check server logs and permissions.") :
+      outdated ? (page->bridge_updating ? _("Updating Minimap Bridge...") :
+        _("Minimap Bridge will update automatically before the next server start.")) :
+      page->bridge_access == PUMPKIN_MAP_BRIDGE_UNTRUSTED ? _("Installed Map Bridge differs from the bundled version. Check plugin compatibility and permissions.") : !installed ?
+      (running ? _("Map Bridge is not installed. Stop the server to install it and enable live players.") :
+                 _("Map Bridge is not installed. Install it below to enable live players.")) :
+      needs_access ? _("Map Bridge needs data access. Stop the server and use Allow Data Access below.") :
+      _("Map Bridge has not provided live data. Check the server console for compatibility or blocked permissions."));
   }
 }
 static void enabled_changed(GObject *object, GParamSpec *pspec, MapPage *page)
@@ -1275,14 +1303,14 @@ static void request_consent(MapPage *page)
   if (page->consent_open || page->window->disposing ||
       pumpkin_config_get_minimap_consent(page->window->config) || !pumpkin_platform_supports_local_hosting()) return;
   page->consent_open = TRUE;
-  AdwAlertDialog *dialog = ADW_ALERT_DIALOG(adw_alert_dialog_new("Enable the Minimap?",
-    "The minimap increases CPU, memory and disk activity. Higher player update rates use more resources. "
-    "It uses the local Map Bridge plugin to send player names, positions, viewing direction, ping and world information "
-    "to Smashed Pumpkin through the plugin's own data folder. This data stays on this computer; it is not sent to an external service. "
-    "The map reads saved terrain without generating or loading server chunks. "
-    "Bridge installation and data access are confirmed separately while the server is stopped. "
-    "You can disable the minimap at any time in Settings."));
-  adw_alert_dialog_add_responses(dialog, "cancel", "Cancel", "enable", "Agree and Enable", NULL);
+  AdwAlertDialog *dialog = ADW_ALERT_DIALOG(adw_alert_dialog_new(_("Enable the Minimap?"),
+    _("The minimap increases CPU, memory and disk activity. Higher player update rates use more resources. "
+      "It uses the local Map Bridge plugin to send player names, positions, viewing direction, ping and world information "
+      "to Smashed Pumpkin through the plugin's own data folder. This data stays on this computer; it is not sent to an external service. "
+      "The map reads saved terrain without generating or loading server chunks. "
+      "Bridge installation and data access are confirmed separately while the server is stopped. "
+      "You can disable the minimap at any time in Settings.")));
+  adw_alert_dialog_add_responses(dialog, "cancel", _("Cancel"), "enable", _("Agree and Enable"), NULL);
   adw_alert_dialog_set_close_response(dialog, "cancel"); adw_alert_dialog_set_default_response(dialog, "cancel");
   adw_alert_dialog_set_response_appearance(dialog, "enable", ADW_RESPONSE_SUGGESTED);
   adw_alert_dialog_choose(dialog, GTK_WIDGET(page->window), NULL, consent_finished, g_object_ref(page->window));
@@ -1372,7 +1400,7 @@ void pumpkin_window_minimap_setup(PumpkinWindow *self)
   page->choices = g_ptr_array_new(); page->request = g_uuid_string_random();
   g_object_set_data_full(G_OBJECT(self), "minimap-page", page, page_free);
   page->map = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
-  page->bridge_banner = ADW_BANNER(adw_banner_new("Live players require Map Bridge"));
+  page->bridge_banner = ADW_BANNER(adw_banner_new(_("Live players require Map Bridge")));
   gtk_box_append(GTK_BOX(page->map), GTK_WIDGET(page->bridge_banner));
   GtkWidget *overlay = gtk_overlay_new();
   gtk_widget_set_vexpand(overlay, TRUE); gtk_widget_set_hexpand(overlay, TRUE);
@@ -1389,13 +1417,13 @@ void pumpkin_window_minimap_setup(PumpkinWindow *self)
   g_signal_connect(factory, "setup", G_CALLBACK(world_label_setup), NULL);
   g_signal_connect(factory, "bind", G_CALLBACK(world_label_bind), NULL);
   gtk_drop_down_set_factory(page->world_choice, factory); g_object_unref(factory);
-  gtk_accessible_update_property(GTK_ACCESSIBLE(page->world_choice), GTK_ACCESSIBLE_PROPERTY_LABEL, "World and dimension", -1);
+  gtk_accessible_update_property(GTK_ACCESSIBLE(page->world_choice), GTK_ACCESSIBLE_PROPERTY_LABEL, _("World and dimension"), -1);
   gtk_box_append(GTK_BOX(toolbar), GTK_WIDGET(page->world_choice));
-  page->stop_tracking = button("media-playback-stop-symbolic", "Stop following player");
+  page->stop_tracking = button("media-playback-stop-symbolic", _("Stop following player"));
   gtk_widget_set_visible(page->stop_tracking, FALSE); gtk_box_append(GTK_BOX(toolbar), page->stop_tracking);
   page->player_menu = GTK_MENU_BUTTON(gtk_menu_button_new());
   gtk_menu_button_set_icon_name(page->player_menu, "avatar-default-symbolic");
-  gtk_widget_set_tooltip_text(GTK_WIDGET(page->player_menu), "Locate online player");
+  gtk_widget_set_tooltip_text(GTK_WIDGET(page->player_menu), _("Locate online player"));
   gtk_box_append(GTK_BOX(toolbar), GTK_WIDGET(page->player_menu));
   GtkWidget *players_popover = gtk_popover_new(), *players_scroll = gtk_scrolled_window_new();
   gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(players_scroll), GTK_POLICY_NEVER, GTK_POLICY_AUTOMATIC);
@@ -1411,22 +1439,22 @@ void pumpkin_window_minimap_setup(PumpkinWindow *self)
   gtk_widget_set_vexpand(GTK_WIDGET(page->canvas), TRUE); gtk_widget_set_hexpand(GTK_WIDGET(page->canvas), TRUE);
   gtk_widget_set_focusable(GTK_WIDGET(page->canvas), TRUE); gtk_widget_add_css_class(GTK_WIDGET(page->canvas), "minimap-canvas");
   gtk_widget_set_overflow(GTK_WIDGET(page->canvas), GTK_OVERFLOW_HIDDEN);
-  gtk_accessible_update_property(GTK_ACCESSIBLE(page->canvas), GTK_ACCESSIBLE_PROPERTY_LABEL, "Saved terrain and online player map", -1);
+  gtk_accessible_update_property(GTK_ACCESSIBLE(page->canvas), GTK_ACCESSIBLE_PROPERTY_LABEL, _("Saved terrain and online player map"), -1);
   gtk_drawing_area_set_draw_func(page->canvas, map_draw, page, NULL); gtk_overlay_set_child(GTK_OVERLAY(overlay), GTK_WIDGET(page->canvas));
   page->footer = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
   gtk_widget_set_margin_top(page->footer, 10);
   gtk_widget_set_visible(page->footer, FALSE);
-  page->status = GTK_LABEL(gtk_label_new("Saved terrain / Map Bridge is required for live players"));
+  page->status = GTK_LABEL(gtk_label_new(_("Saved terrain / Map Bridge is required for live players")));
   gtk_label_set_wrap(page->status, TRUE); gtk_label_set_xalign(page->status, 0); gtk_widget_add_css_class(GTK_WIDGET(page->status), "caption");
   gtk_widget_add_css_class(GTK_WIDGET(page->status), "dim-label"); gtk_widget_set_hexpand(GTK_WIDGET(page->status), TRUE);
   gtk_box_append(GTK_BOX(page->footer), GTK_WIDGET(page->status));
   gtk_widget_set_visible(GTK_WIDGET(page->status), FALSE);
-  page->install = gtk_button_new_with_label("Install Map Bridge...");
+  page->install = gtk_button_new_with_label(_("Install Map Bridge..."));
   gtk_box_append(GTK_BOX(page->footer), page->install);
-  page->approve = gtk_button_new_with_label("Allow Data Access...");
+  page->approve = gtk_button_new_with_label(_("Allow Data Access..."));
   gtk_box_append(GTK_BOX(page->footer), page->approve);
   gtk_box_append(GTK_BOX(page->map), page->footer);
-  page->terrain_status = GTK_LABEL(gtk_label_new("Loading saved terrain..."));
+  page->terrain_status = GTK_LABEL(gtk_label_new(_("Loading saved terrain...")));
   gtk_label_set_xalign(page->terrain_status, 0); gtk_label_set_wrap(page->terrain_status, TRUE);
   gtk_widget_add_css_class(GTK_WIDGET(page->terrain_status), "caption");
   gtk_widget_add_css_class(GTK_WIDGET(page->terrain_status), "dim-label");
@@ -1438,18 +1466,18 @@ void pumpkin_window_minimap_setup(PumpkinWindow *self)
   gtk_stack_add_named(page->map_view, page->map, "content");
   GtkWidget *disabled = adw_status_page_new();
   adw_status_page_set_icon_name(ADW_STATUS_PAGE(disabled), "find-location-symbolic");
-  adw_status_page_set_title(ADW_STATUS_PAGE(disabled), "Minimap is Disabled");
+  adw_status_page_set_title(ADW_STATUS_PAGE(disabled), _("Minimap is Disabled"));
   adw_status_page_set_description(ADW_STATUS_PAGE(disabled), pumpkin_platform_supports_local_hosting() ?
-    "Explore saved chunks without generating terrain. Enable the minimap here or in Settings. Live players require the optional Map Bridge plugin." :
-    "The minimap requires a locally hosted server, which is not supported on this platform.");
-  GtkWidget *enable = gtk_button_new_with_label("Enable Minimap");
+    _("Explore saved chunks without generating terrain. Enable the minimap here or in Settings. Live players require the optional Map Bridge plugin.") :
+    _("The minimap requires a locally hosted server, which is not supported on this platform."));
+  GtkWidget *enable = gtk_button_new_with_label(_("Enable Minimap"));
   gtk_widget_set_halign(enable, GTK_ALIGN_CENTER);
   gtk_widget_add_css_class(enable, "suggested-action");
   gtk_widget_set_sensitive(enable, pumpkin_platform_supports_local_hosting());
   adw_status_page_set_child(ADW_STATUS_PAGE(disabled), enable);
   g_signal_connect(enable, "clicked", G_CALLBACK(enable_clicked), page);
   gtk_stack_add_named(page->map_view, disabled, "disabled");
-  AdwViewStackPage *map_page = adw_view_stack_add_titled(self->details_stack, GTK_WIDGET(page->map_view), "minimap", "Minimap");
+  AdwViewStackPage *map_page = adw_view_stack_add_titled(self->details_stack, GTK_WIDGET(page->map_view), "minimap", _("Minimap"));
   adw_view_stack_page_set_icon_name(map_page, "find-location-symbolic");
   g_signal_connect(page->map_view, "map", G_CALLBACK(map_mapped), page);
 
@@ -1459,27 +1487,27 @@ void pumpkin_window_minimap_setup(PumpkinWindow *self)
   page->player_name = GTK_LABEL(gtk_label_new(NULL)); gtk_widget_add_css_class(GTK_WIDGET(page->player_name), "title-3");
   page->player_info = GTK_LABEL(gtk_label_new(NULL)); gtk_label_set_selectable(page->player_info, TRUE);
   gtk_box_append(GTK_BOX(card), GTK_WIDGET(page->player_name)); gtk_box_append(GTK_BOX(card), GTK_WIDGET(page->player_info));
-  GtkWidget *track = gtk_button_new_with_label("Follow Player"); gtk_box_append(GTK_BOX(card), track);
-  GtkWidget *actions = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6), *kick = gtk_button_new_with_label("Kick..."), *ban = gtk_button_new_with_label("Ban...");
+  GtkWidget *track = gtk_button_new_with_label(_("Follow Player")); gtk_box_append(GTK_BOX(card), track);
+  GtkWidget *actions = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6), *kick = gtk_button_new_with_label(_("Kick...")), *ban = gtk_button_new_with_label(_("Ban..."));
   g_object_set_data(G_OBJECT(ban), "map-ban", GINT_TO_POINTER(1)); gtk_widget_add_css_class(ban, "destructive-action");
   gtk_box_append(GTK_BOX(actions), kick); gtk_box_append(GTK_BOX(actions), ban); gtk_box_append(GTK_BOX(card), actions); gtk_popover_set_child(page->popover, card);
 
   page->enabled = ADW_SWITCH_ROW(adw_switch_row_new());
-  adw_preferences_row_set_title(ADW_PREFERENCES_ROW(page->enabled), "Enable minimap");
-  adw_action_row_set_subtitle(ADW_ACTION_ROW(page->enabled), "Turn off to release map memory and unload the local bridge from all servers.");
+  adw_preferences_row_set_title(ADW_PREFERENCES_ROW(page->enabled), _("Enable minimap"));
+  adw_action_row_set_subtitle(ADW_ACTION_ROW(page->enabled), _("Turn off to release map memory and unload the local bridge from all servers."));
   adw_preferences_group_add(self->minimap_settings_group, GTK_WIDGET(page->enabled));
   gtk_widget_set_sensitive(GTK_WIDGET(page->enabled), pumpkin_platform_supports_local_hosting());
   adw_switch_row_set_active(page->enabled, pumpkin_config_get_minimap_enabled(self->config) && pumpkin_config_get_minimap_consent(self->config));
   AdwActionRow *rate_row = ADW_ACTION_ROW(adw_action_row_new());
-  adw_preferences_row_set_title(ADW_PREFERENCES_ROW(rate_row), "Player update rate");
-  adw_action_row_set_subtitle(rate_row, "Updates per second. Higher rates use more resources.");
+  adw_preferences_row_set_title(ADW_PREFERENCES_ROW(rate_row), _("Player update rate"));
+  adw_action_row_set_subtitle(rate_row, _("Updates per second. Higher rates use more resources."));
   page->refresh_rate = GTK_SCALE(gtk_scale_new_with_range(GTK_ORIENTATION_HORIZONTAL, 2, 20, 1));
   gtk_scale_set_draw_value(page->refresh_rate, TRUE); gtk_scale_set_digits(page->refresh_rate, 0);
   gtk_scale_set_value_pos(page->refresh_rate, GTK_POS_RIGHT); gtk_widget_set_size_request(GTK_WIDGET(page->refresh_rate), 200, -1);
   gtk_range_set_value(GTK_RANGE(page->refresh_rate), pumpkin_config_get_minimap_refresh_hz(self->config));
   gtk_widget_set_sensitive(GTK_WIDGET(page->refresh_rate), adw_switch_row_get_active(page->enabled));
   gtk_widget_set_valign(GTK_WIDGET(page->refresh_rate), GTK_ALIGN_CENTER);
-  gtk_accessible_update_property(GTK_ACCESSIBLE(page->refresh_rate), GTK_ACCESSIBLE_PROPERTY_LABEL, "Minimap player updates per second", -1);
+  gtk_accessible_update_property(GTK_ACCESSIBLE(page->refresh_rate), GTK_ACCESSIBLE_PROPERTY_LABEL, _("Minimap player updates per second"), -1);
   adw_action_row_add_suffix(rate_row, GTK_WIDGET(page->refresh_rate));
   adw_preferences_group_add(self->minimap_settings_group, GTK_WIDGET(rate_row));
   g_signal_connect(page->refresh_rate, "value-changed", G_CALLBACK(refresh_changed), page);

@@ -11,6 +11,18 @@ main(void)
   char command[256];
   while (fgets(command, sizeof(command), stdin) != NULL) {
     if (strcmp(command, "crash\n") == 0) return 7;
+    if (strcmp(command, "buffered-exit-output\n") == 0) {
+      for (guint i = 0; i < 200; ++i) printf("Buffered exit output: %03u\n", i);
+      fflush(stdout);
+      if (!g_file_set_contents("buffered-output-written", "written", -1, NULL)) return 2;
+      return 0;
+    }
+    if (strcmp(command, "lifecycle-log-collision\n") == 0) {
+      puts("Server process exited");
+      puts("Auto-restart scheduled");
+      puts("Serverprozess beendet");
+      fflush(stdout);
+    }
     if (g_str_has_prefix(command, "plugin ")) {
       FILE *journal = fopen("bridge-commands", "a");
       if (journal == NULL) return 2;

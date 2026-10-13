@@ -1,0 +1,17 @@
+# Catalog-discovery fixture only. English text avoids shipping a real translation.
+msgid ""
+msgstr ""
+"Project-Id-Version: smashed-pumpkin test fixture\n"
+"PO-Revision-Date: 2026-10-12 00:00+0000\n"
+"Last-Translator: Smashed Pumpkin contributors\n"
+"Language-Team: Test fixtures\n"
+"Language: zh_TW\n"
+"X-Language-Name: Chinese (Traditional)\n"
+"X-Language-Aliases: zh_Hant;zh_HK;zh_MO\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+msgid "Overview"
+msgstr "Traditional catalog fixture"

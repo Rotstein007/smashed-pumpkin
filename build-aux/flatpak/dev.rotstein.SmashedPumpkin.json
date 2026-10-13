@@ -141,6 +141,9 @@
       "license-files": [
         "LICENSE"
       ],
+      "config-opts": [
+        "-Dlocaledir=share/smashed-pumpkin/translations"
+      ],
       "sources": [
         {
           "type": "dir",

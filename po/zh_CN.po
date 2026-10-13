@@ -1,0 +1,3658 @@
+# Chinese translations for smashed-pumpkin package.
+# Copyright (C) 2026 THE smashed-pumpkin'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the smashed-pumpkin package.
+# Automatically generated, 2026.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: smashed-pumpkin\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-13 00:47+0800\n"
+"PO-Revision-Date: 2026-10-12 20:25+0800\n"
+"Last-Translator: Smashed Pumpkin contributors\n"
+"Language-Team: Simplified Chinese\n"
+"Language: zh_CN\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"X-Language-Name: 简体中文\n"
+"X-Language-Aliases: zh_Hans;zh_Hans_CN;zh_SG\n"
+
+#: resources/ui/window.ui:9 resources/ui/window-windows.ui:9
+msgid "_Info"
+msgstr "_信息"
+
+#: resources/ui/window.ui:15 resources/ui/window-windows.ui:15
+msgid "_Quit"
+msgstr "_退出"
+
+#: resources/ui/window.ui:54 resources/ui/window.ui:2399
+#: resources/ui/window.ui:2555 resources/ui/window-windows.ui:47
+#: resources/ui/window-windows.ui:2396 resources/ui/window-windows.ui:2552
+msgid "Back to Overview"
+msgstr "返回总览"
+
+#: resources/ui/window.ui:71 resources/ui/window-windows.ui:64
+#: src/window.c:8360 src/window.c:10152 src/window.c:11881
+msgid "No server selected"
+msgstr "未选择服务器"
+
+#: resources/ui/window.ui:90 resources/ui/window-windows.ui:82
+msgid "Support Pumpkin development"
+msgstr "支持 Pumpkin 开发"
+
+#: resources/ui/window.ui:104 resources/ui/window-windows.ui:96
+msgid "Sponsor Pumpkin"
+msgstr "赞助 Pumpkin"
+
+#: resources/ui/window.ui:122 resources/ui/window-windows.ui:119
+#: src/window.c:5688 src/window.c:11075
+msgid "Overview"
+msgstr "总览"
+
+#: resources/ui/window.ui:146 resources/ui/window-windows.ui:143
+msgid "Server Networks"
+msgstr "服务器网络"
+
+#: resources/ui/window.ui:156 resources/ui/window-windows.ui:153
+#: src/window.c:7414
+msgid "Add Network"
+msgstr "添加网络"
+
+#: resources/ui/window.ui:175 resources/ui/window.ui:2539
+#: resources/ui/window-windows.ui:172 resources/ui/window-windows.ui:2536
+msgid "Servers"
+msgstr "服务器"
+
+#: resources/ui/window.ui:190 resources/ui/window.ui:2566
+#: resources/ui/window-windows.ui:187 resources/ui/window-windows.ui:2563
+msgid "Add Server"
+msgstr "添加服务器"
+
+#: resources/ui/window.ui:195 resources/ui/window.ui:2572
+#: resources/ui/window-windows.ui:192 resources/ui/window-windows.ui:2569
+msgid "Import Server"
+msgstr "导入服务器"
+
+#: resources/ui/window.ui:219 resources/ui/window-windows.ui:216
+#: src/window.c:5702
+msgid "Details"
+msgstr "详情"
+
+#: resources/ui/window.ui:239 resources/ui/window-windows.ui:236
+msgid "Toggle navigation"
+msgstr "切换导航栏"
+
+#: resources/ui/window.ui:255 resources/ui/window-windows.ui:252
+#: src/window.c:3132
+msgid "Up to date"
+msgstr "已是最新"
+
+#: resources/ui/window.ui:264 resources/ui/window-windows.ui:261
+#: src/window.c:5409 src/window-minimap.c:1089
+msgid "Install"
+msgstr "安装"
+
+#: resources/ui/window.ui:273 resources/ui/window-windows.ui:270
+#: src/window.c:5409 src/window.c:7574 src/window.c:7585
+#: src/window-minimap.c:1089
+msgid "Update"
+msgstr "更新"
+
+#: resources/ui/window.ui:282 resources/ui/window-windows.ui:279
+msgid "Start"
+msgstr "启动"
+
+#: resources/ui/window.ui:291 resources/ui/window-windows.ui:288
+#: src/window-server-actions.c:30
+msgid "Stop"
+msgstr "停止"
+
+#: resources/ui/window.ui:300 resources/ui/window-windows.ui:297
+msgid "Restart"
+msgstr "重启"
+
+#: resources/ui/window.ui:355 resources/ui/window-windows.ui:352
+#: src/window.c:2149
+msgid "Console"
+msgstr "控制台"
+
+#: resources/ui/window.ui:367 resources/ui/window-windows.ui:364
+#: src/window.c:9259
+msgid "System CPU: --"
+msgstr "系统 CPU：--"
+
+#: resources/ui/window.ui:373 resources/ui/window-windows.ui:370
+#: src/window.c:9252
+msgid "System RAM: --"
+msgstr "系统内存：--"
+
+#: resources/ui/window.ui:379 resources/ui/window-windows.ui:376
+#: src/window.c:9364
+msgid "Pumpkin CPU: --"
+msgstr "Pumpkin CPU：--"
+
+#: resources/ui/window.ui:385 resources/ui/window-windows.ui:382
+#: src/window.c:9355
+msgid "Pumpkin RAM: --"
+msgstr "Pumpkin 内存：--"
+
+#: resources/ui/window.ui:416 resources/ui/window-windows.ui:413
+msgid "Enter command…"
+msgstr "输入命令…"
+
+#: resources/ui/window.ui:422 resources/ui/window-windows.ui:419
+msgid "Send command"
+msgstr "发送命令"
+
+#: resources/ui/window.ui:434 resources/ui/window-windows.ui:431
+msgid "Copy"
+msgstr "复制"
+
+#: resources/ui/window.ui:439 resources/ui/window-windows.ui:436
+msgid "Clear"
+msgstr "清除"
+
+#: resources/ui/window.ui:446 resources/ui/window-windows.ui:443
+msgid "Filter"
+msgstr "筛选"
+
+#: resources/ui/window.ui:447 resources/ui/window-windows.ui:444
+msgid "Filter log levels"
+msgstr "筛选日志级别"
+
+#: resources/ui/window.ui:461 resources/ui/window-windows.ui:458
+msgid "Console Levels"
+msgstr "控制台级别"
+
+#: resources/ui/window.ui:468 resources/ui/window.ui:2220
+#: resources/ui/window-windows.ui:465 resources/ui/window-windows.ui:2217
+msgid "All"
+msgstr "全部"
+
+#: resources/ui/window.ui:474 resources/ui/window.ui:2239
+#: resources/ui/window-windows.ui:471 resources/ui/window-windows.ui:2236
+msgid "Trace"
+msgstr "跟踪"
+
+#: resources/ui/window.ui:480 resources/ui/window.ui:2238
+#: resources/ui/window-windows.ui:477 resources/ui/window-windows.ui:2235
+msgid "Debug"
+msgstr "调试"
+
+#: resources/ui/window.ui:486 resources/ui/window.ui:2235
+#: resources/ui/window-windows.ui:483 resources/ui/window-windows.ui:2232
+msgid "Info"
+msgstr "信息"
+
+#: resources/ui/window.ui:492 resources/ui/window.ui:2236
+#: resources/ui/window-windows.ui:489 resources/ui/window-windows.ui:2233
+msgid "Warn"
+msgstr "警告"
+
+#: resources/ui/window.ui:498 resources/ui/window.ui:2237
+#: resources/ui/window-windows.ui:495 resources/ui/window-windows.ui:2234
+msgid "Error"
+msgstr "错误"
+
+#: resources/ui/window.ui:504 resources/ui/window-windows.ui:501
+msgid "SMPK"
+msgstr "SMPK"
+
+#: resources/ui/window.ui:510 resources/ui/window-windows.ui:507
+msgid "Other"
+msgstr "其他"
+
+#: resources/ui/window.ui:523 resources/ui/window-windows.ui:520
+msgid "Server Folder"
+msgstr "服务器目录"
+
+#: resources/ui/window.ui:537 resources/ui/window-windows.ui:534
+#: src/window.c:2149
+msgid "Stats"
+msgstr "统计"
+
+#: resources/ui/window.ui:560 resources/ui/window-windows.ui:557
+msgid "CPU"
+msgstr "CPU"
+
+#: resources/ui/window.ui:609 resources/ui/window-windows.ui:606
+msgid "Memory"
+msgstr "内存"
+
+#: resources/ui/window.ui:646 resources/ui/window-windows.ui:643
+msgid "TPS"
+msgstr "TPS"
+
+#: resources/ui/window.ui:684 resources/ui/window-windows.ui:681
+#: src/window.c:2149
+msgid "Plugins"
+msgstr "插件"
+
+#: resources/ui/window.ui:707 resources/ui/window-windows.ui:704
+msgid "Connect Marketplace account"
+msgstr "连接插件市场账户"
+
+#: resources/ui/window.ui:714 resources/ui/window-windows.ui:711
+msgid "Plugin Folder"
+msgstr "插件目录"
+
+#: resources/ui/window.ui:725 resources/ui/window.ui:945
+#: resources/ui/window-windows.ui:722 resources/ui/window-windows.ui:942
+#: src/window.c:4326
+msgid "Marketplace"
+msgstr "插件市场"
+
+#: resources/ui/window.ui:737 resources/ui/window-windows.ui:734
+msgid "Search marketplace plugins"
+msgstr "搜索市场插件"
+
+#: resources/ui/window.ui:743 resources/ui/window-windows.ui:740
+msgid "Category"
+msgstr "分类"
+
+#: resources/ui/window.ui:751 resources/ui/window-windows.ui:748
+msgid "All types"
+msgstr "所有类型"
+
+#: resources/ui/window.ui:752 resources/ui/window-windows.ui:749
+#: src/window.c:4910
+msgid "Free"
+msgstr "免费"
+
+#: resources/ui/window.ui:753 resources/ui/window-windows.ui:750
+#: src/window.c:4911
+msgid "Paid"
+msgstr "付费"
+
+#: resources/ui/window.ui:754 resources/ui/window-windows.ui:751
+#: src/window.c:4912
+msgid "Adwall"
+msgstr "广告墙"
+
+#: resources/ui/window.ui:770 resources/ui/window.ui:1065
+#: resources/ui/window-windows.ui:767 resources/ui/window-windows.ui:1062
+msgid "Name"
+msgstr "名称"
+
+#: resources/ui/window.ui:771 resources/ui/window-windows.ui:768
+msgid "Downloads"
+msgstr "下载量"
+
+#: resources/ui/window.ui:772 resources/ui/window-windows.ui:769
+msgid "Created"
+msgstr "创建时间"
+
+#: resources/ui/window.ui:773 resources/ui/window-windows.ui:770
+#: src/window.c:5710
+msgid "Updated"
+msgstr "更新时间"
+
+#: resources/ui/window.ui:783 resources/ui/window.ui:1074
+#: resources/ui/window-windows.ui:780 resources/ui/window-windows.ui:1071
+#: src/window.c:6071 src/window.c:10394 src/window.c:14384
+msgid "Sort descending"
+msgstr "按降序排列"
+
+#: resources/ui/window.ui:790 resources/ui/window-windows.ui:787
+msgid "Refresh marketplace list"
+msgstr "刷新市场列表"
+
+#: resources/ui/window.ui:801 resources/ui/window-windows.ui:798
+#: src/window.c:5945
+msgid "Loading marketplace plugins..."
+msgstr "正在加载市场插件…"
+
+#: resources/ui/window.ui:813 resources/ui/window-windows.ui:810
+msgid "Reload"
+msgstr "重新加载"
+
+#: resources/ui/window.ui:814 resources/ui/window-windows.ui:811
+msgid "Retry loading Marketplace plugins"
+msgstr "重试加载插件市场"
+
+#: resources/ui/window.ui:819 resources/ui/window-windows.ui:816
+msgid "Previous"
+msgstr "上一页"
+
+#: resources/ui/window.ui:825 resources/ui/window-windows.ui:822
+msgid "Next"
+msgstr "下一页"
+
+#: resources/ui/window.ui:849 resources/ui/window-windows.ui:846
+#: src/window.c:2972 src/window.c:5335 src/window.c:5409
+msgid "Installed"
+msgstr "已安装"
+
+#: resources/ui/window.ui:895 resources/ui/window-windows.ui:892
+msgid "Drop .so or .wasm plugins here"
+msgstr "将 .so 或 .wasm 插件拖放到此处"
+
+#: resources/ui/window.ui:911 resources/ui/window-windows.ui:908
+msgid "Import local plugins"
+msgstr "导入本地插件"
+
+#: resources/ui/window.ui:923 resources/ui/window-windows.ui:920
+msgid "Import"
+msgstr "导入"
+
+#: resources/ui/window.ui:933 resources/ui/window-windows.ui:930
+msgid "Browse plugin marketplace"
+msgstr "浏览插件市场"
+
+#: resources/ui/window.ui:973 resources/ui/window.ui:1086
+#: resources/ui/window-windows.ui:970 resources/ui/window-windows.ui:1083
+msgid "All players"
+msgstr "所有玩家"
+
+#: resources/ui/window.ui:989 resources/ui/window-windows.ui:986
+#: src/window.c:10243
+msgid "Your players"
+msgstr "玩家"
+
+#: resources/ui/window.ui:996 resources/ui/window-windows.ui:993
+msgid "Player history and live connections"
+msgstr "玩家历史记录与当前连接"
+
+#: resources/ui/window.ui:1006 resources/ui/window-windows.ui:1003
+msgid "Open player data folder"
+msgstr "打开玩家数据目录"
+
+#: resources/ui/window.ui:1025 resources/ui/window-windows.ui:1022
+#: src/window.c:10408
+msgid "Search players"
+msgstr "搜索玩家"
+
+#: resources/ui/window.ui:1031 resources/ui/window-windows.ui:1028
+msgid "Filter by connection status"
+msgstr "按连接状态筛选"
+
+#: resources/ui/window.ui:1035 resources/ui/window-windows.ui:1032
+msgid "Any status"
+msgstr "任意状态"
+
+#: resources/ui/window.ui:1036 resources/ui/window-windows.ui:1033
+#: src/window.c:9965 src/window.c:10991 src/window.c:11058
+msgid "Online"
+msgstr "在线"
+
+#: resources/ui/window.ui:1037 resources/ui/window-windows.ui:1034
+#: src/window.c:9965 src/window.c:10991 src/window.c:11058
+msgid "Offline"
+msgstr "离线"
+
+#: resources/ui/window.ui:1046 resources/ui/window-windows.ui:1043
+msgid "Clear search and connection-status filter"
+msgstr "清除搜索和连接状态筛选"
+
+#: resources/ui/window.ui:1058 resources/ui/window-windows.ui:1055
+msgid "Sort players"
+msgstr "排序玩家"
+
+#: resources/ui/window.ui:1062 resources/ui/window-windows.ui:1059
+#: src/window.c:11084
+msgid "Last seen"
+msgstr "最近在线"
+
+#: resources/ui/window.ui:1063 resources/ui/window-windows.ui:1060
+#: src/window.c:11083
+msgid "Playtime"
+msgstr "游戏时长"
+
+#: resources/ui/window.ui:1064 resources/ui/window-windows.ui:1061
+#: src/window.c:11085
+msgid "Recorded since"
+msgstr "记录起始时间"
+
+#: resources/ui/window.ui:1111 resources/ui/window-windows.ui:1108
+#: src/window.c:10243
+msgid "Whitelist"
+msgstr "白名单"
+
+#: resources/ui/window.ui:1137 resources/ui/window-windows.ui:1134
+#: src/window.c:10243
+msgid "Bans"
+msgstr "封禁"
+
+#: resources/ui/window.ui:1150 resources/ui/window-windows.ui:1147
+msgid "Account bans"
+msgstr "账号封禁"
+
+#: resources/ui/window.ui:1170 resources/ui/window-windows.ui:1167
+msgid "IP bans"
+msgstr "IP 封禁"
+
+#: resources/ui/window.ui:1177 resources/ui/window-windows.ui:1174
+msgid "Address blocks are independent of player connection status."
+msgstr "地址封禁与玩家连接状态无关。"
+
+#: resources/ui/window.ui:1208 resources/ui/window-windows.ui:1205
+#: src/window.c:2149 src/window-worlds.c:482
+msgid "Worlds"
+msgstr "世界"
+
+#: resources/ui/window.ui:1223 resources/ui/window-windows.ui:1220
+#: src/window.c:2149
+msgid "Settings"
+msgstr "设置"
+
+#: resources/ui/window.ui:1240 resources/ui/window-windows.ui:1237
+msgid "Application"
+msgstr "应用"
+
+#: resources/ui/window.ui:1261 resources/ui/window-windows.ui:1258
+msgid "Application startup"
+msgstr "应用启动"
+
+#: resources/ui/window.ui:1264 resources/ui/window-windows.ui:1261
+msgid "Start with system"
+msgstr "随系统启动"
+
+#: resources/ui/window.ui:1265 resources/ui/window-windows.ui:1262
+msgid "Launch the app automatically when you log in."
+msgstr "登录时自动启动应用。"
+
+#: resources/ui/window.ui:1276 resources/ui/window-windows.ui:1273
+msgid "Start minimized"
+msgstr "启动时最小化"
+
+#: resources/ui/window.ui:1277 resources/ui/window-windows.ui:1274
+msgid "Start hidden in the system tray."
+msgstr "启动后隐藏到系统托盘。"
+
+#: resources/ui/window.ui:1290 resources/ui/window-windows.ui:1287
+msgid "Window at startup"
+msgstr "启动时的窗口"
+
+#: resources/ui/window.ui:1291 resources/ui/window-windows.ui:1288
+msgid "Applies on the next launch."
+msgstr "下次启动时生效。"
+
+#: resources/ui/window.ui:1294 resources/ui/window-windows.ui:1291
+msgid "Expand on startup"
+msgstr "启动时展开窗口"
+
+#: resources/ui/window.ui:1295 resources/ui/window-windows.ui:1292
+msgid "Start maximized or in borderless fullscreen."
+msgstr "以最大化窗口或无边框全屏模式启动。"
+
+#: resources/ui/window.ui:1300 resources/ui/window-windows.ui:1297
+msgid "Window mode"
+msgstr "窗口模式"
+
+#: resources/ui/window.ui:1301 resources/ui/window-windows.ui:1298
+msgid "In fullscreen, press F11 to return to a window."
+msgstr "全屏时按 F11 可返回窗口模式。"
+
+#: resources/ui/window.ui:1305 resources/ui/window-windows.ui:1302
+msgid "Maximized window"
+msgstr "最大化窗口"
+
+#: resources/ui/window.ui:1306 resources/ui/window-windows.ui:1303
+msgid "Borderless fullscreen"
+msgstr "无边框全屏"
+
+#: resources/ui/window.ui:1314 resources/ui/window-windows.ui:1311
+#: src/window.c:737 src/window.c:738
+msgid "Monitor"
+msgstr "显示器"
+
+#: resources/ui/window.ui:1321 resources/ui/window-windows.ui:1318
+msgid "Display and time"
+msgstr "显示与时间"
+
+#: resources/ui/window.ui:1324 resources/ui/window-windows.ui:1321
+msgid "Language"
+msgstr "语言"
+
+#: resources/ui/window.ui:1325 resources/ui/window-windows.ui:1322
+msgid ""
+"Save to apply on the next application launch. Missing translations use "
+"English."
+msgstr "保存后将在下次启动应用时生效。缺少的翻译将显示为英文。"
+
+#: resources/ui/window.ui:1331 resources/ui/window-windows.ui:1328
+msgid "Language change saved"
+msgstr "语言设置已保存"
+
+#: resources/ui/window.ui:1332 resources/ui/window-windows.ui:1329
+msgid ""
+"The new language will be used next time you launch the application. Running "
+"servers are not restarted."
+msgstr "新语言将在下次启动应用时生效。运行中的服务器不会重启。"
+
+#: resources/ui/window.ui:1337 resources/ui/window-windows.ui:1334
+msgid "Date format"
+msgstr "日期格式"
+
+#: resources/ui/window.ui:1338 resources/ui/window-windows.ui:1335
+msgid "Used in logs, player information and build labels."
+msgstr "用于日志、玩家信息和构建标签。"
+
+#: resources/ui/window.ui:1346 resources/ui/window-windows.ui:1343
+msgid "YYYY-MM-DD"
+msgstr "YYYY-MM-DD"
+
+#: resources/ui/window.ui:1347 resources/ui/window-windows.ui:1344
+msgid "DD.MM.YYYY"
+msgstr "DD.MM.YYYY"
+
+#: resources/ui/window.ui:1348 resources/ui/window-windows.ui:1345
+msgid "MM/DD/YYYY"
+msgstr "MM/DD/YYYY"
+
+#: resources/ui/window.ui:1358 resources/ui/window-windows.ui:1355
+msgid "Time format"
+msgstr "时间格式"
+
+#: resources/ui/window.ui:1359 resources/ui/window-windows.ui:1356
+msgid "Uses your local system timezone."
+msgstr "使用本地系统时区。"
+
+#: resources/ui/window.ui:1367 resources/ui/window-windows.ui:1364
+msgid "24-hour"
+msgstr "24 小时制"
+
+#: resources/ui/window.ui:1368 resources/ui/window-windows.ui:1365
+msgid "12-hour"
+msgstr "12 小时制"
+
+#: resources/ui/window.ui:1380 resources/ui/window-windows.ui:1377
+msgid "Server startup"
+msgstr "服务器启动"
+
+#: resources/ui/window.ui:1383 resources/ui/window-windows.ui:1380
+msgid "Auto-start servers on launch"
+msgstr "启动应用时自动启动服务器"
+
+#: resources/ui/window.ui:1384 resources/ui/window-windows.ui:1381
+msgid "Start the selected servers after their configured delay."
+msgstr "在设定的延迟后启动所选服务器。"
+
+#: resources/ui/window.ui:1404 resources/ui/window-windows.ui:1401
+msgid "Add server to auto-start list"
+msgstr "将服务器添加到自动启动列表"
+
+#: resources/ui/window.ui:1410 resources/ui/window.ui:2483
+#: resources/ui/window-windows.ui:1407 resources/ui/window-windows.ui:2480
+#: src/window.c:7727
+msgid "Add server"
+msgstr "添加服务器"
+
+#: resources/ui/window.ui:1426 resources/ui/window-windows.ui:1423
+msgid "Background and overview"
+msgstr "后台运行与总览"
+
+#: resources/ui/window.ui:1429 resources/ui/window-windows.ui:1426
+msgid "Keep running in background"
+msgstr "在后台继续运行"
+
+#: resources/ui/window.ui:1430 resources/ui/window-windows.ui:1427
+msgid "Closing the window keeps the app and servers running."
+msgstr "关闭窗口后，应用和服务器仍会继续运行。"
+
+#: resources/ui/window.ui:1441 resources/ui/window-windows.ui:1438
+msgid "Show detailed server cards"
+msgstr "显示详细服务器卡片"
+
+#: resources/ui/window.ui:1442 resources/ui/window-windows.ui:1439
+msgid "Show build, players, size, ports and status in the overview."
+msgstr "在总览中显示构建信息、玩家数、大小、端口和状态。"
+
+#: resources/ui/window.ui:1455 resources/ui/window-windows.ui:1452
+#: src/window.c:2149 src/window-minimap.c:1471
+msgid "Minimap"
+msgstr "小地图"
+
+#: resources/ui/window.ui:1456 resources/ui/window-windows.ui:1453
+msgid "Optional world map and local player telemetry. Applies immediately."
+msgstr "可选的世界地图和本地玩家遥测功能。更改立即生效。"
+
+#: resources/ui/window.ui:1461 resources/ui/window-windows.ui:1458
+msgid "Downloads and storage"
+msgstr "下载与存储"
+
+#: resources/ui/window.ui:1464 resources/ui/window-windows.ui:1461
+msgid "Pumpkin release channel"
+msgstr "Pumpkin 发布频道"
+
+#: resources/ui/window.ui:1465 resources/ui/window-windows.ui:1462
+msgid ""
+"Applies to future installs and updates. Back up worlds before changing "
+"channels; plugin compatibility may differ."
+msgstr ""
+"仅影响之后的安装和更新。切换频道前请备份世界；不同频道的插件兼容性可能不同。"
+
+#: resources/ui/window.ui:1469 resources/ui/window-windows.ui:1466
+msgid "Nightly"
+msgstr "每日构建版"
+
+#: resources/ui/window.ui:1470 resources/ui/window-windows.ui:1467
+msgid "Stable"
+msgstr "稳定版"
+
+#: resources/ui/window.ui:1478 resources/ui/window-windows.ui:1475
+msgid "Use local download cache"
+msgstr "使用本地下载缓存"
+
+#: resources/ui/window.ui:1479 resources/ui/window-windows.ui:1476
+msgid "Reuse downloaded Pumpkin binaries across servers."
+msgstr "在不同服务器之间复用已下载的 Pumpkin 程序文件。"
+
+#: resources/ui/window.ui:1490 resources/ui/window-windows.ui:1487
+msgid "Cached downloads"
+msgstr "缓存的下载文件"
+
+#: resources/ui/window.ui:1491 resources/ui/window-windows.ui:1488
+msgid "Installed servers are not removed."
+msgstr "不会移除已安装的服务器。"
+
+#: resources/ui/window.ui:1494 resources/ui/window-windows.ui:1491
+#: src/window.c:1152
+msgid "Clear Cache"
+msgstr "清除缓存"
+
+#: resources/ui/window.ui:1496 resources/ui/window-windows.ui:1493
+msgid "Delete all cached Pumpkin binaries"
+msgstr "删除所有缓存的 Pumpkin 程序文件"
+
+#: resources/ui/window.ui:1505 resources/ui/window-windows.ui:1502
+msgid "Advanced"
+msgstr "高级"
+
+#: resources/ui/window.ui:1508 resources/ui/window-windows.ui:1505
+msgid "Download URL"
+msgstr "下载 URL"
+
+#: resources/ui/window.ui:1509 resources/ui/window-windows.ui:1506
+msgid ""
+"Leave empty to use the selected release channel. Custom URLs override the "
+"channel and are not checked for updates."
+msgstr "留空则使用所选发布频道。自定义 URL 会覆盖频道设置，且不会检查更新。"
+
+#: resources/ui/window.ui:1514 resources/ui/window-windows.ui:1511
+msgid "Pumpkin download URL (binary)"
+msgstr "Pumpkin 程序文件下载 URL"
+
+#: resources/ui/window.ui:1528 resources/ui/window-windows.ui:1525
+msgid "Save Application Settings"
+msgstr "保存应用设置"
+
+#: resources/ui/window.ui:1534 resources/ui/window.ui:2181
+#: resources/ui/window-windows.ui:1531 resources/ui/window-windows.ui:2178
+msgid "Reset to Defaults"
+msgstr "恢复默认设置"
+
+#: resources/ui/window.ui:1551 resources/ui/window-windows.ui:1548
+msgid "Server"
+msgstr "服务器"
+
+#: resources/ui/window.ui:1573 resources/ui/window-windows.ui:1570
+msgid "Server Settings"
+msgstr "服务器设置"
+
+#: resources/ui/window.ui:1581 resources/ui/window-windows.ui:1578
+msgid "Identity & Install"
+msgstr "标识与安装"
+
+#: resources/ui/window.ui:1588 resources/ui/window-windows.ui:1585
+msgid "Server name (shown in the app)"
+msgstr "服务器名称（在应用中显示）"
+
+#: resources/ui/window.ui:1596 resources/ui/window-windows.ui:1593
+#: src/window.c:12798
+msgid "Choose Server Icon"
+msgstr "选择服务器图标"
+
+#: resources/ui/window.ui:1601 resources/ui/window-windows.ui:1598
+msgid "Reset Icon"
+msgstr "重置图标"
+
+#: resources/ui/window.ui:1608 resources/ui/window-windows.ui:1605
+msgid ""
+"Minecraft uses a 64×64 PNG named server-icon.png in the server root. The "
+"image will be resized and saved there."
+msgstr ""
+"Minecraft 使用服务器根目录中名为 server-icon.png 的 64×64 PNG 图片作为图标。"
+"图片会调整尺寸后保存到该目录。"
+
+#: resources/ui/window.ui:1620 resources/ui/window-windows.ui:1617
+msgid "Networking"
+msgstr "网络"
+
+#: resources/ui/window.ui:1634 resources/ui/window-windows.ui:1631
+msgid "Java Port"
+msgstr "Java 版端口"
+
+#: resources/ui/window.ui:1641 resources/ui/window.ui:1661
+#: resources/ui/window-windows.ui:1638 resources/ui/window-windows.ui:1658
+msgid "Port"
+msgstr "端口"
+
+#: resources/ui/window.ui:1654 resources/ui/window-windows.ui:1651
+msgid "Bedrock Port"
+msgstr "基岩版端口"
+
+#: resources/ui/window.ui:1672 resources/ui/window.ui:1681
+#: resources/ui/window.ui:2153 resources/ui/window-windows.ui:1669
+#: resources/ui/window-windows.ui:1678 resources/ui/window-windows.ui:2150
+#: src/window.c:1705 src/window.c:1717 src/window.c:1756
+msgid "Port must be 1–65535."
+msgstr "端口必须在 1–65535 之间。"
+
+#: resources/ui/window.ui:1690 resources/ui/window-windows.ui:1687
+msgid "Maximum player count."
+msgstr "玩家人数上限。"
+
+#: resources/ui/window.ui:1698 resources/ui/window-windows.ui:1695
+msgid "Max players"
+msgstr "最大玩家数"
+
+#: resources/ui/window.ui:1706 resources/ui/window-windows.ui:1703
+#: src/window.c:1729
+msgid "Max players must be at least 1."
+msgstr "最大玩家数必须至少为 1。"
+
+#: resources/ui/window.ui:1715 resources/ui/window-windows.ui:1712
+msgid "Update rate for stats and player polling (milliseconds)."
+msgstr "统计信息和玩家状态的轮询间隔（毫秒）。"
+
+#: resources/ui/window.ui:1723 resources/ui/window-windows.ui:1720
+msgid "Update rate (ms)"
+msgstr "更新间隔（毫秒）"
+
+#: resources/ui/window.ui:1731 resources/ui/window-windows.ui:1728
+#: src/window.c:1744
+msgid "Update rate must be between 2ms and 2000ms."
+msgstr "更新间隔必须在 2 至 2000 毫秒之间。"
+
+#: resources/ui/window.ui:1748 resources/ui/window-windows.ui:1745
+msgid "Domains & DDNS"
+msgstr "域名与 DDNS"
+
+#: resources/ui/window.ui:1755 resources/ui/window-windows.ui:1752
+msgid ""
+"Set hostnames for this server and optionally keep a Cloudflare DNS record "
+"updated when your home IP changes."
+msgstr ""
+"为此服务器设置主机名；也可在家庭 IP 地址变化时自动更新 Cloudflare DNS 记录。"
+
+#: resources/ui/window.ui:1763 resources/ui/window-windows.ui:1760
+msgid "Domain or subdomain (e.g. pumpkin.rotstein.dev)"
+msgstr "域名或子域名（例如 pumpkin.rotstein.dev）"
+
+#: resources/ui/window.ui:1771 resources/ui/window-windows.ui:1768
+msgid "Dynamic DNS (Cloudflare)"
+msgstr "动态 DNS（Cloudflare）"
+
+#: resources/ui/window.ui:1781 resources/ui/window-windows.ui:1778
+msgid "Enable DDNS"
+msgstr "启用 DDNS"
+
+#: resources/ui/window.ui:1795 resources/ui/window-windows.ui:1792
+msgid "Cloudflare Zone ID (required)"
+msgstr "Cloudflare 区域 ID（必填）"
+
+#: resources/ui/window.ui:1800 resources/ui/window-windows.ui:1797
+msgid "Cloudflare API Token (required)"
+msgstr "Cloudflare API 令牌（必填）"
+
+#: resources/ui/window.ui:1805 resources/ui/window-windows.ui:1802
+msgid "Cloudflare Record ID (optional, auto-discovered when empty)"
+msgstr "Cloudflare 记录 ID（选填，留空时自动查找）"
+
+#: resources/ui/window.ui:1813 resources/ui/window-windows.ui:1810
+msgid "Proxied (orange cloud)"
+msgstr "通过代理（橙色云朵）"
+
+#: resources/ui/window.ui:1830 resources/ui/window-windows.ui:1827
+msgid "Interval (30-86400 seconds)"
+msgstr "间隔（30–86400 秒）"
+
+#: resources/ui/window.ui:1850 resources/ui/window-windows.ui:1847
+msgid "Sync now"
+msgstr "立即同步"
+
+#: resources/ui/window.ui:1857 resources/ui/window-windows.ui:1854
+#: src/window.c:11744 src/window.c:11795 src/window.c:11869
+msgid "DDNS disabled."
+msgstr "DDNS 已停用。"
+
+#: resources/ui/window.ui:1869 resources/ui/window-windows.ui:1866
+msgid "DNS setup guide"
+msgstr "DNS 设置指南"
+
+#: resources/ui/window.ui:1876 resources/ui/window-windows.ui:1873
+#: src/window.c:11766
+msgid "Target: your-public-ip (Java:25565, Bedrock:19132)"
+msgstr "目标：your-public-ip（Java：25565，基岩版：19132）"
+
+#: resources/ui/window.ui:1882 resources/ui/window-windows.ui:1879
+msgid "1) Create one A/AAAA record for your domain to your public server IP."
+msgstr "1）为域名创建一条指向服务器公网 IP 的 A/AAAA 记录。"
+
+#: resources/ui/window.ui:1890 resources/ui/window-windows.ui:1887
+msgid ""
+"2) If Java does not use port 25565, add an SRV record: _minecraft._tcp."
+"<domain> with your Java port."
+msgstr ""
+"2）如果 Java 版未使用 25565 端口，请添加 SRV 记录 _minecraft._tcp.<domain>，"
+"并填写 Java 版端口。"
+
+#: resources/ui/window.ui:1898 resources/ui/window-windows.ui:1895
+msgid ""
+"3) For Bedrock on the same domain, add an SRV record: _minecraft._udp."
+"<domain> with your Bedrock port if needed."
+msgstr ""
+"3）如果基岩版使用同一域名，必要时请添加 SRV 记录 _minecraft._udp.<domain>，并"
+"填写基岩版端口。"
+
+#: resources/ui/window.ui:1906 resources/ui/window-windows.ui:1903
+msgid "Save Domain & DDNS Settings"
+msgstr "保存域名与 DDNS 设置"
+
+#: resources/ui/window.ui:1919 resources/ui/window-windows.ui:1916
+msgid "Performance Limits"
+msgstr "性能限制"
+
+#: resources/ui/window.ui:1929 resources/ui/window-windows.ui:1926
+msgid "Max CPU cores"
+msgstr "最大 CPU 核心数"
+
+#: resources/ui/window.ui:1934 resources/ui/window-windows.ui:1931
+msgid "Max RAM (MB)"
+msgstr "最大内存（MB）"
+
+#: resources/ui/window.ui:1941 resources/ui/window-windows.ui:1938
+msgid "Max CPU cores available: --."
+msgstr "可用 CPU 核心数上限：--。"
+
+#: resources/ui/window.ui:1950 resources/ui/window-windows.ui:1947
+msgid "Max RAM available: -- MB."
+msgstr "可用内存上限：-- MB。"
+
+#: resources/ui/window.ui:1959 resources/ui/window-windows.ui:1956
+#: src/window.c:12002
+msgid "Max available: -- cores, -- MB RAM."
+msgstr "可用上限：-- 核心、-- MB 内存。"
+
+#: resources/ui/window.ui:1967 resources/ui/window-windows.ui:1964
+msgid "Recommendation: set at least 5 GB RAM."
+msgstr "建议至少分配 5 GB 内存。"
+
+#: resources/ui/window.ui:1979 resources/ui/window-windows.ui:1976
+msgid "Reliability"
+msgstr "可靠性"
+
+#: resources/ui/window.ui:1989 resources/ui/window-windows.ui:1986
+msgid "Auto restart"
+msgstr "自动重启"
+
+#: resources/ui/window.ui:2006 resources/ui/window-windows.ui:2003
+msgid "Delay (ms)"
+msgstr "延迟（毫秒）"
+
+#: resources/ui/window.ui:2014 resources/ui/window-windows.ui:2011
+msgid "ms"
+msgstr "毫秒"
+
+#: resources/ui/window.ui:2022 resources/ui/window-windows.ui:2019
+msgid "The server will restart automatically after this delay if it crashes."
+msgstr "服务器崩溃后，将在此延迟时间结束时自动重启。"
+
+#: resources/ui/window.ui:2033 resources/ui/window-windows.ui:2030
+msgid "Auto Update"
+msgstr "自动更新"
+
+#: resources/ui/window.ui:2043 resources/ui/window-windows.ui:2040
+msgid "Install updates automatically"
+msgstr "自动安装更新"
+
+#: resources/ui/window.ui:2060 resources/ui/window-windows.ui:2057
+msgid "Use scheduled time"
+msgstr "使用计划时间"
+
+#: resources/ui/window.ui:2077 resources/ui/window-windows.ui:2074
+msgid "HH:MM (24h)"
+msgstr "HH:MM（24 小时制）"
+
+#: resources/ui/window.ui:2085 resources/ui/window-windows.ui:2082
+msgid "Local time"
+msgstr "本地时间"
+
+#: resources/ui/window.ui:2093 resources/ui/window-windows.ui:2090
+#: src/window.c:1772
+msgid "Use HH:MM (24h), e.g. 01:00."
+msgstr "请使用 HH:MM（24 小时制），例如 01:00。"
+
+#: resources/ui/window.ui:2102 resources/ui/window-windows.ui:2099
+msgid ""
+"When enabled, the server announces a 10s update restart and then counts down "
+"3..2..1.. before restarting."
+msgstr ""
+"启用后，服务器会在更新重启前提前 10 秒通知，并在重启前显示 3、2、1 倒计时。"
+
+#: resources/ui/window.ui:2114 resources/ui/window-windows.ui:2111
+msgid "RCON"
+msgstr "RCON"
+
+#: resources/ui/window.ui:2121 resources/ui/window-windows.ui:2118
+msgid ""
+"RCON (Remote Console) is optional. Use it if you want to control the server "
+"from admin tools or scripts."
+msgstr "RCON（远程控制台）为可选功能，可用于通过管理工具或脚本控制服务器。"
+
+#: resources/ui/window.ui:2132 resources/ui/window-windows.ui:2129
+msgid "RCON host"
+msgstr "RCON 主机"
+
+#: resources/ui/window.ui:2137 resources/ui/window-windows.ui:2134
+msgid "RCON port"
+msgstr "RCON 端口"
+
+#: resources/ui/window.ui:2144 resources/ui/window-windows.ui:2141
+#: src/window.c:1763
+msgid "Enter a valid IP address."
+msgstr "请输入有效的 IP 地址。"
+
+#: resources/ui/window.ui:2162 resources/ui/window-windows.ui:2159
+msgid "RCON password (keep secret)"
+msgstr "RCON 密码（请妥善保密）"
+
+#: resources/ui/window.ui:2175 resources/ui/window-windows.ui:2172
+msgid "Save Server Settings"
+msgstr "保存服务器设置"
+
+#: resources/ui/window.ui:2205 resources/ui/window-windows.ui:2202
+#: src/window.c:2149
+msgid "Logs"
+msgstr "日志"
+
+#: resources/ui/window.ui:2221 resources/ui/window-windows.ui:2218
+msgid "Today"
+msgstr "今天"
+
+#: resources/ui/window.ui:2222 resources/ui/window-windows.ui:2219
+msgid "This week"
+msgstr "本周"
+
+#: resources/ui/window.ui:2234 resources/ui/window-windows.ui:2231
+msgid "All levels"
+msgstr "所有级别"
+
+#: resources/ui/window.ui:2247 resources/ui/window-windows.ui:2244
+msgid "Search sessions…"
+msgstr "搜索会话…"
+
+#: resources/ui/window.ui:2254 resources/ui/window-windows.ui:2251
+msgid "Refresh sessions"
+msgstr "刷新会话"
+
+#: resources/ui/window.ui:2274 resources/ui/window-windows.ui:2271
+msgid "Sessions"
+msgstr "会话"
+
+#: resources/ui/window.ui:2311 resources/ui/window-windows.ui:2308
+#: src/window.c:13627
+msgid "Session archive"
+msgstr "会话归档"
+
+#: resources/ui/window.ui:2319 resources/ui/window-windows.ui:2316
+msgid "Select a server session to view its log"
+msgstr "选择一个服务器会话以查看日志"
+
+#: resources/ui/window.ui:2355 resources/ui/window-windows.ui:2352
+msgid "Open Logs Folder"
+msgstr "打开日志目录"
+
+#: resources/ui/window.ui:2361 resources/ui/window-windows.ui:2358
+#: src/window.c:14039
+msgid "Clear All Logs"
+msgstr "清除所有日志"
+
+#: resources/ui/window.ui:2383 resources/ui/window-windows.ui:2380
+msgid "Network Details"
+msgstr "网络详情"
+
+#: resources/ui/window.ui:2418 resources/ui/window-windows.ui:2415
+msgid "No network selected"
+msgstr "未选择网络"
+
+#: resources/ui/window.ui:2455 resources/ui/window-windows.ui:2452
+msgid "Start all"
+msgstr "全部启动"
+
+#: resources/ui/window.ui:2462 resources/ui/window-windows.ui:2459
+msgid "Stop all"
+msgstr "全部停止"
+
+#: resources/ui/window.ui:2469 resources/ui/window-windows.ui:2466
+msgid "Update all"
+msgstr "全部更新"
+
+#: resources/ui/window.ui:2476 resources/ui/window-windows.ui:2473
+msgid "Install all"
+msgstr "全部安装"
+
+#: resources/ui/window.ui:2490 resources/ui/window-windows.ui:2487
+msgid "Set icon"
+msgstr "设置图标"
+
+#: resources/ui/window.ui:2497 resources/ui/window-windows.ui:2494
+msgid "Reset icon"
+msgstr "重置图标"
+
+#: resources/ui/window.ui:2504 resources/ui/window-windows.ui:2501
+msgid "Set proxy"
+msgstr "设置代理"
+
+#: resources/ui/window.ui:2511 resources/ui/window-windows.ui:2508
+msgid "Clear proxy"
+msgstr "清除代理"
+
+#: resources/ui/window.ui:2579 resources/ui/window-windows.ui:2576
+#: src/window.c:7370 src/window.c:13390
+msgid "Delete"
+msgstr "删除"
+
+#: src/app.c:169
+msgid "Share your feedback"
+msgstr "分享您的反馈"
+
+#: src/app.c:171
+msgid "You can rate the app in GNOME Software or KDE Discover."
+msgstr "您可以在 GNOME Software 或 KDE Discover 中为应用评分。"
+
+#: src/app.c:173 src/window.c:5716 src/window.c:6199 src/window.c:7120
+msgid "Close"
+msgstr "关闭"
+
+#. Translators: Keep the <ul> and <li> markup in these release notes.
+#: src/app.c:463
+msgid ""
+"<ul><li>Interactive minimap with player markers, viewing direction, player "
+"tracking and world switching.</li><li>Pumpkin Marketplace: browse, install "
+"and update plugins.</li></ul>"
+msgstr ""
+"<ul><li>可交互的小地图，支持玩家标记、视线方向显示、玩家跟踪和世界切换。</"
+"li><li>Pumpkin 插件市场：浏览、安装和更新插件。</li></ul>"
+
+#: src/app.c:473
+msgid ""
+"This is an independend tool and is not related to PumpkinMC. The following "
+"links lead to the PumpkinMC project."
+msgstr "这是一个独立工具，与 PumpkinMC 无关。以下链接指向 PumpkinMC 项目。"
+
+#: src/app.c:478
+msgid "Website"
+msgstr "网站"
+
+#: src/app.c:479
+msgid "Contribute"
+msgstr "参与贡献"
+
+#: src/app.c:481
+msgid "Issues"
+msgstr "问题反馈"
+
+#. Translators: %s is a display date/time, not persisted build metadata.
+#. Translators: %s is an unmodified build identifier.
+#: src/build-metadata.c:88 src/window.c:2969
+#, c-format
+msgid "Build %s"
+msgstr "构建版本 %s"
+
+#. Translators: %s is an unmodified version identifier.
+#: src/build-metadata.c:92
+#, c-format
+msgid "Stable %s"
+msgstr "稳定版 %s"
+
+#. Translators: %s is an unmodified nightly build identifier.
+#: src/build-metadata.c:96
+#, c-format
+msgid "Nightly %s"
+msgstr "每日构建版 %s"
+
+#: src/tray.c:100
+msgid "Open"
+msgstr "打开"
+
+#: src/tray.c:101
+msgid "Quit"
+msgstr "退出"
+
+#: src/window.c:146
+msgid "Android preview"
+msgstr "Android 预览版"
+
+#: src/window.c:148
+msgid ""
+"This first Android port currently focuses on GTK UI bring-up. Local Pumpkin "
+"hosting, server installs and server imports are intentionally disabled for "
+"now."
+msgstr ""
+"此次首次移植到 Android 的工作目前侧重于让 GTK 界面正常运行。本地运行 Pumpkin "
+"服务器、安装服务器和导入服务器等功能暂时被禁用。"
+
+#: src/window.c:604 src/window.c:612
+msgid "s"
+msgstr "秒"
+
+#: src/window.c:671
+msgid "No more servers available"
+msgstr "没有更多可用服务器"
+
+#: src/window.c:721
+msgid "System default"
+msgstr "系统默认"
+
+#: src/window.c:745
+msgid "Saved monitor (disconnected)"
+msgstr "已保存的显示器（未连接）"
+
+#: src/window.c:777
+msgid ""
+"For maximized windows, your desktop chooses the monitor. Select fullscreen "
+"to choose one."
+msgstr ""
+"窗口最大化时，由桌面环境选择显示器。若要自行选择显示器，请使用全屏模式。"
+
+#: src/window.c:778
+msgid "If the selected monitor is disconnected, the system default is used."
+msgstr "如果所选显示器未连接，将使用系统默认显示器。"
+
+#: src/window.c:808 src/window.c:810
+msgid "Failed to save general settings"
+msgstr "保存通用设置失败"
+
+#: src/window.c:818
+msgid "Language saved. It will take effect on the next application launch."
+msgstr "语言设置已保存，将在下次启动应用时生效。"
+
+#: src/window.c:887 src/window.c:888
+msgid "General settings saved"
+msgstr "通用设置已保存"
+
+#: src/window.c:962
+msgid "Reset General Settings?"
+msgstr "要重置通用设置吗？"
+
+#: src/window.c:963
+msgid ""
+"All general settings will be reset to their default values. This cannot be "
+"undone."
+msgstr "所有通用设置都将恢复为默认值。此操作无法撤销。"
+
+#: src/window.c:965 src/window.c:1030 src/window.c:1151 src/window.c:1940
+#: src/window.c:2043 src/window.c:4329 src/window.c:7339 src/window.c:7369
+#: src/window.c:7416 src/window.c:7906 src/window.c:10561 src/window.c:10600
+#: src/window.c:10637 src/window.c:10898 src/window.c:12384 src/window.c:12580
+#: src/window.c:13389 src/window.c:13487 src/window.c:14038
+#: src/window-minimap.c:921 src/window-minimap.c:1089 src/window-minimap.c:1149
+#: src/window-minimap.c:1304 src/window-worlds.c:200
+msgid "Cancel"
+msgstr "取消"
+
+#: src/window.c:966 src/window.c:1031
+msgid "Reset"
+msgstr "重置"
+
+#: src/window.c:1027
+msgid "Reset Server Settings?"
+msgstr "要重置服务器设置吗？"
+
+#: src/window.c:1028
+msgid ""
+"All settings for this server will be reset to their default values. This "
+"cannot be undone."
+msgstr "此服务器的所有设置都将恢复为默认值。此操作无法撤销。"
+
+#: src/window.c:1123
+msgid "Cache directory does not exist."
+msgstr "缓存目录不存在。"
+
+#: src/window.c:1124
+msgid "Cache is already empty"
+msgstr "缓存已经为空"
+
+#: src/window.c:1133
+#, c-format
+msgid "Cache cleared (%.1f MB freed)"
+msgstr "缓存已清除（已释放 %.1f MB）"
+
+#: src/window.c:1135
+#, c-format
+msgid "Cache cleared (%.1f KB freed)"
+msgstr "缓存已清除（已释放 %.1f KB）"
+
+#: src/window.c:1137
+#, c-format
+msgid "Cache cleared (%d bytes freed)"
+msgstr "缓存已清除（已释放 %d 字节）"
+
+#: src/window.c:1148
+msgid "Clear Download Cache?"
+msgstr "要清除下载缓存吗？"
+
+#: src/window.c:1149
+msgid ""
+"All cached Pumpkin binaries will be deleted. Future installs will need to "
+"download again."
+msgstr "所有缓存的 Pumpkin 程序文件都将被删除。之后安装时需要重新下载。"
+
+#: src/window.c:1679 src/window.c:1689 src/window.c:1699 src/window.c:1711
+#: src/window.c:1723 src/window.c:1735 src/window.c:1750
+msgid "No negative values allowed."
+msgstr "不允许使用负数。"
+
+#: src/window.c:1683
+msgid "Above available cores."
+msgstr "超过可用核心数。"
+
+#: src/window.c:1693
+msgid "Above available RAM."
+msgstr "超过可用内存。"
+
+#: src/window.c:1701 src/window.c:1713 src/window.c:1752
+msgid "Port must be a number."
+msgstr "端口必须为数字。"
+
+#: src/window.c:1725
+msgid "Max players must be a number."
+msgstr "最大玩家数必须为数字。"
+
+#: src/window.c:1737
+msgid "Update rate must be a number."
+msgstr "更新间隔必须为数字。"
+
+#: src/window.c:1741
+msgid "Update rate is required."
+msgstr "必须填写更新间隔。"
+
+#: src/window.c:1832 src/window.c:1841 src/window.c:1868
+msgid "Port is invalid."
+msgstr "端口无效。"
+
+#: src/window.c:1850
+msgid "Max players is invalid."
+msgstr "最大玩家数无效。"
+
+#: src/window.c:1859
+msgid "Update rate is invalid."
+msgstr "更新间隔无效。"
+
+#: src/window.c:1877
+msgid "Host is invalid."
+msgstr "主机地址无效。"
+
+#: src/window.c:1886
+msgid "Time is invalid."
+msgstr "时间无效。"
+
+#: src/window.c:1898
+#, c-format
+msgid "Max CPU cores available: %d."
+msgstr "可用 CPU 核心数上限：%d。"
+
+#: src/window.c:1911
+#, c-format
+msgid "Max RAM available: %d MB."
+msgstr "可用内存上限：%d MB。"
+
+#: src/window.c:1938
+msgid "Unsaved changes"
+msgstr "有未保存的更改"
+
+#: src/window.c:1938
+msgid "Save changes before leaving Settings?"
+msgstr "离开设置前要保存更改吗？"
+
+#: src/window.c:1941 src/window.c:14316
+msgid "Discard"
+msgstr "放弃更改"
+
+#: src/window.c:1942
+msgid "Save"
+msgstr "保存"
+
+#: src/window.c:2040
+msgid "Update in progress"
+msgstr "正在更新"
+
+#: src/window.c:2041
+msgid ""
+"A server update is currently running. Closing now may interrupt the "
+"installation."
+msgstr "服务器正在更新。现在关闭可能会中断安装。"
+
+#: src/window.c:2044
+msgid "Close anyway"
+msgstr "仍然关闭"
+
+#: src/window.c:2149
+msgid "Players"
+msgstr "玩家"
+
+#: src/window.c:2401
+msgid "Server stopped unexpectedly."
+msgstr "服务器意外停止。"
+
+#: src/window.c:2429
+msgid "Server session started"
+msgstr "服务器会话已开始"
+
+#: src/window.c:2729
+msgid "Java"
+msgstr "Java"
+
+#: src/window.c:2732
+msgid "Bedrock"
+msgstr "基岩版"
+
+#: src/window.c:2734 src/window.c:3485 src/window.c:4886 src/window.c:4920
+#: src/window.c:4923 src/window-worlds.c:321
+msgid "Unknown"
+msgstr "未知"
+
+#: src/window.c:2894
+#, c-format
+msgid "%llud %lluh"
+msgstr "%llu 天 %llu 小时"
+
+#: src/window.c:2897
+#, c-format
+msgid "%lluh %llum"
+msgstr "%llu 小时 %llu 分钟"
+
+#: src/window.c:2900
+#, c-format
+msgid "%llum %llus"
+msgstr "%llu 分钟 %llu 秒"
+
+#: src/window.c:2902
+#, c-format
+msgid "%llus"
+msgstr "%llu 秒"
+
+#: src/window.c:2909 src/window.c:2913 src/window.c:2922
+msgid "Never"
+msgstr "从未"
+
+#: src/window.c:2930
+#, c-format
+msgid "%llus ago"
+msgstr "%llu 秒前"
+
+#: src/window.c:2933
+#, c-format
+msgid "%llum ago"
+msgstr "%llu 分钟前"
+
+#: src/window.c:2936
+#, c-format
+msgid "%lluh ago"
+msgstr "%llu 小时前"
+
+#: src/window.c:2939
+#, c-format
+msgid "%llud ago"
+msgstr "%llu 天前"
+
+#: src/window.c:2941
+#, c-format
+msgid "%lluy ago"
+msgstr "%llu 年前"
+
+#: src/window.c:2950
+msgid "Installing..."
+msgstr "正在安装…"
+
+#: src/window.c:2952
+msgid "Not installed"
+msgstr "尚未安装"
+
+#: src/window.c:3096
+msgid "Custom source"
+msgstr "自定义来源"
+
+#: src/window.c:3097
+msgid "Custom download URLs are not checked for updates"
+msgstr "使用自定义下载 URL 时不会检查更新"
+
+#: src/window.c:3102
+msgid "Checking..."
+msgstr "正在检查…"
+
+#: src/window.c:3103
+msgid "Checking for updates..."
+msgstr "正在检查更新…"
+
+#: src/window.c:3109
+msgid "Check failed"
+msgstr "检查失败"
+
+#: src/window.c:3115
+msgid "Check updates"
+msgstr "检查更新"
+
+#: src/window.c:3116 src/window.c:3133
+msgid "Check for updates"
+msgstr "检查更新"
+
+#: src/window.c:3128
+msgid "Update available"
+msgstr "有可用更新"
+
+#: src/window.c:3129
+msgid "Update available. Check again for newer builds"
+msgstr "有可用更新。可再次检查是否有更新的构建版本"
+
+#: src/window.c:3248 src/window.c:3762 src/window.c:13530
+msgid "installed"
+msgstr "已安装"
+
+#: src/window.c:3250 src/window.c:3764 src/window.c:13532
+msgid "latest"
+msgstr "最新"
+
+#: src/window.c:3251 src/window.c:3765 src/window.c:13533
+#, c-format
+msgid "Updating Pumpkin binary: %s -> %s"
+msgstr "正在更新 Pumpkin 程序文件：%s -> %s"
+
+#: src/window.c:3690
+msgid "Server name cannot be empty."
+msgstr "服务器名称不能为空。"
+
+#: src/window.c:3694
+msgid "Server name already exists."
+msgstr "服务器名称已存在。"
+
+#: src/window.c:3886
+msgid "Local Pumpkin hosting is not available on Android yet."
+msgstr "Android 暂不支持在本地运行 Pumpkin 服务器。"
+
+#: src/window.c:4045
+msgid "Recovered server binary from cache"
+msgstr "已从缓存恢复服务器程序文件"
+
+#: src/window.c:4101 src/window.c:13080 src/window.c:13474
+msgid "Install/update already in progress"
+msgstr "已有安装或更新操作正在进行"
+
+#: src/window.c:4232
+msgid "Marketplace API key connected"
+msgstr "插件市场 API 密钥已连接"
+
+#: src/window.c:4233
+msgid "Add Marketplace API key"
+msgstr "添加插件市场 API 密钥"
+
+#: src/window.c:4264
+msgid "Marketplace connected"
+msgstr "已连接插件市场"
+
+#: src/window.c:4264
+msgid "Marketplace connected for this session"
+msgstr "已在本次会话中连接插件市场"
+
+#: src/window.c:4280
+msgid ""
+"Marketplace disconnected; the saved key could not be removed from the system "
+"keyring"
+msgstr "已断开插件市场连接，但无法从系统密钥环中移除保存的密钥"
+
+#: src/window.c:4310
+msgid "Marketplace API key cannot be empty"
+msgstr "插件市场 API 密钥不能为空"
+
+#: src/window.c:4326
+msgid "Connect Marketplace"
+msgstr "连接插件市场"
+
+#: src/window.c:4327
+msgid "Paste a newly created Marketplace API key."
+msgstr "请粘贴新创建的插件市场 API 密钥。"
+
+#: src/window.c:4338
+msgid "Connected"
+msgstr "已连接"
+
+#: src/window.c:4340
+msgid "Disconnect"
+msgstr "断开连接"
+
+#: src/window.c:4345
+msgid "Marketplace API key"
+msgstr "插件市场 API 密钥"
+
+#: src/window.c:4349
+msgid "Connect"
+msgstr "连接"
+
+#: src/window.c:4470
+msgid ""
+"Could not contact the Marketplace to validate the API key. It was not saved."
+msgstr "无法联系插件市场以验证 API 密钥。密钥未保存。"
+
+#: src/window.c:4487
+msgid ""
+"Marketplace API key contains invalid characters or is too long. It was not "
+"saved."
+msgstr "插件市场 API 密钥包含无效字符或长度过长。密钥未保存。"
+
+#: src/window.c:4491
+msgid "Marketplace API key validation is already in progress."
+msgstr "正在验证插件市场 API 密钥。"
+
+#: src/window.c:4508
+msgid "Could not create the Marketplace API key validation request."
+msgstr "无法创建插件市场 API 密钥验证请求。"
+
+#: src/window.c:4516
+msgid "Validating Marketplace API key..."
+msgstr "正在验证插件市场 API 密钥…"
+
+#: src/window.c:5144
+msgid "Marketplace did not provide a stable public plugin ID."
+msgstr "插件市场未提供稳定的公开插件 ID。"
+
+#: src/window.c:5156
+msgid "The destination belongs to another plugin. It was not overwritten."
+msgstr "目标位置属于另一个插件，未进行覆盖。"
+
+#: src/window.c:5185
+msgid "Missing Marketplace plugin metadata."
+msgstr "缺少插件市场的插件元数据。"
+
+#: src/window.c:5210
+#, c-format
+msgid "Failed to install plugin: %s"
+msgstr "安装插件失败：%s"
+
+#: src/window.c:5217
+#, c-format
+msgid "Failed to prepare plugin update: %s"
+msgstr "准备插件更新失败：%s"
+
+#: src/window.c:5228
+#, c-format
+msgid "Failed to install plugin; the previous file was restored: %s"
+msgstr "安装插件失败，已恢复原有文件：%s"
+
+#: src/window.c:5259
+msgid ""
+"The installed plugin changed during the download. Retry after the other "
+"operation finishes."
+msgstr "下载期间，已安装的插件发生了变化。请在其他操作完成后重试。"
+
+#: src/window.c:5271
+msgid ""
+"The plugin's file assignment changed during the download. Retry after the "
+"other operation finishes."
+msgstr "下载期间，插件与文件的关联发生了变化。请在其他操作完成后重试。"
+
+#: src/window.c:5281
+msgid "Marketplace returned an invalid WASM plugin."
+msgstr "插件市场返回了无效的 WASM 插件。"
+
+#: src/window.c:5283
+msgid ""
+"The Marketplace rejected this anonymous free download. No API key was sent."
+msgstr "插件市场拒绝了此次匿名免费下载。未发送 API 密钥。"
+
+#: src/window.c:5285
+msgid "The Marketplace does not currently allow downloading this plugin."
+msgstr "插件市场目前不允许下载此插件。"
+
+#: src/window.c:5323
+#, c-format
+msgid "Installed %s%s%s; restart the server to use it"
+msgstr "已安装 %s%s%s；重启服务器后即可使用"
+
+#: src/window.c:5323
+#, c-format
+msgid "Installed %s%s%s"
+msgstr "已安装 %s%s%s"
+
+#: src/window.c:5331
+#, c-format
+msgid "%s; plugin metadata could not be saved: %s"
+msgstr "%s；无法保存插件元数据：%s"
+
+#: src/window.c:5346
+msgid "Select a server before installing a plugin"
+msgstr "安装插件前请先选择服务器"
+
+#: src/window.c:5351
+msgid "Only free Marketplace plugins can be installed for now"
+msgstr "目前只能安装插件市场中的免费插件"
+
+#: src/window.c:5367 src/window.c:5384
+msgid "Could not prepare Marketplace installation"
+msgstr "无法准备插件市场安装操作"
+
+#: src/window.c:5394
+msgid "Downloading Marketplace plugin…"
+msgstr "正在下载插件市场中的插件…"
+
+#: src/window.c:5408
+msgid "Unavailable"
+msgstr "不可用"
+
+#: src/window.c:5424
+msgid "Only free plugins are available for installation"
+msgstr "只有免费插件可以安装"
+
+#: src/window.c:5426
+msgid "Already installed"
+msgstr "已经安装"
+
+#: src/window.c:5428
+msgid "Select a server to install plugins"
+msgstr "请选择服务器以安装插件"
+
+#: src/window.c:5473
+msgid "View plugin details"
+msgstr "查看插件详情"
+
+#: src/window.c:5513 src/window.c:5647
+msgid "Unknown author"
+msgstr "未知作者"
+
+#: src/window.c:5615
+msgid "Marketplace Plugin"
+msgstr "插件市场中的插件"
+
+#: src/window.c:5647
+#, c-format
+msgid "by %s"
+msgstr "作者：%s"
+
+#: src/window.c:5692
+msgid ""
+"A description and screenshots are not available from the Marketplace API yet."
+msgstr "插件市场 API 暂不提供描述和截图。"
+
+#: src/window.c:5706
+msgid "Version"
+msgstr "版本"
+
+#: src/window.c:5709 src/window.c:7155
+msgid "Added"
+msgstr "添加时间"
+
+#: src/window.c:5796
+msgid "Failed to load Marketplace plugins."
+msgstr "加载插件市场中的插件失败。"
+
+#: src/window.c:5832
+msgid "No marketplace plugins found for the current filters."
+msgstr "未找到符合当前筛选条件的市场插件。"
+
+#: src/window.c:5844
+#, c-format
+msgid "Page %u · %u result"
+msgid_plural "Page %u · %u results"
+msgstr[0] "第 %u 页 · %u 个结果"
+
+#: src/window.c:5889
+msgid "The Marketplace returned an invalid plugin list."
+msgstr "插件市场返回了无效的插件列表。"
+
+#: src/window.c:6071 src/window.c:10393
+msgid "Sort ascending"
+msgstr "按升序排列"
+
+#: src/window.c:6196
+msgid "Plugin issue"
+msgstr "插件问题"
+
+#: src/window.c:6197
+msgid "Unknown plugin issue."
+msgstr "未知的插件问题。"
+
+#: src/window.c:6544 src/window.c:13141
+msgid "Waiting for shared download..."
+msgstr "正在等待共享下载…"
+
+#: src/window.c:6605
+msgid "Not set"
+msgstr "未设置"
+
+#: src/window.c:6632
+#, c-format
+msgid "Servers: %u · Running: %u · Players: %u · Proxy: %s"
+msgstr "服务器：%u · 运行中：%u · 玩家：%u · 代理：%s"
+
+#: src/window.c:6668
+msgid "No servers assigned yet."
+msgstr "尚未分配服务器。"
+
+#: src/window.c:6692
+msgid "Proxy server"
+msgstr "代理服务器"
+
+#: src/window.c:6752
+msgid "No additional servers could be started."
+msgstr "未能启动更多服务器。"
+
+#: src/window.c:6755
+#, c-format
+msgid "Started %u network server."
+msgid_plural "Started %u network servers."
+msgstr[0] "已启动网络中的 %u 个服务器。"
+
+#: src/window.c:6805
+msgid "No running network servers to stop."
+msgstr "网络中没有可停止的运行中服务器。"
+
+#: src/window.c:6808
+#, c-format
+msgid "Stopping %u network server..."
+msgid_plural "Stopping %u network servers..."
+msgstr[0] "正在停止网络中的 %u 个服务器…"
+
+#: src/window.c:6830
+msgid "Latest build not resolved yet. Try again in a moment."
+msgstr "尚未解析出最新构建版本。请稍后重试。"
+
+#: src/window.c:6859
+msgid "No updates started for this network."
+msgstr "未开始更新此网络中的服务器。"
+
+#: src/window.c:6862
+#, c-format
+msgid "Preparing updates for %u network server..."
+msgid_plural "Preparing updates for %u network servers..."
+msgstr[0] "正在为网络中的 %u 个服务器准备更新…"
+
+#: src/window.c:6911
+#, c-format
+msgid "Installing Pumpkin on %u network server..."
+msgid_plural "Installing Pumpkin on %u network servers..."
+msgstr[0] "正在为网络中的 %u 个服务器安装 Pumpkin…"
+
+#: src/window.c:6914
+msgid "All network servers already have Pumpkin installed."
+msgstr "网络中的所有服务器都已安装 Pumpkin。"
+
+#: src/window.c:6916
+msgid "Install-all needs a download URL for some servers."
+msgstr "全部安装时，部分服务器需要提供下载 URL。"
+
+#: src/window.c:6918
+msgid "No installs started."
+msgstr "未开始任何安装。"
+
+#: src/window.c:7088
+msgid "Add"
+msgstr "添加"
+
+#: src/window.c:7109
+msgid "No available servers to add."
+msgstr "没有可添加的服务器。"
+
+#: src/window.c:7118
+msgid "Add Servers"
+msgstr "添加服务器"
+
+#: src/window.c:7118
+msgid "Add servers with one click."
+msgstr "一键添加服务器。"
+
+#: src/window.c:7147
+msgid "Server is already assigned to a different network."
+msgstr "服务器已分配给其他网络。"
+
+#: src/window.c:7149
+msgid "Assigned"
+msgstr "已分配"
+
+#: src/window.c:7168
+#, c-format
+msgid "%s added to network."
+msgstr "%s 已添加到网络。"
+
+#: src/window.c:7203
+msgid "Server removed from network."
+msgstr "服务器已从网络中移除。"
+
+#: src/window.c:7248
+msgid "Proxy server updated."
+msgstr "代理服务器已更新。"
+
+#: src/window.c:7265
+msgid "Proxy cleared."
+msgstr "代理已清除。"
+
+#: src/window.c:7337
+msgid "Set Proxy"
+msgstr "设置代理"
+
+#: src/window.c:7337
+msgid "Choose the proxy server for this network."
+msgstr "请选择此网络的代理服务器。"
+
+#: src/window.c:7340
+msgid "Set"
+msgstr "设置"
+
+#: src/window.c:7366 src/window.c:13386
+#, c-format
+msgid "Delete \"%s\"?"
+msgstr "要删除“%s”吗？"
+
+#: src/window.c:7367
+msgid "This permanently deletes the network."
+msgstr "这将永久删除该网络。"
+
+#: src/window.c:7414
+msgid "Create a folder-like group for multiple servers."
+msgstr "创建一个类似文件夹的分组来管理多个服务器。"
+
+#: src/window.c:7417 src/window.c:12385
+msgid "Create"
+msgstr "创建"
+
+#: src/window.c:7422
+msgid "Network name"
+msgstr "网络名称"
+
+#: src/window.c:7443
+msgid "Network name cannot be empty"
+msgstr "网络名称不能为空"
+
+#: src/window.c:7491 src/window.c:9476
+msgid "Stopped"
+msgstr "已停止"
+
+#: src/window.c:7494
+msgid "Updating"
+msgstr "更新中"
+
+#: src/window.c:7497
+msgid "Maintenance"
+msgstr "维护中"
+
+#: src/window.c:7500 src/window.c:9476
+msgid "Running"
+msgstr "运行中"
+
+#: src/window.c:7525
+#, c-format
+msgid "Build: %s · Players: %d · Size: %s"
+msgstr "%s · 玩家：%d · 大小：%s"
+
+#: src/window.c:7541
+#, c-format
+msgid "Java:%d · Bedrock:%d"
+msgstr "Java：%d · 基岩版：%d"
+
+#: src/window.c:7583
+msgid "Updating..."
+msgstr "正在更新…"
+
+#: src/window.c:7593
+msgid "Delete server"
+msgstr "删除服务器"
+
+#: src/window.c:7608
+msgid "Remove from network"
+msgstr "从网络中移除"
+
+#: src/window.c:7651
+msgid "No server networks yet. Create one to manage multi-server setups."
+msgstr "暂无服务器网络。创建一个网络来管理多服务器环境。"
+
+#: src/window.c:7699
+#, c-format
+msgid "Players: %u"
+msgstr "玩家：%u"
+
+#: src/window.c:7729
+msgid "Delete network"
+msgstr "删除网络"
+
+#: src/window.c:7801
+msgid "No standalone servers. Add a server or remove one from a network."
+msgstr "没有独立服务器。请添加服务器，或将服务器从网络中移除。"
+
+#: src/window.c:7854
+msgid ""
+"A plugin file already exists at the target location. It was not overwritten."
+msgstr "目标位置已存在插件文件，未进行覆盖。"
+
+#: src/window.c:7859
+#, c-format
+msgid "Failed to toggle plugin: %s"
+msgstr "切换插件启用状态失败：%s"
+
+#: src/window.c:7868
+msgid "Could not restore the previous plugin filename after a lockfile error."
+msgstr "锁文件发生错误后，无法恢复插件原有的文件名。"
+
+#: src/window.c:7903
+#, c-format
+msgid "Remove plugin \"%s\"?"
+msgstr "要移除插件“%s”吗？"
+
+#: src/window.c:7904
+msgid "This permanently removes the plugin file."
+msgstr "这将永久移除插件文件。"
+
+#: src/window.c:7907 src/window.c:10899 src/window.c:11135
+msgid "Remove"
+msgstr "移除"
+
+#: src/window.c:7931
+msgid "Wait for the plugin download to finish before deleting plugins."
+msgstr "请等待插件下载完成后再删除插件。"
+
+#: src/window.c:7939
+msgid "Failed to delete plugin."
+msgstr "删除插件失败。"
+
+#: src/window.c:7945
+msgid "Could not restore the plugin filename after a lockfile error."
+msgstr "锁文件发生错误后，无法恢复插件文件名。"
+
+#: src/window.c:7951
+msgid ""
+"Plugin disabled and removed from ppm.lock, but its pending-delete backup "
+"could not be deleted."
+msgstr "插件已禁用并从 ppm.lock 中移除，但无法删除其待删除的备份文件。"
+
+#: src/window.c:8166
+msgid "Sandbox denied"
+msgstr "沙盒拒绝访问"
+
+#: src/window.c:8168
+#, c-format
+msgid ""
+"Pumpkin denied this plugin filesystem access while loading.\n"
+"\n"
+"Current upstream WASM plugins only get their own data folder preopened:\n"
+"%s\n"
+"\n"
+"A compatible plugin must use Pumpkin's plugin context/data-folder API "
+"instead of reading or writing arbitrary server paths during load.\n"
+"\n"
+"Log line:\n"
+"%s"
+msgstr ""
+"Pumpkin 在加载此插件时拒绝了其文件系统访问请求。\n"
+"\n"
+"目前上游的 WASM 插件只会预先打开自身的数据文件夹：\n"
+"%s\n"
+"\n"
+"兼容的插件必须使用 Pumpkin 的插件上下文或数据文件夹 API，而不能在加载时任意读"
+"写服务器路径。\n"
+"\n"
+"日志行：\n"
+"%s"
+
+#: src/window.c:8174
+msgid "(not available)"
+msgstr "（不可用）"
+
+#: src/window.c:8185
+msgid "Incompatible plugin API"
+msgstr "插件 API 不兼容"
+
+#: src/window.c:8187
+#, c-format
+msgid ""
+"This plugin was built for a different Pumpkin plugin API. Update it from the "
+"Marketplace or ask its author for a compatible build. Changing Smashed "
+"Pumpkin or filesystem permissions will not fix the binary.\n"
+"\n"
+"Pumpkin log:\n"
+"%s"
+msgstr ""
+"此插件是为另一种 Pumpkin 插件 API 构建的。请从插件市场更新，或联系作者获取兼"
+"容的构建版本。修改 Smashed Pumpkin 或文件系统权限无法解决此插件的二进制兼容性"
+"问题。\n"
+"\n"
+"Pumpkin 日志：\n"
+"%s"
+
+#: src/window.c:8192 src/window.c:8213
+msgid "Load failed"
+msgstr "加载失败"
+
+#: src/window.c:8202
+msgid "Initialization failed"
+msgstr "初始化失败"
+
+#: src/window.c:8742
+msgid "No data"
+msgstr "暂无数据"
+
+#: src/window.c:8744
+#, c-format
+msgid "CPU  %.1f%%"
+msgstr "CPU  %.1f%%"
+
+#: src/window.c:8748
+#, c-format
+msgid "Memory  %s"
+msgstr "内存  %s"
+
+#: src/window.c:8750
+#, c-format
+msgid "TPS  %.1f"
+msgstr "TPS  %.1f"
+
+#: src/window.c:8754
+#, c-format
+msgid "%llds ago"
+msgstr "%lld 秒前"
+
+#: src/window.c:8755
+#, c-format
+msgid "%lldm %02llds ago"
+msgstr "%lld 分 %02lld 秒前"
+
+#: src/window.c:8759
+#, c-format
+msgid ""
+"%s\n"
+"%d player · %s"
+msgid_plural ""
+"%s\n"
+"%d players · %s"
+msgstr[0] ""
+"%s\n"
+"%d 位玩家 · %s"
+
+#: src/window.c:8903
+msgid "Now"
+msgstr "现在"
+
+#: src/window.c:8908
+#, c-format
+msgid "-%dm"
+msgstr "-%d 分"
+
+#: src/window.c:8910
+#, c-format
+msgid "-%dm%02ds"
+msgstr "-%d 分 %02d 秒"
+
+#: src/window.c:8913
+#, c-format
+msgid "-%ds"
+msgstr "-%d 秒"
+
+#: src/window.c:8942 src/window.c:8973 src/window.c:9017
+msgid "Waiting for data…"
+msgstr "正在等待数据…"
+
+#: src/window.c:9249
+#, c-format
+msgid "System RAM: %s / %s"
+msgstr "系统内存：%s / %s"
+
+#: src/window.c:9256
+#, c-format
+msgid "System CPU: %.1f%%"
+msgstr "系统 CPU：%.1f%%"
+
+#: src/window.c:9350
+#, c-format
+msgid "Pumpkin RAM: %s"
+msgstr "Pumpkin 内存：%s"
+
+#: src/window.c:9359
+#, c-format
+msgid "Pumpkin CPU: %.1f%%"
+msgstr "Pumpkin CPU：%.1f%%"
+
+#: src/window.c:9612
+msgid "Remove plugin…"
+msgstr "移除插件…"
+
+#: src/window.c:9633
+msgid "Market"
+msgstr "市场"
+
+#: src/window.c:9637
+#, c-format
+msgid "Update %s"
+msgstr "更新 %s"
+
+#: src/window.c:9643
+msgid "Open the warning button for details"
+msgstr "点击警告按钮查看详情"
+
+#: src/window.c:9653
+msgid "View in Marketplace"
+msgstr "在插件市场中查看"
+
+#: src/window.c:9680
+msgid "Open plugins folder"
+msgstr "打开插件目录"
+
+#: src/window.c:9697
+msgid "Plugin actions"
+msgstr "插件操作"
+
+#: src/window.c:9856 src/window.c:9883
+#, c-format
+msgid "Played %s"
+msgstr "游戏时长 %s"
+
+#: src/window.c:9857 src/window.c:9884
+#, c-format
+msgid "Played %s  ·  Last seen %s"
+msgstr "游戏时长 %s  ·  最近在线 %s"
+
+#: src/window.c:9879 src/window.c:11047
+msgid "Unknown player"
+msgstr "未知玩家"
+
+#: src/window.c:9914 src/window.c:10995 src/window.c:11054
+msgid "Edition unknown"
+msgstr "版本类型未知"
+
+#: src/window.c:9918
+msgid ""
+"Pumpkin has not reported this player's edition. It is never guessed from the "
+"username."
+msgstr "Pumpkin 尚未报告该玩家的版本类型，应用不会根据用户名猜测。"
+
+#: src/window.c:9941 src/window.c:11093
+msgid "Admin"
+msgstr "管理员"
+
+#: src/window.c:9941 src/window.c:11093
+msgid "Operator"
+msgstr "操作员"
+
+#: src/window.c:9942
+msgid "Whitelisted"
+msgstr "已加入白名单"
+
+#: src/window.c:9943
+msgid "Banned"
+msgstr "已封禁"
+
+#: src/window.c:9943
+msgid "IP banned"
+msgstr "IP 已封禁"
+
+#: src/window.c:9976
+msgid "UUID not yet available"
+msgstr "UUID 尚不可用"
+
+#: src/window.c:9977
+msgid ""
+"\n"
+"Ban: "
+msgstr ""
+"\n"
+"封禁： "
+
+#: src/window.c:9979
+msgid ""
+"\n"
+"IP ban: "
+msgstr ""
+"\n"
+"IP 封禁： "
+
+#: src/window.c:10117
+msgid "IP unban requested"
+msgstr "已请求解除 IP 封禁"
+
+#: src/window.c:10129
+msgid "Connections from this address are blocked"
+msgstr "来自此地址的连接已被阻止"
+
+#: src/window.c:10131 src/window.c:11126
+msgid "Unban"
+msgstr "解除封禁"
+
+#: src/window.c:10135
+msgid "Remove this IP ban"
+msgstr "移除此 IP 封禁"
+
+#: src/window.c:10135
+msgid "Start the server to remove an IP ban"
+msgstr "请启动服务器以移除 IP 封禁"
+
+#: src/window.c:10231
+#, c-format
+msgid "%u of %u account bans  ·  %u of %u IP bans"
+msgstr "账号封禁：%u / %u  ·  IP 封禁：%u / %u"
+
+#: src/window.c:10234
+#, c-format
+msgid "%u of %u whitelisted players  ·  %u online"
+msgstr "白名单玩家：%u / %u  ·  %u 人在线"
+
+#: src/window.c:10237
+#, c-format
+msgid "%u of %u players  ·  %u online"
+msgstr "玩家：%u / %u  ·  %u 人在线"
+
+#: src/window.c:10240
+#, c-format
+msgid "%u online  ·  %u known player"
+msgid_plural "%u online  ·  %u known players"
+msgstr[0] "%u 人在线  ·  %u 位已记录玩家"
+
+#: src/window.c:10288 src/window.c:14497
+msgid "No matching players"
+msgstr "没有匹配的玩家"
+
+#: src/window.c:10289 src/window.c:14499
+msgid "Whitelist is empty"
+msgstr "白名单为空"
+
+#: src/window.c:10289
+msgid "No account bans"
+msgstr "没有账号封禁"
+
+#: src/window.c:10289
+msgid "No players yet"
+msgstr "暂无玩家"
+
+#: src/window.c:10290
+msgid "Try a different search or connection-status filter."
+msgstr "请尝试其他搜索条件或连接状态筛选条件。"
+
+#: src/window.c:10291
+msgid "Players allowed by your server whitelist appear here."
+msgstr "服务器白名单中允许加入的玩家会显示在此处。"
+
+#: src/window.c:10292
+msgid "Account bans appear here. Address blocks are listed separately below."
+msgstr "账号封禁会显示在此处。地址封禁在下方单独列出。"
+
+#: src/window.c:10293
+msgid "Players appear here when they join your server."
+msgstr "玩家加入服务器后会显示在此处。"
+
+#: src/window.c:10298
+msgid "No matching IP bans"
+msgstr "没有匹配的 IP 封禁"
+
+#: src/window.c:10298
+msgid "No IP bans"
+msgstr "没有 IP 封禁"
+
+#: src/window.c:10298
+msgid "IP bans block an address rather than an individual account."
+msgstr "IP 封禁会阻止来自某个地址的连接，而不是封禁单个账号。"
+
+#: src/window.c:10410
+msgid "Search whitelisted players"
+msgstr "搜索白名单玩家"
+
+#: src/window.c:10412
+msgid "Search accounts, addresses or ban reasons"
+msgstr "搜索账号、地址或封禁原因"
+
+#: src/window.c:10517 src/window.c:10533 src/window.c:10844
+msgid "No server selected."
+msgstr "未选择服务器。"
+
+#: src/window.c:10521
+msgid "Failed to delete tracked player data."
+msgstr "删除玩家跟踪数据失败。"
+
+#: src/window.c:10522
+msgid "Failed to delete tracked player data"
+msgstr "删除玩家跟踪数据失败"
+
+#: src/window.c:10525
+#, c-format
+msgid "Deleted tracked player data for %s"
+msgstr "已删除 %s 的跟踪数据"
+
+#: src/window.c:10526 src/window.c:10680 src/window.c:10739 src/window.c:10805
+msgid "player"
+msgstr "玩家"
+
+#: src/window.c:10539 src/window.c:10770 src/window.c:10848
+msgid "Server is not running."
+msgstr "服务器未运行。"
+
+#: src/window.c:10545 src/window.c:10628
+msgid "Player IP is already banned."
+msgstr "玩家 IP 已被封禁。"
+
+#: src/window.c:10555
+msgid "No known IP for this player yet; cannot run ban-ip."
+msgstr "尚无此玩家的已知 IP，无法执行 ban-ip。"
+
+#: src/window.c:10559 src/window.c:11130
+msgid "Ban IP"
+msgstr "封禁 IP"
+
+#: src/window.c:10559 src/window.c:10635
+msgid "Optional reason shown in ban history."
+msgstr "可填写原因，显示在封禁历史中。"
+
+#: src/window.c:10562 src/window.c:10638 src/window.c:11126
+msgid "Ban"
+msgstr "封禁"
+
+#: src/window.c:10568 src/window.c:10644 src/window-minimap.c:924
+msgid "Reason (optional)"
+msgstr "原因（选填）"
+
+#: src/window.c:10583
+msgid "Player IP is not banned."
+msgstr "玩家 IP 未被封禁。"
+
+#: src/window.c:10593 src/window.c:10617 src/window.c:10863
+msgid "Failed to run pardon-ip."
+msgstr "执行 pardon-ip 失败。"
+
+#: src/window.c:10598
+msgid "Pardon IP"
+msgstr "解除 IP 封禁"
+
+#: src/window.c:10598
+msgid "Enter the IP address to unban."
+msgstr "请输入要解除封禁的 IP 地址。"
+
+#: src/window.c:10601
+msgid "Pardon"
+msgstr "解除封禁"
+
+#: src/window.c:10606
+msgid "IP (e.g. 127.0.0.1)"
+msgstr "IP（例如 127.0.0.1）"
+
+#: src/window.c:10624
+msgid "Player is already banned."
+msgstr "玩家已被封禁。"
+
+#: src/window.c:10632 src/window.c:10664 src/window.c:10687
+msgid "Player name unknown; cannot run command."
+msgstr "玩家名称未知，无法执行命令。"
+
+#: src/window.c:10635 src/window-minimap.c:921
+msgid "Ban Player"
+msgstr "封禁玩家"
+
+#: src/window.c:10660
+msgid "Player is not banned."
+msgstr "玩家未被封禁。"
+
+#: src/window.c:10680
+#, c-format
+msgid "Unbanned %s"
+msgstr "已解除 %s 的封禁"
+
+#: src/window.c:10716
+msgid "Player is already op."
+msgstr "玩家已经是操作员。"
+
+#: src/window.c:10720
+msgid "Player is not op."
+msgstr "玩家不是操作员。"
+
+#: src/window.c:10738
+#, c-format
+msgid "Granted ADMIN to %s"
+msgstr "已授予 %s 管理员权限"
+
+#: src/window.c:10738
+#, c-format
+msgid "Removed ADMIN from %s"
+msgstr "已撤销 %s 的管理员权限"
+
+#: src/window.c:10765
+msgid "Ban target unknown; cannot run command."
+msgstr "封禁目标未知，无法执行命令。"
+
+#: src/window.c:10805
+#, c-format
+msgid "Banned %s"
+msgstr "已封禁 %s"
+
+#: src/window.c:10858
+msgid "IP address required for pardon-ip."
+msgstr "执行 pardon-ip 需要提供 IP 地址。"
+
+#: src/window.c:10873
+msgid "Not available"
+msgstr "不可用"
+
+#: src/window.c:10895
+msgid "Remove player from history?"
+msgstr "要从历史记录中移除玩家吗？"
+
+#: src/window.c:10896
+msgid ""
+"This removes Smashed Pumpkin's activity history, not the player's world "
+"data. The player will appear again when they join."
+msgstr ""
+"这只会移除 Smashed Pumpkin 的活动历史记录，不会删除玩家的世界数据。玩家再次加"
+"入后会重新显示。"
+
+#: src/window.c:10990 src/window.c:11084
+msgid "Online now"
+msgstr "当前在线"
+
+#: src/window.c:11022
+msgid "Player Details"
+msgstr "玩家详情"
+
+#: src/window.c:11076
+msgid "Manage"
+msgstr "管理"
+
+#: src/window.c:11079
+msgid "Activity"
+msgstr "活动"
+
+#: src/window.c:11089
+msgid "Identity"
+msgstr "身份信息"
+
+#: src/window.c:11090
+msgid "UUID"
+msgstr "UUID"
+
+#: src/window.c:11091
+msgid "Last IP address"
+msgstr "最近的 IP 地址"
+
+#: src/window.c:11092
+msgid "Permissions"
+msgstr "权限"
+
+#: src/window.c:11092
+msgid "Player"
+msgstr "玩家"
+
+#: src/window.c:11096
+msgid "The server has not reported an edition for this player."
+msgstr "服务器尚未报告此玩家的版本类型。"
+
+#: src/window.c:11100
+msgid "Pumpkin does not expose native Bedrock skins here yet."
+msgstr "Pumpkin 暂不在此处提供基岩版原生皮肤。"
+
+#: src/window.c:11115
+msgid "Manage player"
+msgstr "管理玩家"
+
+#: src/window.c:11117
+msgid "Start the server to use moderation actions."
+msgstr "请启动服务器以使用玩家管理操作。"
+
+#: src/window.c:11118
+msgid "Disconnect player"
+msgstr "断开玩家连接"
+
+#: src/window.c:11118
+msgid "The player can reconnect."
+msgstr "玩家可以重新连接。"
+
+#: src/window.c:11119
+msgid "Kick"
+msgstr "踢出"
+
+#: src/window.c:11120
+msgid "Operator permissions"
+msgstr "操作员权限"
+
+#: src/window.c:11121
+msgid "Remove elevated server permissions."
+msgstr "撤销高级服务器权限。"
+
+#: src/window.c:11121
+msgid "Grant elevated server permissions."
+msgstr "授予高级服务器权限。"
+
+#: src/window.c:11122
+msgid "Revoke"
+msgstr "撤销"
+
+#: src/window.c:11122
+msgid "Grant"
+msgstr "授予"
+
+#: src/window.c:11124
+msgid "Player ban"
+msgstr "玩家封禁"
+
+#: src/window.c:11125
+msgid "Allow this account to rejoin."
+msgstr "允许此账号重新加入。"
+
+#: src/window.c:11125
+msgid "Block this account from joining."
+msgstr "禁止此账号加入。"
+
+#: src/window.c:11128
+msgid "IP ban"
+msgstr "IP 封禁"
+
+#: src/window.c:11129
+msgid "Allow connections from this address."
+msgstr "允许来自此地址的连接。"
+
+#: src/window.c:11129
+msgid "Block connections from this address."
+msgstr "阻止来自此地址的连接。"
+
+#: src/window.c:11130
+msgid "Unban IP"
+msgstr "解除 IP 封禁"
+
+#: src/window.c:11134
+msgid "Remove from history"
+msgstr "从历史记录中移除"
+
+#: src/window.c:11135
+msgid "Only clears tracking; world data is kept."
+msgstr "仅清除跟踪记录，保留世界数据。"
+
+#: src/window.c:11389
+#, c-format
+msgid "Invalid HTTP request."
+msgstr "HTTP 请求无效。"
+
+#: src/window.c:11395
+#, c-format
+msgid "Failed to create HTTP request."
+msgstr "创建 HTTP 请求失败。"
+
+#: src/window.c:11436
+msgid "DDNS sync failed: missing data."
+msgstr "DDNS 同步失败：缺少数据。"
+
+#: src/window.c:11440
+msgid "DDNS sync failed: unsupported provider."
+msgstr "DDNS 同步失败：不支持此服务提供商。"
+
+#: src/window.c:11444
+msgid "DDNS sync failed: domain is empty."
+msgstr "DDNS 同步失败：域名为空。"
+
+#: src/window.c:11448
+msgid "DDNS sync failed: Cloudflare Zone ID is missing."
+msgstr "DDNS 同步失败：缺少 Cloudflare 区域 ID。"
+
+#: src/window.c:11452
+msgid "DDNS sync failed: Cloudflare API token is missing."
+msgstr "DDNS 同步失败：缺少 Cloudflare API 令牌。"
+
+#: src/window.c:11471 src/window.c:11516
+#, c-format
+msgid "DDNS sync failed: %s"
+msgstr "DDNS 同步失败：%s"
+
+#: src/window.c:11471 src/window.c:11516 src/window.c:11558
+msgid "request error"
+msgstr "请求错误"
+
+#: src/window.c:11475
+#, c-format
+msgid "DDNS sync failed: Cloudflare list returned HTTP %u."
+msgstr "DDNS 同步失败：Cloudflare 列表请求返回 HTTP %u。"
+
+#: src/window.c:11490
+#, c-format
+msgid "DDNS up to date (%s)"
+msgstr "DDNS 已是最新状态（%s）"
+
+#: src/window.c:11520
+#, c-format
+msgid "DDNS sync failed: Cloudflare update returned HTTP %u."
+msgstr "DDNS 同步失败：Cloudflare 更新请求返回 HTTP %u。"
+
+#: src/window.c:11532
+#, c-format
+msgid "DDNS updated to %s"
+msgstr "DDNS 已更新为 %s"
+
+#: src/window.c:11557
+#, c-format
+msgid "DDNS failed to get public IP: %s"
+msgstr "DDNS 获取公网 IP 失败：%s"
+
+#: src/window.c:11564
+#, c-format
+msgid "DDNS failed to get public IP (HTTP %u)."
+msgstr "DDNS 获取公网 IP 失败（HTTP %u）。"
+
+#: src/window.c:11571
+msgid "DDNS failed: invalid public IPv4 response."
+msgstr "DDNS 失败：公网 IPv4 响应无效。"
+
+#: src/window.c:11600
+msgid "DDNS sync failed."
+msgstr "DDNS 同步失败。"
+
+#: src/window.c:11606
+msgid "DDNS sync failed"
+msgstr "DDNS 同步失败"
+
+#: src/window.c:11648
+msgid "DDNS sync already running..."
+msgstr "DDNS 同步已在进行中…"
+
+#: src/window.c:11704
+msgid "Nothing to sync. Enable DDNS and fill Domain, Zone ID and API token."
+msgstr "没有需要同步的内容。请启用 DDNS，并填写域名、区域 ID 和 API 令牌。"
+
+#: src/window.c:11712
+msgid "Syncing DDNS..."
+msgstr "正在同步 DDNS…"
+
+#: src/window.c:11816
+#, c-format
+msgid "Target: your-public-ip (Java:%d, Bedrock:%d)"
+msgstr "目标：your-public-ip（Java：%d，基岩版：%d）"
+
+#: src/window.c:11867
+msgid "DDNS enabled. Waiting for next sync..."
+msgstr "DDNS 已启用。正在等待下次同步…"
+
+#: src/window.c:11906
+msgid "DDNS interval must be a valid number."
+msgstr "DDNS 间隔必须为有效数字。"
+
+#: src/window.c:11914
+#, c-format
+msgid "DDNS interval must be between %d and %d seconds."
+msgstr "DDNS 间隔必须在 %d 至 %d 秒之间。"
+
+#: src/window.c:11924
+msgid "Domain is required when DDNS is enabled."
+msgstr "启用 DDNS 时必须填写域名。"
+
+#: src/window.c:11928
+msgid "Cloudflare Zone ID is required when DDNS is enabled."
+msgstr "启用 DDNS 时必须填写 Cloudflare 区域 ID。"
+
+#: src/window.c:11932
+msgid "Cloudflare API token is required when DDNS is enabled."
+msgstr "启用 DDNS 时必须填写 Cloudflare API 令牌。"
+
+#: src/window.c:11951
+msgid "Failed to save domain/DDNS settings"
+msgstr "保存域名与 DDNS 设置失败"
+
+#: src/window.c:11959
+msgid "Domain and DDNS settings saved"
+msgstr "域名与 DDNS 设置已保存"
+
+#: src/window.c:11960
+msgid "Domain and DDNS settings saved."
+msgstr "域名与 DDNS 设置已保存。"
+
+#: src/window.c:12090
+#, c-format
+msgid "Max available: %s cores, %s MB RAM."
+msgstr "可用上限：%s 核心、%s MB 内存。"
+
+#: src/window.c:12382
+msgid "New Server"
+msgstr "新建服务器"
+
+#: src/window.c:12382
+msgid "Choose a unique server name."
+msgstr "请使用不重复的服务器名称。"
+
+#: src/window.c:12390
+msgid "Server name"
+msgstr "服务器名称"
+
+#: src/window.c:12429
+#, c-format
+msgid "Source is not a directory"
+msgstr "来源不是目录"
+
+#: src/window.c:12435
+#, c-format
+msgid "Failed to create directory %s"
+msgstr "创建目录 %s 失败"
+
+#: src/window.c:12556
+msgid "Only local files can be imported."
+msgstr "仅可导入本地文件。"
+
+#: src/window.c:12560
+msgid "Plugins must be .so or .wasm files."
+msgstr "插件必须为 .so 或 .wasm 文件。"
+
+#: src/window.c:12564
+msgid "Only .so or .wasm files can be imported as plugins."
+msgstr "仅可将 .so 或 .wasm 文件作为插件导入。"
+
+#: src/window.c:12577
+#, c-format
+msgid "Overwrite plugin \"%s\"?"
+msgstr "要覆盖插件“%s”吗？"
+
+#: src/window.c:12578
+msgid "A plugin with the same name already exists."
+msgstr "已存在同名插件。"
+
+#: src/window.c:12581 src/window.c:13488
+msgid "Overwrite"
+msgstr "覆盖"
+
+#: src/window.c:12627
+msgid "Import Server Folder"
+msgstr "导入服务器目录"
+
+#: src/window.c:12649
+msgid "Missing base directory"
+msgstr "缺少基础目录"
+
+#: src/window.c:12785
+msgid "Server icon updated"
+msgstr "服务器图标已更新"
+
+#: src/window.c:12802
+msgid "PNG images"
+msgstr "PNG 图片"
+
+#: src/window.c:12820
+msgid "Server icon reset to default"
+msgstr "服务器图标已恢复为默认值"
+
+#: src/window.c:12916
+msgid ""
+"Installation complete. The previous executable is retained as .previous."
+msgstr "安装完成。原有可执行文件已保留为 .previous。"
+
+#: src/window.c:12917
+msgid "Installation complete."
+msgstr "安装完成。"
+
+#: src/window.c:12928
+msgid ""
+"Update installed, but the server could not be restarted. See the console for "
+"details."
+msgstr "更新已安装，但无法重启服务器。请查看控制台了解详情。"
+
+#: src/window.c:12933
+msgid "Installation complete"
+msgstr "安装完成"
+
+#: src/window.c:12934
+msgid "Installed, but installation metadata could not be saved"
+msgstr "已安装，但无法保存安装元数据"
+
+#: src/window.c:12966
+msgid "Downloaded binary is invalid; the existing installation was not changed"
+msgstr "下载的程序文件无效，原有安装未发生更改"
+
+#: src/window.c:12980
+msgid "Download verified; stopping safely before installation."
+msgstr "下载已验证，正在安全停止服务器以准备安装。"
+
+#: src/window.c:13056
+msgid "Shared cache timed out, downloading directly..."
+msgstr "共享缓存等待超时，正在直接下载…"
+
+#: src/window.c:13076
+msgid "Wait for server maintenance to finish"
+msgstr "请等待服务器维护完成"
+
+#: src/window.c:13113
+msgid "Ignoring invalid cached binary"
+msgstr "正在忽略无效的缓存程序文件"
+
+#: src/window.c:13170
+msgid "Downloading Pumpkin binary..."
+msgstr "正在下载 Pumpkin 程序文件…"
+
+#: src/window.c:13191
+msgid "Downloaded binary is invalid; the server was not stopped"
+msgstr "下载的程序文件无效，服务器未被停止"
+
+#: src/window.c:13198
+#, c-format
+msgid "Cannot store downloaded binary in cache: %s"
+msgstr "无法将下载的程序文件存入缓存：%s"
+
+#: src/window.c:13239
+msgid "Finish the current install or update before changing release channels"
+msgstr "请完成当前安装或更新后再切换发布频道"
+
+#: src/window.c:13298
+msgid "Resolver returned no download URL"
+msgstr "解析器未返回下载 URL"
+
+#: src/window.c:13300
+#, c-format
+msgid "Update check failed: %s"
+msgstr "检查更新失败：%s"
+
+#: src/window.c:13382
+msgid "Stop the server and finish maintenance before deleting it"
+msgstr "删除服务器前，请停止服务器并完成维护操作"
+
+#: src/window.c:13387
+msgid "This permanently deletes the server and its data."
+msgstr "这将永久删除服务器及其数据。"
+
+#: src/window.c:13412
+msgid "Server deletion cancelled: the server or maintenance is now running"
+msgstr "已取消删除服务器：服务器已启动或维护操作正在进行"
+
+#: src/window.c:13478
+msgid "Stop the server before installing."
+msgstr "安装前请先停止服务器。"
+
+#: src/window.c:13484
+msgid "Overwrite existing installation?"
+msgstr "要覆盖现有安装吗？"
+
+#: src/window.c:13485
+msgid "This will replace the current Pumpkin binary."
+msgstr "这将替换当前的 Pumpkin 程序文件。"
+
+#: src/window.c:13628
+msgid "No sessions match your filters"
+msgstr "没有符合筛选条件的会话"
+
+#: src/window.c:13701
+msgid "Log file"
+msgstr "日志文件"
+
+#: src/window.c:13918
+msgid "Plugin import finished"
+msgstr "插件导入已完成"
+
+#: src/window.c:13932
+msgid "Import Plugins"
+msgstr "导入插件"
+
+#: src/window.c:13934
+msgid "Pumpkin plugins"
+msgstr "Pumpkin 插件"
+
+#: src/window.c:13982
+msgid "No log folder found"
+msgstr "未找到日志目录"
+
+#: src/window.c:14015
+msgid "No log files removed"
+msgstr "未移除任何日志文件"
+
+#: src/window.c:14021
+#, c-format
+msgid "Removed %u log file (%s)"
+msgid_plural "Removed %u log files (%s)"
+msgstr[0] "已移除 %u 个日志文件（%s）"
+
+#: src/window.c:14035
+msgid "Clear All Logs?"
+msgstr "要清除所有日志吗？"
+
+#: src/window.c:14036
+msgid "This deletes all log files in the selected server logs folder."
+msgstr "这将删除所选服务器日志目录中的所有日志文件。"
+
+#: src/window.c:14138 src/window.c:14139 src/window.c:14211 src/window.c:14212
+msgid "Settings saved"
+msgstr "设置已保存"
+
+#: src/window.c:14201 src/window.c:14202
+msgid "Failed to save settings"
+msgstr "保存设置失败"
+
+#: src/window.c:14208 src/window.c:14209
+msgid "Settings saved, restarting server..."
+msgstr "设置已保存，正在重启服务器…"
+
+#: src/window.c:14305
+msgid "Fix invalid settings first"
+msgstr "请先修正无效的设置"
+
+#: src/window.c:14313
+msgid "Restart Required"
+msgstr "需要重启"
+
+#: src/window.c:14314
+msgid ""
+"These changes require a server restart. Discard changes or save and restart "
+"now?"
+msgstr "这些更改需要重启服务器才能生效。要放弃更改，还是保存并立即重启？"
+
+#: src/window.c:14317
+msgid "Save & Restart"
+msgstr "保存并重启"
+
+#: src/window.c:14498
+msgid ""
+"Players appear here when they join your server. Try changing the search or "
+"status filter."
+msgstr "玩家加入服务器后会显示在此处。请尝试更改搜索或状态筛选条件。"
+
+#: src/window.c:14500
+msgid "Whitelisted players will appear here."
+msgstr "白名单玩家会显示在此处。"
+
+#: src/window.c:14501
+msgid "No banned players"
+msgstr "没有被封禁的玩家"
+
+#: src/window.c:14502
+msgid "Player and IP bans will appear here."
+msgstr "玩家封禁和 IP 封禁会显示在此处。"
+
+#: src/window.c:14671
+msgid "System language"
+msgstr "跟随系统"
+
+#: src/window.c:14723
+msgid "No sessions found"
+msgstr "未找到会话"
+
+#: src/window.c:14912
+msgid "CPU usage history"
+msgstr "CPU 使用率历史"
+
+#: src/window.c:14917
+msgid "Memory usage history"
+msgstr "内存使用量历史"
+
+#: src/window.c:15348
+msgid "Auto-start skipped: Pumpkin is not installed."
+msgstr "已跳过自动启动：尚未安装 Pumpkin。"
+
+#: src/window.c:15365
+msgid "Started automatically on launch."
+msgstr "已在应用启动时自动启动。"
+
+#: src/window-lifecycle.c:50
+msgid "Cannot start: Pumpkin is not installed."
+msgstr "无法启动：尚未安装 Pumpkin。"
+
+#: src/window-lifecycle.c:53
+msgid "Install Pumpkin before starting."
+msgstr "启动前请先安装 Pumpkin。"
+
+#: src/window-lifecycle.c:71
+msgid "Invalid server port."
+msgstr "服务器端口无效。"
+
+#: src/window-lifecycle.c:81
+#, c-format
+msgid "Port %d may already be in use (%s). Trying to start anyway."
+msgstr "端口 %d 可能已被占用（%s）。仍将尝试启动。"
+
+#: src/window-lifecycle.c:85
+#, c-format
+msgid "Port %d may already be in use. Trying to start anyway."
+msgstr "端口 %d 可能已被占用。仍将尝试启动。"
+
+#: src/window-lifecycle.c:98 src/window-lifecycle.c:99
+msgid "Failed to start server."
+msgstr "启动服务器失败。"
+
+#: src/window-lifecycle.c:106
+msgid "Started by network action."
+msgstr "已通过网络操作启动。"
+
+#: src/window-lifecycle.c:227
+msgid "Force stop server?"
+msgstr "要强制停止服务器吗？"
+
+#: src/window-lifecycle.c:228
+msgid ""
+"The server has not finished shutting down. Force stopping may lose unsaved "
+"world or plugin data."
+msgstr "服务器尚未完成关闭。强制停止可能导致未保存的世界或插件数据丢失。"
+
+#: src/window-lifecycle.c:229
+msgid "Keep Waiting"
+msgstr "继续等待"
+
+#: src/window-lifecycle.c:229
+msgid "Force Stop"
+msgstr "强制停止"
+
+#: src/window-minimap.c:154
+msgid "Overworld"
+msgstr "主世界"
+
+#: src/window-minimap.c:155
+msgid "Nether"
+msgstr "下界"
+
+#: src/window-minimap.c:156
+msgid "End"
+msgstr "末地"
+
+#: src/window-minimap.c:178
+msgid "No saved chunks"
+msgstr "没有已保存的区块"
+
+#: src/window-minimap.c:321
+#, c-format
+msgid "%.0f block"
+msgid_plural "%.0f blocks"
+msgstr[0] "%.0f 个方块"
+
+#: src/window-minimap.c:333
+#, c-format
+msgid ""
+"%u ms ping\n"
+"X %.1f   Y %.1f   Z %.1f"
+msgstr ""
+"延迟 %u 毫秒\n"
+"X %.1f   Y %.1f   Z %.1f"
+
+#: src/window-minimap.c:358
+msgid ""
+"This player's world has no saved chunks or cannot be identified unambiguously"
+msgstr "此玩家所在世界没有已保存的区块，或无法明确识别该世界"
+
+#: src/window-minimap.c:369
+msgid "No players online"
+msgstr "没有在线玩家"
+
+#: src/window-minimap.c:369
+msgid "Live data unavailable"
+msgstr "实时数据不可用"
+
+#: src/window-minimap.c:547
+msgid "Discovering saved worlds..."
+msgstr "正在查找已保存的世界…"
+
+#: src/window-minimap.c:547
+msgid "No saved terrain yet / chunks appear after the server saves them"
+msgstr "暂无已保存的地形 / 服务器保存区块后才会显示"
+
+#: src/window-minimap.c:551
+msgid "Live chunk positions / terrain has not been saved yet"
+msgstr "实时区块位置 / 地形尚未保存"
+
+#: src/window-minimap.c:610
+#, c-format
+msgid ""
+"Terrain / %u chunk / some saved chunks could not be decoded / zoom in for "
+"full detail"
+msgid_plural ""
+"Terrain / %u chunks / some saved chunks could not be decoded / zoom in for "
+"full detail"
+msgstr[0] "地形 / %u 个区块 / 部分已保存的区块无法解码 / 放大以查看完整细节"
+
+#: src/window-minimap.c:613
+#, c-format
+msgid "Terrain / %u chunk / some saved chunks could not be decoded"
+msgid_plural "Terrain / %u chunks / some saved chunks could not be decoded"
+msgstr[0] "地形 / %u 个区块 / 部分已保存的区块无法解码"
+
+#: src/window-minimap.c:617
+#, c-format
+msgid "Terrain / %u chunk / zoom in for full detail"
+msgid_plural "Terrain / %u chunks / zoom in for full detail"
+msgstr[0] "地形 / %u 个区块 / 放大以查看完整细节"
+
+#: src/window-minimap.c:619
+#, c-format
+msgid "Terrain / %u chunk"
+msgid_plural "Terrain / %u chunks"
+msgstr[0] "地形 / %u 个区块"
+
+#: src/window-minimap.c:622
+#, c-format
+msgid "Loading terrain / %u of %u chunk"
+msgid_plural "Loading terrain / %u of %u chunks"
+msgstr[0] "正在加载地形 / %u / %u 个区块"
+
+#: src/window-minimap.c:793
+msgid "Map action finished"
+msgstr "地图操作已完成"
+
+#: src/window-minimap.c:798
+msgid "Player positions unavailable / saved terrain only"
+msgstr "玩家位置不可用 / 仅显示已保存的地形"
+
+#: src/window-minimap.c:798
+msgid "Server stopped / saved terrain"
+msgstr "服务器已停止 / 已保存的地形"
+
+#: src/window-minimap.c:801
+#, c-format
+msgid "Live / %u online"
+msgstr "实时 / %u 人在线"
+
+#: src/window-minimap.c:832
+msgid "Map action was not acknowledged; check server logs before retrying"
+msgstr "地图操作未收到确认；请检查服务器日志后再重试"
+
+#: src/window-minimap.c:918
+#, c-format
+msgid "Ban %s?"
+msgstr "要封禁 %s 吗？"
+
+#: src/window-minimap.c:918
+#, c-format
+msgid "Kick %s?"
+msgstr "要踢出 %s 吗？"
+
+#: src/window-minimap.c:920
+msgid "This player will be disconnected and prevented from joining again."
+msgstr "此玩家将断开连接，并被禁止再次加入。"
+
+#: src/window-minimap.c:920
+msgid "This player can reconnect after being disconnected."
+msgstr "此玩家断开连接后仍可重新连接。"
+
+#: src/window-minimap.c:921
+msgid "Kick Player"
+msgstr "踢出玩家"
+
+#: src/window-minimap.c:963
+msgid "Map Bridge is already installed; it has not been overwritten"
+msgstr "Map Bridge 已安装，未进行覆盖"
+
+#: src/window-minimap.c:966
+msgid "Plugin folder must be an ordinary local directory"
+msgstr "插件目录必须是普通的本地目录"
+
+#: src/window-minimap.c:999
+#, c-format
+msgid ""
+"Could not update Minimap Bridge: %s. Retry below while the server is stopped."
+msgstr "无法更新 Minimap Bridge：%s。请在服务器停止时使用下方选项重试。"
+
+#: src/window-minimap.c:1002
+msgid "Map Bridge installed."
+msgstr "Map Bridge 已安装。"
+
+#: src/window-minimap.c:1053
+#, c-format
+msgid "Could not update Minimap Bridge: %s"
+msgstr "无法更新 Minimap Bridge：%s"
+
+#: src/window-minimap.c:1055
+msgid "Minimap Bridge updated to the version bundled with this app."
+msgstr "Minimap Bridge 已更新为此应用附带的版本。"
+
+#: src/window-minimap.c:1056
+#, c-format
+msgid "Minimap Bridge update failed; the existing plugin was retained: %s"
+msgstr "Minimap Bridge 更新失败，已保留原有插件：%s"
+
+#: src/window-minimap.c:1085
+msgid "Update Map Bridge?"
+msgstr "要更新 Map Bridge 吗？"
+
+#: src/window-minimap.c:1085
+msgid "Install Map Bridge?"
+msgstr "要安装 Map Bridge 吗？"
+
+#: src/window-minimap.c:1086
+msgid ""
+"This optional plugin reads live player coordinates and ping. It can kick or "
+"ban a player only when you confirm an action. It requires access to its own "
+"data folder, not networking. After installation, use Allow Data Access here "
+"while the server is stopped. Existing signature checks are not disabled. "
+"Other Pumpkin builds may require a matching Bridge API version."
+msgstr ""
+"此可选插件会读取玩家的实时坐标和延迟。只有在您确认操作后，它才会踢出或封禁玩"
+"家。它需要访问自身的数据文件夹，不需要网络权限。安装后，请在服务器停止时使用"
+"此处的“允许数据访问”。现有签名检查不会被禁用。其他 Pumpkin 构建版本可能需要匹"
+"配的 Bridge API 版本。"
+
+#: src/window-minimap.c:1118
+msgid "Map Bridge data access allowed."
+msgstr "已允许 Map Bridge 访问数据。"
+
+#: src/window-minimap.c:1143
+msgid "Allow Map Bridge Data Access?"
+msgstr "要允许 Map Bridge 访问数据吗？"
+
+#. Translators: Keep the permission identifier fs.write.data unchanged.
+#: src/window-minimap.c:1145
+msgid ""
+"Allow fs.write.data for the exact Map Bridge bundled with Smashed Pumpkin? "
+"This lets it exchange live player positions, ping and confirmed moderation "
+"actions with this app through its own data folder. No network permission is "
+"granted. Only this plugin's saved permission decision is updated; other "
+"plugins, blocked permissions and signature checks stay unchanged."
+msgstr ""
+"要为 Smashed Pumpkin 附带的这一特定 Map Bridge 插件授予 fs.write.data 权限"
+"吗？这将允许它通过自身的数据文件夹与此应用交换实时玩家位置、延迟和已确认的玩"
+"家管理操作。不会授予网络权限。仅更新此插件已保存的权限设置；其他插件、被阻止"
+"的权限和签名检查均保持不变。"
+
+#: src/window-minimap.c:1149
+msgid "Allow Data Access"
+msgstr "允许数据访问"
+
+#: src/window-minimap.c:1164
+msgid ""
+"Pumpkin denied Map Bridge data access. Stop the server, allow access below, "
+"then start it again."
+msgstr ""
+"Pumpkin 拒绝了 Map Bridge 的数据访问请求。请停止服务器，在下方允许访问，然后"
+"重新启动服务器。"
+
+#: src/window-minimap.c:1166
+msgid ""
+"Map Bridge is incompatible with this Pumpkin build. Rebuild it against the "
+"matching plugin API."
+msgstr ""
+"Map Bridge 与此 Pumpkin 构建版本不兼容。请使用匹配的插件 API 重新构建。"
+
+#: src/window-minimap.c:1167
+msgid ""
+"Map Bridge failed to load. Check plugin permissions, signature policy and "
+"the server console."
+msgstr "Map Bridge 加载失败。请检查插件权限、签名策略和服务器控制台。"
+
+#: src/window-minimap.c:1211
+msgid "Update Map Bridge..."
+msgstr "更新 Map Bridge…"
+
+#: src/window-minimap.c:1211 src/window-minimap.c:1443
+msgid "Install Map Bridge..."
+msgstr "安装 Map Bridge…"
+
+#: src/window-minimap.c:1217
+msgid "Stop the server before allowing data access"
+msgstr "允许数据访问前请先停止服务器"
+
+#: src/window-minimap.c:1218
+msgid "Allow only the bundled Map Bridge to use its own data folder"
+msgstr "仅允许附带的 Map Bridge 使用自身的数据文件夹"
+
+#: src/window-minimap.c:1219
+msgid "Stop the server before installing Map Bridge"
+msgstr "安装 Map Bridge 前请先停止服务器"
+
+#: src/window-minimap.c:1219
+msgid "Install the optional live-player bridge"
+msgstr "安装可选的实时玩家桥接插件"
+
+#: src/window-minimap.c:1224
+msgid ""
+"Map Bridge data access was denied. Stop the server and allow access below."
+msgstr "Map Bridge 的数据访问请求已被拒绝。请停止服务器并在下方允许访问。"
+
+#: src/window-minimap.c:1225
+msgid ""
+"Map Bridge permission cache could not be read safely. Check server logs and "
+"permissions."
+msgstr "无法安全读取 Map Bridge 的权限缓存。请检查服务器日志和权限。"
+
+#: src/window-minimap.c:1226
+msgid "Updating Minimap Bridge..."
+msgstr "正在更新 Minimap Bridge…"
+
+#: src/window-minimap.c:1227
+msgid "Minimap Bridge will update automatically before the next server start."
+msgstr "Minimap Bridge 将在下次启动服务器前自动更新。"
+
+#: src/window-minimap.c:1228
+msgid ""
+"Installed Map Bridge differs from the bundled version. Check plugin "
+"compatibility and permissions."
+msgstr "已安装的 Map Bridge 与附带版本不同。请检查插件兼容性和权限。"
+
+#: src/window-minimap.c:1229
+msgid ""
+"Map Bridge is not installed. Stop the server to install it and enable live "
+"players."
+msgstr "尚未安装 Map Bridge。请停止服务器以安装该插件并启用实时玩家显示。"
+
+#: src/window-minimap.c:1230
+msgid "Map Bridge is not installed. Install it below to enable live players."
+msgstr "尚未安装 Map Bridge。请在下方安装以启用实时玩家显示。"
+
+#: src/window-minimap.c:1231
+msgid ""
+"Map Bridge needs data access. Stop the server and use Allow Data Access "
+"below."
+msgstr "Map Bridge 需要数据访问权限。请停止服务器并使用下方的“允许数据访问”。"
+
+#: src/window-minimap.c:1232
+msgid ""
+"Map Bridge has not provided live data. Check the server console for "
+"compatibility or blocked permissions."
+msgstr ""
+"Map Bridge 尚未提供实时数据。请查看服务器控制台，检查兼容性或被阻止的权限。"
+
+#: src/window-minimap.c:1297
+msgid "Enable the Minimap?"
+msgstr "要启用小地图吗？"
+
+#: src/window-minimap.c:1298
+msgid ""
+"The minimap increases CPU, memory and disk activity. Higher player update "
+"rates use more resources. It uses the local Map Bridge plugin to send player "
+"names, positions, viewing direction, ping and world information to Smashed "
+"Pumpkin through the plugin's own data folder. This data stays on this "
+"computer; it is not sent to an external service. The map reads saved terrain "
+"without generating or loading server chunks. Bridge installation and data "
+"access are confirmed separately while the server is stopped. You can disable "
+"the minimap at any time in Settings."
+msgstr ""
+"小地图会增加 CPU、内存和磁盘的使用量。玩家更新频率越高，消耗的资源越多。它使"
+"用本地 Map Bridge 插件，通过插件自身的数据文件夹将玩家名称、位置、视线方向、"
+"延迟和世界信息传递给 Smashed Pumpkin。这些数据仅保留在本机，不会发送到外部服"
+"务。地图会读取已保存的地形，不会生成或加载服务器区块。桥接插件的安装和数据访"
+"问权限需要在服务器停止时分别确认。您可以随时在设置中禁用小地图。"
+
+#: src/window-minimap.c:1304
+msgid "Agree and Enable"
+msgstr "同意并启用"
+
+#: src/window-minimap.c:1394
+msgid "Live players require Map Bridge"
+msgstr "实时玩家显示需要 Map Bridge"
+
+#: src/window-minimap.c:1411
+msgid "World and dimension"
+msgstr "世界与维度"
+
+#: src/window-minimap.c:1413
+msgid "Stop following player"
+msgstr "停止跟随玩家"
+
+#: src/window-minimap.c:1417
+msgid "Locate online player"
+msgstr "定位在线玩家"
+
+#: src/window-minimap.c:1433
+msgid "Saved terrain and online player map"
+msgstr "已保存的地形与在线玩家地图"
+
+#: src/window-minimap.c:1438
+msgid "Saved terrain / Map Bridge is required for live players"
+msgstr "已保存的地形 / 实时玩家显示需要 Map Bridge"
+
+#: src/window-minimap.c:1445
+msgid "Allow Data Access..."
+msgstr "允许数据访问…"
+
+#: src/window-minimap.c:1448
+msgid "Loading saved terrain..."
+msgstr "正在加载已保存的地形…"
+
+#: src/window-minimap.c:1460
+msgid "Minimap is Disabled"
+msgstr "小地图已禁用"
+
+#: src/window-minimap.c:1462
+msgid ""
+"Explore saved chunks without generating terrain. Enable the minimap here or "
+"in Settings. Live players require the optional Map Bridge plugin."
+msgstr ""
+"无需生成地形即可浏览已保存的区块。可在此处或设置中启用小地图。实时玩家显示需"
+"要可选的 Map Bridge 插件。"
+
+#: src/window-minimap.c:1463
+msgid ""
+"The minimap requires a locally hosted server, which is not supported on this "
+"platform."
+msgstr "小地图需要在本地运行服务器，此平台不支持该功能。"
+
+#: src/window-minimap.c:1464
+msgid "Enable Minimap"
+msgstr "启用小地图"
+
+#: src/window-minimap.c:1481
+msgid "Follow Player"
+msgstr "跟随玩家"
+
+#: src/window-minimap.c:1482
+msgid "Kick..."
+msgstr "踢出…"
+
+#: src/window-minimap.c:1482
+msgid "Ban..."
+msgstr "封禁…"
+
+#: src/window-minimap.c:1487
+msgid "Enable minimap"
+msgstr "启用小地图"
+
+#: src/window-minimap.c:1488
+msgid ""
+"Turn off to release map memory and unload the local bridge from all servers."
+msgstr "关闭后会释放地图内存，并从所有服务器卸载本地桥接插件。"
+
+#: src/window-minimap.c:1493
+msgid "Player update rate"
+msgstr "玩家更新频率"
+
+#: src/window-minimap.c:1494
+msgid "Updates per second. Higher rates use more resources."
+msgstr "每秒更新次数。频率越高，消耗的资源越多。"
+
+#: src/window-minimap.c:1501
+msgid "Minimap player updates per second"
+msgstr "小地图玩家每秒更新次数"
+
+#: src/window-server-actions.c:30
+msgid "Force Stop..."
+msgstr "强制停止…"
+
+#: src/window-server-actions.c:30
+msgid "Stopping..."
+msgstr "正在停止…"
+
+#: src/window-server-actions.c:37
+msgid "Force termination can lose unsaved data"
+msgstr "强制终止可能导致未保存的数据丢失"
+
+#: src/window-server-actions.c:37
+msgid "Save data and stop the server"
+msgstr "保存数据并停止服务器"
+
+#: src/window-server-actions.c:39
+msgid "Download first, then safely stop, install and restart"
+msgstr "先完成下载，再安全停止、安装并重启"
+
+#: src/window-server-actions.c:39
+msgid "Update the installed server"
+msgstr "更新已安装的服务器"
+
+#: src/window-worlds.c:109
+#, c-format
+msgid "%u world"
+msgstr "%u 个世界"
+
+#: src/window-worlds.c:109
+#, c-format
+msgid "%u worlds"
+msgstr "%u 个世界"
+
+#: src/window-worlds.c:110
+#, c-format
+msgid "%u of %u worlds"
+msgstr "%u / %u 个世界"
+
+#: src/window-worlds.c:154
+msgid "World imported. The configured world has not been changed."
+msgstr "世界已导入。已配置的世界未发生更改。"
+
+#: src/window-worlds.c:154
+msgid "World removed"
+msgstr "世界已移除"
+
+#: src/window-worlds.c:164
+msgid "Stop the server and finish maintenance before modifying worlds."
+msgstr "修改世界前，请停止服务器并完成维护操作。"
+
+#: src/window-worlds.c:177
+msgid "Importing world..."
+msgstr "正在导入世界…"
+
+#: src/window-worlds.c:177
+msgid "Removing world..."
+msgstr "正在移除世界…"
+
+#: src/window-worlds.c:194
+#, c-format
+msgid "Remove \"%s\"?"
+msgstr "要移除“%s”吗？"
+
+#: src/window-worlds.c:197
+msgid ""
+"This is the configured world. Removing it permanently deletes its data. The "
+"server may generate a new world on its next start. Make a backup first."
+msgstr ""
+"这是当前配置的世界。移除后将永久删除其数据。服务器下次启动时可能会生成新世"
+"界。请先备份。"
+
+#: src/window-worlds.c:198
+msgid ""
+"This permanently deletes the world folder. Make a backup before continuing."
+msgstr "这将永久删除该世界文件夹。继续前请先备份。"
+
+#: src/window-worlds.c:200
+msgid "Remove World"
+msgstr "移除世界"
+
+#: src/window-worlds.c:219
+msgid "Only local world folders can be imported."
+msgstr "仅可导入本地世界文件夹。"
+
+#: src/window-worlds.c:228
+msgid "Import World Folder"
+msgstr "导入世界文件夹"
+
+#: src/window-worlds.c:240
+msgid "Stop the server before importing worlds"
+msgstr "导入世界前请先停止服务器"
+
+#: src/window-worlds.c:246
+msgid "Import one world folder at a time"
+msgstr "一次只能导入一个世界文件夹"
+
+#: src/window-worlds.c:251
+msgid "Only local world folders can be imported"
+msgstr "仅支持导入本地世界文件夹"
+
+#: src/window-worlds.c:319
+msgid "Size unavailable"
+msgstr "大小不可用"
+
+#: src/window-worlds.c:322
+msgid "Linked or external folder · Read-only"
+msgstr "已链接或外部文件夹 · 只读"
+
+#: src/window-worlds.c:323
+msgid "No level.dat found · Read-only"
+msgstr "未找到 level.dat · 只读"
+
+#: src/window-worlds.c:324
+msgid "Configured world · Used on server start"
+msgstr "已配置的世界 · 服务器启动时使用"
+
+#: src/window-worlds.c:324
+msgid "Stored world · Not configured"
+msgstr "已存储的世界 · 未配置"
+
+#: src/window-worlds.c:325
+#, c-format
+msgid ""
+"%s · Modified %s\n"
+"%s"
+msgstr ""
+"%s · 修改于 %s\n"
+"%s"
+
+#: src/window-worlds.c:331
+msgid "Configured"
+msgstr "已配置"
+
+#: src/window-worlds.c:341
+msgid "World actions"
+msgstr "世界操作"
+
+#: src/window-worlds.c:344
+msgid "Open Folder"
+msgstr "打开文件夹"
+
+#: src/window-worlds.c:351
+msgid "Remove World..."
+msgstr "移除世界…"
+
+#: src/window-worlds.c:384
+msgid "Could Not Load Worlds"
+msgstr "无法加载世界"
+
+#: src/window-worlds.c:385
+msgid "Reload to try again"
+msgstr "重新加载以重试"
+
+#: src/window-worlds.c:389
+msgid "No Worlds Yet"
+msgstr "暂无世界"
+
+#: src/window-worlds.c:390
+msgid ""
+"Start the server to generate its configured world, or import a folder "
+"containing level.dat."
+msgstr "启动服务器以生成已配置的世界，或导入包含 level.dat 的文件夹。"
+
+#: src/window-worlds.c:414
+msgid "Select a Server"
+msgstr "选择服务器"
+
+#: src/window-worlds.c:414
+msgid "Its worlds will appear here."
+msgstr "该服务器的世界将显示在此处。"
+
+#: src/window-worlds.c:417
+msgid "Loading Worlds"
+msgstr "正在加载世界"
+
+#: src/window-worlds.c:417
+msgid "Reading world folders and calculating their sizes..."
+msgstr "正在读取世界文件夹并计算其大小…"
+
+#: src/window-worlds.c:418
+msgid "Loading..."
+msgstr "正在加载…"
+
+#: src/window-worlds.c:438
+msgid ""
+"Copy a world into this server's storage without replacing its configured "
+"world"
+msgstr "将世界复制到此服务器的存储目录，而不替换当前配置的世界"
+
+#: src/window-worlds.c:439
+msgid "Stop the server and finish maintenance before importing worlds"
+msgstr "导入世界前，请停止服务器并完成维护操作"
+
+#: src/window-worlds.c:469
+msgid "Search worlds"
+msgstr "搜索世界"
+
+#: src/window-worlds.c:471
+msgid "Import World..."
+msgstr "导入世界…"
+
+#: src/window-worlds.c:474
+msgid "Reload worlds"
+msgstr "重新加载世界"
+
+#: src/window-worlds.c:478
+msgid "Open server data folder"
+msgstr "打开服务器数据文件夹"
+
+#: src/window-worlds.c:496
+msgid "No matching worlds"
+msgstr "没有匹配的世界"
+
+#: src/window-worlds.c:501
+msgid ""
+"Imported worlds are stored separately. Importing does not change the world's "
+"server configuration."
+msgstr "导入的世界会单独存储。导入操作不会更改世界的服务器配置。"

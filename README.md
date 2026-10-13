@@ -75,8 +75,12 @@ More views are available on the [website](https://smashed-pumpkin.rotstein.dev/)
 
 ## Build On Linux
 
-Requires a C compiler, Meson 1.3.2 or newer, Ninja, pkg-config and development
-headers for GTK 4.12 or newer, libadwaita 1.5 or newer and libsoup 3.4 or newer.
+Requires a C compiler, Meson 1.3.2 or newer, Ninja, pkg-config, GNU gettext tools,
+and development headers for GTK 4.12 or newer, libadwaita 1.5 or newer and
+libsoup 3.4 or newer. Native glibc builds also require `localedef`, the `en_US`
+locale source and the UTF-8 charmap (typically provided by a locale-source package).
+These generate a bundled messages-only locale; users do not need matching German
+or Chinese system locales.
 GTK 3 and Ayatana AppIndicator are optional dependencies for the tray helper.
 
 ```bash
@@ -85,6 +89,28 @@ meson compile -C buildDir
 ./buildDir/src/smashed-pumpkin
 meson test -C buildDir --print-errorlogs
 ```
+
+UI regressions additionally require Xvfb, Openbox, xauth, xprop and XTest
+development files (`xvfb openbox xauth x11-utils libxtst-dev` on Debian/Ubuntu).
+They use a private display, configuration and local Marketplace fixtures:
+
+```bash
+bash build-aux/test-window-ui-headless.sh buildDir all
+bash build-aux/test-window-ui-headless.sh buildDir minimap
+```
+
+The harness keeps GTK warnings fatal and checks the toolkit before testing the
+app. GTK 4.24.1 has a reproducible window/popover frame regression; the tested
+GTK 4.22.5 / libadwaita 1.9.4 pair passes. Use compatible headers and libraries
+in an isolated environment when system packages are affected. CI runs all eight
+UI scopes; Meson's default test environment isolates desktop proxy/VFS/settings.
+
+Uninstalled builds automatically discover translations from the build tree;
+`SMASHED_PUMPKIN_LOCALEDIR` can point at another absolute catalog directory.
+
+Language selection is in General settings → Display and time and takes effect on
+the next launch without restarting servers. The first production Simplified Chinese
+catalog covers core interface text; untranslated messages use English.
 
 If Meson reports that an existing build directory uses an incompatible version,
 run `meson setup --reconfigure buildDir` before compiling again.

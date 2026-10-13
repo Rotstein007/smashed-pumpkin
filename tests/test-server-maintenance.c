@@ -96,6 +96,211 @@ spin(guint milliseconds)
   } while (g_get_monotonic_time() < until);
 }
 
+typedef struct {
+  guint exits;
+  guint restarts;
+  guint last_restart_delay;
+  guint lifecycle_logs;
+} LifecycleEvents;
+
+static void
+on_process_exited(PumpkinServer *server, LifecycleEvents *events)
+{
+  g_assert_false(pumpkin_server_get_running(server));
+  g_assert_false(pumpkin_server_get_stopping(server));
+  events->exits++;
+}
+
+static void
+on_restart_scheduled(PumpkinServer *server, guint delay_ms, LifecycleEvents *events)
+{
+  g_assert_false(pumpkin_server_get_running(server));
+  events->restarts++;
+  events->last_restart_delay = delay_ms;
+}
+
+static void
+on_lifecycle_log(PumpkinServer *server, const char *line, LifecycleEvents *events)
+{
+  (void)server;
+  if (g_strcmp0(line, "Server process exited") == 0 ||
+      g_strcmp0(line, "Auto-restart scheduled") == 0 ||
+      g_strcmp0(line, "Serverprozess beendet") == 0) events->lifecycle_logs++;
+}
+
+static void
+connect_lifecycle_events(PumpkinServer *server, LifecycleEvents *events)
+{
+  g_signal_connect(server, "process-exited", G_CALLBACK(on_process_exited), events);
+  g_signal_connect(server, "restart-scheduled", G_CALLBACK(on_restart_scheduled), events);
+  g_signal_connect(server, "log-line", G_CALLBACK(on_lifecycle_log), events);
+}
+
+static void
+test_lifecycle_log_collision(void)
+{
+  g_autoptr(PumpkinServer) server = create_server("normal");
+  LifecycleEvents events = {0};
+  connect_lifecycle_events(server, &events);
+  g_autoptr(GError) error = NULL;
+  g_assert_true(pumpkin_server_send_command(server, "lifecycle-log-collision", &error));
+  g_assert_no_error(error);
+  gint64 deadline = g_get_monotonic_time() + 5 * G_USEC_PER_SEC;
+  while (events.lifecycle_logs < 3 && g_get_monotonic_time() < deadline) spin(5);
+  g_assert_cmpuint(events.lifecycle_logs, ==, 3);
+  g_assert_cmpuint(events.exits, ==, 0);
+  g_assert_cmpuint(events.restarts, ==, 0);
+  g_assert_true(pumpkin_server_get_running(server));
+  pumpkin_server_stop(server);
+  wait_exit(server);
+  g_assert_cmpuint(events.exits, ==, 1);
+  g_assert_cmpuint(events.restarts, ==, 0);
+  /* The model emits lifecycle signals, not magic log lines, for its own exit. */
+  g_assert_cmpuint(events.lifecycle_logs, ==, 3);
+  cleanup_server(server);
+  g_signal_handlers_disconnect_by_data(server, &events);
+}
+
+static void
+collect_console_message(PumpkinServer *server, const char *message, GPtrArray *messages)
+{
+  (void)server;
+  g_ptr_array_add(messages, g_strdup(message));
+}
+
+static void
+assert_separate_channels(GPtrArray *notices, GPtrArray *output)
+{
+  for (guint n = 0; n < notices->len; ++n) {
+    const char *notice = g_ptr_array_index(notices, n);
+    g_assert_nonnull(notice);
+    g_assert_cmpstr(notice, !=, "");
+    for (guint o = 0; o < output->len; ++o) {
+      g_assert_cmpstr(g_ptr_array_index(output, o), !=, notice);
+    }
+  }
+}
+
+static void
+test_application_notice_channels(void)
+{
+  g_autoptr(PumpkinServer) server = create_server("normal");
+  g_autoptr(GPtrArray) notices = g_ptr_array_new_with_free_func(g_free);
+  g_autoptr(GPtrArray) output = g_ptr_array_new_with_free_func(g_free);
+  g_signal_connect(server, "console-notice", G_CALLBACK(collect_console_message), notices);
+  g_signal_connect(server, "log-line", G_CALLBACK(collect_console_message), output);
+  pumpkin_server_stop(server);
+  wait_exit(server);
+  g_assert_cmpuint(notices->len, ==, 1);
+  assert_separate_channels(notices, output);
+
+  /* The archive retains stable diagnostics independently of console wording. */
+  g_autofree char *logs = pumpkin_server_get_logs_dir(server);
+  g_autoptr(GDir) directory = g_dir_open(logs, 0, NULL);
+  g_assert_nonnull(directory);
+  const char *name = g_dir_read_name(directory);
+  g_assert_nonnull(name);
+  g_autofree char *path = g_build_filename(logs, name, NULL);
+  g_autofree char *contents = NULL;
+  g_assert_true(g_file_get_contents(path, &contents, NULL, NULL));
+  g_assert_nonnull(strstr(contents, "smashed_pumpkin: Stopping server: waiting for saved data and process exit."));
+  cleanup_server(server);
+  g_signal_handlers_disconnect_by_data(server, notices);
+  g_signal_handlers_disconnect_by_data(server, output);
+}
+
+static void
+test_failed_restart_notice(void)
+{
+  g_autoptr(PumpkinServer) server = create_server("normal");
+  pumpkin_server_set_auto_restart_delay(server, 500);
+  g_autoptr(GPtrArray) notices = g_ptr_array_new_with_free_func(g_free);
+  g_autoptr(GPtrArray) output = g_ptr_array_new_with_free_func(g_free);
+  g_signal_connect(server, "console-notice", G_CALLBACK(collect_console_message), notices);
+  g_signal_connect(server, "log-line", G_CALLBACK(collect_console_message), output);
+  g_autoptr(GError) error = NULL;
+  g_assert_true(pumpkin_server_send_command(server, "crash", &error));
+  g_assert_no_error(error);
+  wait_exit(server);
+  g_autofree char *binary = pumpkin_server_get_bin_path(server);
+  g_assert_cmpint(g_remove(binary), ==, 0);
+  gint64 deadline = g_get_monotonic_time() + 5 * G_USEC_PER_SEC;
+  while (notices->len == 0 && g_get_monotonic_time() < deadline) spin(5);
+  g_assert_cmpuint(notices->len, ==, 1);
+  assert_separate_channels(notices, output);
+  g_assert_false(pumpkin_server_get_running(server));
+  cleanup_server(server);
+  g_signal_handlers_disconnect_by_data(server, notices);
+  g_signal_handlers_disconnect_by_data(server, output);
+}
+
+typedef struct {
+  gboolean exited;
+  guint logs_after_exit;
+} BufferedExitEvents;
+
+static void
+on_buffered_exit(PumpkinServer *server, BufferedExitEvents *events)
+{
+  g_assert_false(pumpkin_server_get_running(server));
+  events->exited = TRUE;
+}
+
+static void
+on_buffered_output(PumpkinServer *server, const char *line, BufferedExitEvents *events)
+{
+  (void)server;
+  if (events->exited && g_str_has_prefix(line, "Buffered exit output:")) events->logs_after_exit++;
+}
+
+static void
+test_buffered_exit_output(void)
+{
+  g_autoptr(PumpkinServer) server = create_server("normal");
+  pumpkin_server_set_auto_restart(server, FALSE);
+  BufferedExitEvents events = {0};
+  g_signal_connect(server, "process-exited", G_CALLBACK(on_buffered_exit), &events);
+  g_signal_connect(server, "log-line", G_CALLBACK(on_buffered_output), &events);
+  g_autoptr(GError) error = NULL;
+  g_assert_true(pumpkin_server_send_command(server, "buffered-exit-output", &error));
+  g_assert_no_error(error);
+  g_autofree char *data_dir = pumpkin_server_get_data_dir(server);
+  g_autofree char *marker = g_build_filename(data_dir, "buffered-output-written", NULL);
+  /* Deliberately withhold main-context dispatch until the child has written its
+   * tail. The read and process-wait callbacks will both have pending work. */
+  gint64 deadline = g_get_monotonic_time() + 5 * G_USEC_PER_SEC;
+  while (!g_file_test(marker, G_FILE_TEST_EXISTS) && g_get_monotonic_time() < deadline) g_usleep(1000);
+  g_assert_true(g_file_test(marker, G_FILE_TEST_EXISTS));
+  g_usleep(50000);
+  g_autofree char *logs_dir = pumpkin_server_get_logs_dir(server);
+  g_autoptr(GDir) dir = g_dir_open(logs_dir, 0, &error);
+  g_assert_no_error(error);
+  g_assert_nonnull(dir);
+  const char *name = g_dir_read_name(dir);
+  g_assert_nonnull(name);
+  g_autofree char *log_path = g_build_filename(logs_dir, name, NULL);
+  g_autofree char *contents = NULL;
+  deadline = g_get_monotonic_time() + 5 * G_USEC_PER_SEC;
+  do {
+    spin(5);
+    g_clear_pointer(&contents, g_free);
+    g_assert_true(g_file_get_contents(log_path, &contents, NULL, &error));
+    g_assert_no_error(error);
+  } while ((!events.exited || strstr(contents, "Buffered exit output: 199") == NULL) &&
+           g_get_monotonic_time() < deadline);
+  g_assert_true(events.exited);
+  g_assert_false(pumpkin_server_get_running(server));
+  /* Draining the original OutputReader must not revive the live UI, but every
+   * trailing line still belongs in the original session's persistent log. */
+  g_assert_cmpuint(events.logs_after_exit, ==, 0);
+  for (guint i = 0; i < 200; ++i) {
+    g_autofree char *line = g_strdup_printf("Buffered exit output: %03u\n", i);
+    g_assert_nonnull(strstr(contents, line));
+  }
+  cleanup_server(server);
+  g_signal_handlers_disconnect_by_data(server, &events);
+}
+
 static void
 test_restart_defaults(void)
 {
@@ -130,8 +335,13 @@ test_crash_restart(void)
   g_autoptr(PumpkinServer) server = create_server("normal");
   g_autoptr(GError) error = NULL;
   int original_pid = pumpkin_server_get_pid(server);
+  LifecycleEvents events = {0};
+  connect_lifecycle_events(server, &events);
   g_assert_true(pumpkin_server_send_command(server, "crash", &error));
   g_assert_no_error(error); wait_exit(server);
+  g_assert_cmpuint(events.exits, ==, 1);
+  g_assert_cmpuint(events.restarts, ==, 1);
+  g_assert_cmpuint(events.last_restart_delay, ==, 4000);
   gint64 exited = g_get_monotonic_time(), deadline = exited + 5 * G_USEC_PER_SEC;
   while (!pumpkin_server_get_running(server) && g_get_monotonic_time() < deadline) spin(5);
   g_assert_true(pumpkin_server_get_running(server));
@@ -146,7 +356,12 @@ test_crash_restart(void)
   g_assert_no_error(error); wait_exit(server);
   pumpkin_server_set_auto_restart(server, FALSE); spin(200);
   g_assert_false(pumpkin_server_get_running(server));
+  g_assert_cmpuint(events.exits, ==, 3);
+  g_assert_cmpuint(events.restarts, ==, 2);
+  g_assert_cmpuint(events.last_restart_delay, ==, 100);
+  g_assert_cmpuint(events.lifecycle_logs, ==, 0);
   cleanup_server(server);
+  g_signal_handlers_disconnect_by_data(server, &events);
 }
 
 static void
@@ -361,6 +576,10 @@ main(int argc, char **argv)
   g_assert_nonnull(test_root);
   g_test_add_func("/maintenance/restart-defaults", test_restart_defaults);
   g_test_add_func("/maintenance/crash-restart", test_crash_restart);
+  g_test_add_func("/maintenance/lifecycle-log-collision", test_lifecycle_log_collision);
+  g_test_add_func("/maintenance/application-notice-channels", test_application_notice_channels);
+  g_test_add_func("/maintenance/failed-restart-notice", test_failed_restart_notice);
+  g_test_add_func("/maintenance/buffered-exit-output", test_buffered_exit_output);
   g_test_add_func("/maintenance/graceful-stop", test_graceful_stop);
   g_test_add_func("/maintenance/timeout-force", test_timeout_requires_force);
   g_test_add_func("/maintenance/cancelled-wait", test_cancelled_wait);
